@@ -1,0 +1,21 @@
+services:
+  db:
+    image: postgres:17
+    container_name: landly_postgres
+    environment:
+      POSTGRES_USER: landly-user
+      POSTGRES_PASSWORD: landly-password
+      POSTGRES_DB: landly
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - landly_network
+
+networks:
+  landly_network:
+    driver: bridge
+
+volumes:
+  postgres_data:
