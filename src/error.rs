@@ -1,7 +1,11 @@
-
-use actix_web::{http::StatusCode, HttpResponse};
+use actix_web::{
+    http::StatusCode, HttpResponse,
+    error::ResponseError
+};
 use thiserror::Error;
-use serde_json::Value as JsonValue;
+use diesel::result::{Error as DieselError, DatabaseErrorKind};
+use diesel::r2d2::{Error as R2D2Error, PoolError};
+use serde_json::{json, Value as JsonValue};
 
 #[derive(Error, Debug)]
 pub enum AppError {
@@ -26,9 +30,9 @@ pub enum AppError {
     InternalServerError,
 }
 
-impl actix_web::error::ResponseError for AppError {
+impl ResponseError for AppError {
     fn status_code(&self) -> StatusCode {
-        match *self { 
+        match *self {
             AppError::Unauthorized(_) => StatusCode::UNAUTHORIZED,
             AppError::Forbidden(_) => StatusCode::FORBIDDEN,
             AppError::NotFound(_) => StatusCode::NOT_FOUND,
@@ -47,5 +51,39 @@ impl actix_web::error::ResponseError for AppError {
                 HttpResponse::InternalServerError().json("Internal Server Error")
             },
         }
+    }
+}
+
+impl From<DieselError> for AppError {
+    fn from(error: DieselError) -> Self {
+        match error {
+            DieselError::DatabaseError(kind, info) => {
+                if let DatabaseErrorKind::UniqueViolation = kind {
+                    let message = info.details().unwrap_or_else(|| info.message()).to_string();
+                    AppError::UnprocessableEntity(json!({ "error": message }))
+                } else {
+                    AppError::InternalServerError
+                }
+            }
+            DieselError::NotFound => {
+                AppError::NotFound(json!({ "error": "requested record was not found" }))
+            }
+            _ => AppError::InternalServerError,
+        }
+    }
+}
+
+impl From<R2D2Error> for AppError {
+    fn from(error: R2D2Error) -> Self {
+        match error {
+            R2D2Error::ConnectionError(_) => AppError::InternalServerError,
+            R2D2Error::QueryError(_) => AppError::InternalServerError,
+        }
+    }
+}
+
+impl From<PoolError> for AppError {
+    fn from(error: PoolError) -> Self {
+        AppError::InternalServerError
     }
 }
