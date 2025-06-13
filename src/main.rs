@@ -1,8 +1,8 @@
 mod constants;
 mod app;
-mod error;
-mod data;
-mod utils;
+mod error; 
+pub mod data;
+pub mod utils;
 
 use crate::app::drivers::middlewares::{
     cors::cors,
@@ -33,9 +33,11 @@ async fn main() -> std::io::Result<()> {
             .wrap(cors())
             .service(
                 web::resource("/test")
-                .route(web::post()
-                    .to(app::features::organisation::controllers::create)
-                )
+                    .route(web::post().to(app::features::organisation::controllers::create))
+            )
+            .service(
+                web::scope("/healthcheck")
+                    .route("", web::get().to(app::features::healthcheck::controllers::index))
             )
     })
     .bind(constants::BIND)?
