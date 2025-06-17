@@ -1,10 +1,12 @@
 use super::schema::*;
 use crate::error::*;
-use serde::{Deserialize, Serialize, Serializer};
+use serde::{Deserialize, Serialize};
 use diesel::prelude::*;
+use utoipa::ToSchema;
 use uuid::Uuid;
 
-#[derive(Debug, Serialize, Deserialize, Queryable, Insertable, Selectable, Clone)]
+// TODO: TMP ToSchema derive for documentation purposes
+#[derive(Debug, Serialize, Deserialize, Queryable, Insertable, Selectable, Clone, ToSchema)]
 #[diesel(table_name = countries)]
 pub struct Country {
     pub id: Uuid,
@@ -164,7 +166,8 @@ pub struct CreateLanguage {
     pub symbol: Option<String>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Queryable, Insertable, Selectable, Clone)]
+// TODO: TMP ToSchema derive for documentation purposes
+#[derive(Debug, Serialize, Deserialize, Queryable, Insertable, Selectable, Clone, ToSchema)]
 #[diesel(table_name = organisation_types)]
 pub struct OrganisationType {
     pub id: Uuid,

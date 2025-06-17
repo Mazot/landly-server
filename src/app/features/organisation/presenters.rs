@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use actix_web::http::StatusCode;
 use actix_web::HttpResponse;
 use chrono::NaiveDateTime;
+use utoipa::ToSchema;
 use uuid::Uuid;
 
 pub trait OrganisationPresenter: Send + Sync + 'static {
@@ -13,9 +14,9 @@ pub trait OrganisationPresenter: Send + Sync + 'static {
     fn to_single_json(&self, item: Organisation) -> HttpResponse;
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
-struct OrganisationContent {
+pub struct OrganisationContent {
     pub id: Uuid,
     pub name: String,
     pub tel: Option<String>,

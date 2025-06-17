@@ -1,6 +1,7 @@
 use actix_web::HttpResponse;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use utoipa::ToSchema;
 use uuid::Uuid;
 use crate::data::models::{Country, OrganisationType};
 
@@ -46,9 +47,9 @@ impl CommonPresenter for CommonPresenterImpl {
     }
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
-struct CountryContent {
+pub struct CountryContent {
     pub id: Uuid,
     pub name: String,
     pub geo_json: Option<Value>,
@@ -69,9 +70,9 @@ impl From<Country> for CountryContent {
     }
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
-struct OrganisationTypeContent {
+pub struct OrganisationTypeContent {
     pub id: Uuid,
     pub r#type: String,
     pub color: Option<String>,

@@ -7,8 +7,9 @@ use diesel::result::{Error as DieselError, DatabaseErrorKind};
 use diesel::r2d2::{Error as R2D2Error, PoolError};
 use serde_json::{json, Value as JsonValue};
 use uuid::Error as UuidError;
+use utoipa::ToSchema;
 
-#[derive(Error, Debug)]
+#[derive(Error, ToSchema, Debug)]
 pub enum AppError {
     // 401
     #[error("Unauthorized: {}", _0)]
