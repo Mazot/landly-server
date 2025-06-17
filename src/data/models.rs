@@ -15,6 +15,16 @@ pub struct Country {
     pub description: Option<String>,
 }
 
+#[derive(Insertable, Clone)]
+#[diesel(table_name = countries)]
+pub struct CreateCountry {
+    pub name: String,
+    pub geo_json: Option<serde_json::Value>,
+    pub flag: Option<String>,
+    pub capital_city: Option<String>,
+    pub description: Option<String>,
+}
+
 #[derive(AsChangeset)]
 #[diesel(table_name = countries)]
 pub struct UpdateCountry {
@@ -26,9 +36,39 @@ pub struct UpdateCountry {
 }
 
 impl Country {
+    pub fn get_by_id(
+        conn: &mut PgConnection,
+        id: &Uuid,
+    ) -> Result<Self, AppError> {
+        let result = countries::table
+            .find(id)
+            .get_result::<Country>(conn)?;
+            
+        Ok(result)
+    }
+    
+    pub fn get_by_name(
+        conn: &mut PgConnection,
+        name: &str,
+    ) -> Result<Self, AppError> {
+        let result = countries::table
+            .filter(countries::name.eq(name))
+            .get_result::<Country>(conn)?;
+        
+        Ok(result)
+    }
+    
+    pub fn get_all(
+        conn: &mut PgConnection,
+    ) -> Result<Vec<Self>, AppError> {
+        let result = countries::table.load::<Country>(conn)?;
+        
+        Ok(result)
+    }
+
     pub fn create(
         conn: &mut PgConnection,
-        record: &Country,
+        record: &CreateCountry,
     ) -> Result<Self, AppError> {
         let result = diesel::insert_into(countries::table)
             .values(record)
@@ -142,6 +182,26 @@ impl OrganisationType {
             .values(record)
             .get_result::<OrganisationType>(conn)?;
 
+        Ok(result)
+    }
+
+    pub fn get_by_id(
+        conn: &mut PgConnection,
+        id: &Uuid,
+    ) -> Result<Self, AppError> {
+        let result = organisation_types::table
+            .find(id)
+            .get_result::<OrganisationType>(conn)?;
+        
+        Ok(result)
+    }
+    
+    pub fn get_all(
+        conn: &mut PgConnection,
+    ) -> Result<Vec<Self>, AppError> {
+        let result = organisation_types::table
+            .load::<OrganisationType>(conn)?;
+        
         Ok(result)
     }
 }

@@ -3,8 +3,7 @@ use std::fs::File;
 use std::io::BufReader;
 use dotenv::dotenv;
 use serde_json::json;
-use uuid::Uuid;
-use landly_server::data::models::Country;
+use landly_server::data::models::{Country, CreateCountry};
 use landly_server::utils::db::establish_connection;
 use country_parser::MergedCountry;
 
@@ -23,8 +22,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let connection = &mut db_pool.get()?;
     
     for country_data in countries {
-        let country = Country {
-            id: Uuid::new_v4(),
+        let country = CreateCountry {
             name: country_data.name,
             geo_json: Some(json!(country_data.geo_json)),
             flag: Some(country_data.flag),

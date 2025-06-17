@@ -93,7 +93,7 @@ impl OrganisationPresenter for OrganisationPresenterImpl {
         let response_content = OrganisationContent::from(
             (item, None, None)
         );
-        
+
         HttpResponse::Ok().json(response_content)
     }
 }

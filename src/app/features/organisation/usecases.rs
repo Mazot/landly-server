@@ -45,6 +45,14 @@ impl OrganisationUsecase {
 
         Ok(response)
     }
+
+    pub fn delete_organisation(&self, id: Uuid) -> Result<HttpResponse, AppError> {
+        self.organisation_repo
+            .delete_organisation(id)?;
+        let response = self.organisation_presenter.to_http_res();
+        
+        Ok(response)
+    }
 }
 
 pub struct CreateOrganisationUsecaseInput {

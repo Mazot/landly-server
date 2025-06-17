@@ -6,6 +6,7 @@ use thiserror::Error;
 use diesel::result::{Error as DieselError, DatabaseErrorKind};
 use diesel::r2d2::{Error as R2D2Error, PoolError};
 use serde_json::{json, Value as JsonValue};
+use uuid::Error as UuidError;
 
 #[derive(Error, Debug)]
 pub enum AppError {
@@ -83,7 +84,16 @@ impl From<R2D2Error> for AppError {
 }
 
 impl From<PoolError> for AppError {
-    fn from(error: PoolError) -> Self {
+    fn from(_error: PoolError) -> Self {
         AppError::InternalServerError
+    }
+}
+
+impl From<UuidError> for AppError {
+    fn from(value: UuidError) -> Self {
+        AppError::UnprocessableEntity(json!({
+            "error": "Invalid UUID format",
+            "details": value.to_string()
+        }))
     }
 }

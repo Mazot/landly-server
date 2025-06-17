@@ -39,6 +39,10 @@ async fn main() -> std::io::Result<()> {
                 web::scope("/healthcheck")
                     .route("", web::get().to(app::features::healthcheck::controllers::index))
             )
+            .service(
+                web::scope("/common")
+                    .route("/countries", web::get().to(app::features::common::controllers::fetch_all_countries))
+            )
     })
     .bind(constants::BIND)?
     .run()

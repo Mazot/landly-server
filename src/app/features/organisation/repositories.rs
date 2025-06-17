@@ -13,6 +13,8 @@ pub trait OrganisationRepository: Send + Sync + 'static {
         &self,
         params: CreateOrganisationRepositoryInput
     ) -> Result<Organisation, AppError>;
+
+    fn delete_organisation(&self, id: Uuid) -> Result<(), AppError>;
 }
 
 #[derive(Clone)]
@@ -32,7 +34,6 @@ impl OrganisationRepository for OrganisationRepositoryImpl {
 
     fn create_organisation(&self, params: CreateOrganisationRepositoryInput) -> Result<Organisation, AppError> {
         let connection = &mut self.pool.get()?;
-
         let new_organisation = Organisation::create(
             connection,
             &CreateOrganisation {
@@ -47,6 +48,13 @@ impl OrganisationRepository for OrganisationRepositoryImpl {
         )?;
 
         Ok(new_organisation)
+    }
+
+    fn delete_organisation(&self, id: Uuid) -> Result<(), AppError> {
+        let connection = &mut self.pool.get()?;
+        Organisation::delete(connection, id)?;
+
+        Ok(())
     }
 }
 

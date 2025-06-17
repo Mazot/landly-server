@@ -22,18 +22,18 @@ pub async fn create(
     _req: HttpRequest,
     form: Json<CreateOrganisationRequest>
 ) -> Result<HttpResponse, AppError> {
-       state
-           .di_container
-           .organisation_usecase
-           .create_organisation(
-               CreateOrganisationUsecaseInput{
-                     name: form.name.clone(),
-                     tel: form.tel.clone(),
-                     email: form.email.clone(),
-                     address: form.address.clone(),
-                     description: form.description.clone(),
-                     location_country_id: form.location_country_id,
-                     organisation_type_id: form.organisation_type_id,
-               }
-           )
+    state
+        .di_container
+        .organisation_usecase
+        .create_organisation(
+            CreateOrganisationUsecaseInput{
+                name: form.name.clone(),
+                tel: form.tel.clone(),
+                email: form.email.clone(),
+                address: form.address.clone(),
+                description: form.description.clone(),
+                location_country_id: form.location_country_id,
+                organisation_type_id: form.organisation_type_id,
+           }
+       )
 }
