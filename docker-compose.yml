@@ -19,8 +19,10 @@ services:
     environment:
       - DATABASE_URL=postgresql://landly-user:landly-password@db:5432/landly
       - FRONTEND_ORIGIN=http://api.orsoft.xyz
+      - HOST=0.0.0.0
+      - PORT=8080
     ports:
-      - "127.0.0.1:8000:8000"
+      - "127.0.0.1:8080:8080"
     depends_on:
       - db
     networks:
