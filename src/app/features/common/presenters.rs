@@ -26,7 +26,7 @@ impl CommonPresenter for CommonPresenterImpl {
 
     fn to_single_country_json(&self, item: Country) -> HttpResponse {
         let response_content = CountryContent::from(item);
-        
+
         HttpResponse::Ok().json(response_content)
     }
 

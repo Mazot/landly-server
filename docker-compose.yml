@@ -13,6 +13,22 @@ services:
     networks:
       - landly_network
 
+  landly-server:
+    build: .
+    container_name: landly_server
+    environment:
+      - DATABASE_URL=postgresql://landly-user:landly-password@db:5432/landly
+      - FRONTEND_ORIGIN=http://api.orsoft.xyz
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      - db
+    networks:
+      - landly_network
+    restart: unless-stopped
+    volumes:
+      - ./data:/app/data
+
 networks:
   landly_network:
     driver: bridge

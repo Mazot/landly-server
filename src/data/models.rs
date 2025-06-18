@@ -45,10 +45,10 @@ impl Country {
         let result = countries::table
             .find(id)
             .get_result::<Country>(conn)?;
-            
+
         Ok(result)
     }
-    
+
     pub fn get_by_name(
         conn: &mut PgConnection,
         name: &str,
@@ -56,10 +56,10 @@ impl Country {
         let result = countries::table
             .filter(countries::name.eq(name))
             .get_result::<Country>(conn)?;
-        
+
         Ok(result)
     }
-    
+
     pub fn get_all(
         conn: &mut PgConnection,
     ) -> Result<Vec<Self>, AppError> {
@@ -195,7 +195,7 @@ impl OrganisationType {
         let result = organisation_types::table
             .find(id)
             .get_result::<OrganisationType>(conn)?;
-        
+
         Ok(result)
     }
     
@@ -204,7 +204,7 @@ impl OrganisationType {
     ) -> Result<Vec<Self>, AppError> {
         let result = organisation_types::table
             .load::<OrganisationType>(conn)?;
-        
+
         Ok(result)
     }
 }
