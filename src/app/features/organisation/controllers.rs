@@ -4,7 +4,7 @@ use super::{
 };
 use crate::app::drivers::middlewares::state::AppState;
 use crate::error::AppError;
-use actix_web::{web::Json, web::Data, HttpRequest, HttpResponse};
+use actix_web::{web::{Data, Json, Path, Query}, HttpRequest, HttpResponse};
 use serde::Deserialize;
 use uuid::Uuid;
 
@@ -15,6 +15,21 @@ pub struct OrganisationsListQueryParams {
     address: Option<String>,
     limit: Option<i64>,
     offset: Option<i64>,
+}
+
+pub async fn list(
+    state: Data<AppState>,
+    query: Query<OrganisationsListQueryParams>
+) -> Result<HttpResponse, AppError> {
+    todo!()
+}
+
+pub async fn fetch(
+    state: Data<AppState>,
+    _req: HttpRequest,
+    id: Path<Uuid>
+) -> Result<HttpResponse, AppError> {
+    todo!()
 }
 
 pub async fn create(
@@ -34,6 +49,6 @@ pub async fn create(
                 description: form.description.clone(),
                 location_country_id: form.location_country_id,
                 organisation_type_id: form.organisation_type_id,
-           }
-       )
+            }
+        )
 }

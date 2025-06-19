@@ -151,7 +151,6 @@ impl Language {
     }
 }
 
-
 #[derive(AsChangeset)]
 #[diesel(table_name = languages)]
 pub struct UpdateLanguage {

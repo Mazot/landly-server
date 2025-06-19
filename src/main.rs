@@ -20,8 +20,8 @@ use utoipa_swagger_ui::SwaggerUi;
         description = "Landly OpenAPI Specification."
     ),
     servers(
-        (url = "http://localhost:8080",
-        description = "Local development server"),
+        (url = "http://localhost:8080", description = "Local development server"),
+        (url = "https://api.orsoft.com", description = "Production server"),
     ),
     paths(
         app::features::healthcheck::controllers::index,
@@ -72,17 +72,11 @@ async fn main() -> std::io::Result<()> {
             .service(
                 web::scope("/api")
                     .service(
-                        web::resource("/test")
-                            .route(web::post().to(app::features::organisation::controllers::create))
-                    )
-                    .service(
                         web::scope("/healthcheck")
                             .route("", web::get().to(app::features::healthcheck::controllers::index))
                     )
-                    .service(
-                        web::scope("/common")
-                            .route("/countries", web::get().to(app::features::common::controllers::fetch_all_countries))
-                    )
+                    .configure(app::features::common::config::configure_services)
+                    .configure(app::features::organisation::config::configure_services)
             )
     })
     .bind(constants::BIND)?
