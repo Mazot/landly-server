@@ -1,8 +1,9 @@
 use super::entities::Organisation;
-use crate::data::models::{Country, OrganisationType};
 use serde::{Deserialize, Serialize};
-use actix_web::http::StatusCode;
-use actix_web::HttpResponse;
+use actix_web::{
+    HttpResponse,
+    http::StatusCode
+};
 use chrono::NaiveDateTime;
 use utoipa::ToSchema;
 use uuid::Uuid;
@@ -12,6 +13,7 @@ pub trait OrganisationPresenter: Send + Sync + 'static {
     // TODO: Tmp solution
     fn to_single_typed_json(&self, item: Organisation) -> HttpResponse<Organisation>;
     fn to_single_json(&self, item: Organisation) -> HttpResponse;
+    fn to_multi_json(&self, items: Vec<Organisation>) -> HttpResponse;
 }
 
 #[derive(Deserialize, Serialize, ToSchema)]
@@ -23,39 +25,14 @@ pub struct OrganisationContent {
     pub email: Option<String>,
     pub address: Option<String>,
     pub description: Option<String>,
-    // TODO: Change to InnerCountry
-    pub location_country: Option<Country>,
-    // TODO: Change to InnerOrganisationType
-    pub organisation_type: Option<OrganisationType>,
+    pub location_country_id: Option<Uuid>,
+    pub organisation_type_id: Option<Uuid>,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
 }
 
-impl From<(Organisation, Option<Country>, Option<OrganisationType>)> for OrganisationContent {
-    fn from((org, country, org_type): (Organisation, Option<Country>, Option<OrganisationType>)) -> Self {
-        let country = if let Some(c) = country {
-            Some(Country {
-                id: c.id,
-                name: c.name,
-                geo_json: c.geo_json,
-                flag: c.flag,
-                capital_city: c.capital_city,
-                description: c.description,
-            })
-        } else {
-            None
-        };
-        
-        let org_type = if let Some(ot) = org_type {
-            Some(OrganisationType {
-                id: ot.id,
-                org_type: ot.org_type,
-                color: ot.color,
-            })
-        } else {
-            None
-        };
-        
+impl From<Organisation> for OrganisationContent {
+    fn from(org: Organisation) -> Self {
         Self {
             id: org.id,
             name: org.name,
@@ -63,13 +40,35 @@ impl From<(Organisation, Option<Country>, Option<OrganisationType>)> for Organis
             email: org.email,
             address: org.address,
             description: org.description,
-            location_country: country,
-            organisation_type: org_type,
+            location_country_id: org.location_country_id,
+            organisation_type_id: org.organisation_type_id,
             created_at: org.created_at,
             updated_at: org.updated_at,
         }
     }
 }
+
+#[derive(Deserialize, Serialize, ToSchema)]
+pub struct MultipleOrganisationsResponse {
+    pub items: Vec<OrganisationContent>,
+    pub total: i64,
+}
+
+impl From<Vec<Organisation>> for MultipleOrganisationsResponse {
+    fn from(items: Vec<Organisation>) -> Self {
+        let response_items: Vec<OrganisationContent> = items
+            .into_iter()
+            .map(|org| OrganisationContent::from(org))
+            .collect();
+        let count = response_items.len() as i64;
+
+        Self {
+            items: response_items,
+            total: count,
+        }
+    }
+}
+
 
 #[derive(Clone)]
 pub struct OrganisationPresenterImpl {}
@@ -91,9 +90,13 @@ impl OrganisationPresenter for OrganisationPresenterImpl {
     }
 
     fn to_single_json(&self, item: Organisation) -> HttpResponse {
-        let response_content = OrganisationContent::from(
-            (item, None, None)
-        );
+        let response_content = OrganisationContent::from(item);
+
+        HttpResponse::Ok().json(response_content)
+    }
+
+    fn to_multi_json(&self, items: Vec<Organisation>) -> HttpResponse {
+        let response_content = MultipleOrganisationsResponse::from(items);
 
         HttpResponse::Ok().json(response_content)
     }

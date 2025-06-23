@@ -26,12 +26,21 @@ use utoipa_swagger_ui::SwaggerUi;
     paths(
         app::features::healthcheck::controllers::index,
         app::features::common::controllers::fetch_all_countries,
+        app::features::organisation::controllers::list,
+        app::features::organisation::controllers::fetch,
+        app::features::organisation::controllers::create,
+        app::features::organisation::controllers::delete,
+        app::features::organisation::controllers::update,
     ),
     components(
         schemas(
             app::features::common::presenters::CountryContent,
             app::features::common::presenters::OrganisationTypeContent,
+            app::features::organisation::requests::OrganisationsListQueryRequest,
+            app::features::organisation::requests::CreateOrganisationRequest,
+            app::features::organisation::requests::UpdateOrganisationRequest,
             app::features::organisation::presenters::OrganisationContent,
+            app::features::organisation::presenters::MultipleOrganisationsResponse,
         )
     ),
     tags(
@@ -50,7 +59,6 @@ async fn main() -> std::io::Result<()> {
     // std::env::set_var("RUST_LOG", "actix_web=info");
     env_logger::init();
 
-    // TODO: Tmp solution
     let app_state = {
         use crate::app::drivers::middlewares::state::AppState;
         let db_pool = utils::db::establish_connection();

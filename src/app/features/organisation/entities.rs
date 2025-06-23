@@ -82,6 +82,30 @@ impl Organisation {
 
         Ok(result)
     }
+
+    pub fn fetch_ids_by_organisation_type(
+        conn: &mut PgConnection,
+        organisation_type_id: Uuid,
+    ) -> Result<Vec<Uuid>, AppError> {
+        let result = organisations::table
+            .filter(organisations::organisation_type_id.eq(organisation_type_id))
+            .select(organisations::id)
+            .load::<Uuid>(conn)?;
+
+        Ok(result)
+    }
+
+    pub fn fetch_ids_by_location_country(
+        conn: &mut PgConnection,
+        location_country_id: Uuid,
+    ) -> Result<Vec<Uuid>, AppError> {
+        let result = organisations::table
+            .filter(organisations::location_country_id.eq(location_country_id))
+            .select(organisations::id)
+            .load::<Uuid>(conn)?;
+
+        Ok(result)
+    }
 }
 
 #[derive(Insertable, Clone)]
