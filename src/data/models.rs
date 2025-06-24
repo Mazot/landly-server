@@ -64,7 +64,7 @@ impl Country {
         conn: &mut PgConnection,
     ) -> Result<Vec<Self>, AppError> {
         let result = countries::table.load::<Country>(conn)?;
-        
+
         Ok(result)
     }
 
@@ -197,7 +197,7 @@ impl OrganisationType {
 
         Ok(result)
     }
-    
+
     pub fn get_all(
         conn: &mut PgConnection,
     ) -> Result<Vec<Self>, AppError> {

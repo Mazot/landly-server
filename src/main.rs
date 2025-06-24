@@ -1,6 +1,6 @@
 mod constants;
 mod app;
-mod error; 
+mod error;
 pub mod data;
 pub mod utils;
 
@@ -31,6 +31,11 @@ use utoipa_swagger_ui::SwaggerUi;
         app::features::organisation::controllers::create,
         app::features::organisation::controllers::delete,
         app::features::organisation::controllers::update,
+        app::features::country_connection::controllers::list,
+        app::features::country_connection::controllers::fetch,
+        app::features::country_connection::controllers::create,
+        app::features::country_connection::controllers::delete,
+        app::features::country_connection::controllers::update,
     ),
     components(
         schemas(
@@ -41,12 +46,18 @@ use utoipa_swagger_ui::SwaggerUi;
             app::features::organisation::requests::UpdateOrganisationRequest,
             app::features::organisation::presenters::OrganisationContent,
             app::features::organisation::presenters::MultipleOrganisationsResponse,
+            app::features::country_connection::requests::CreateCountryConnectionRequest,
+            app::features::country_connection::requests::UpdateCountryConnectionRequest,
+            app::features::country_connection::requests::CountryConnectionsListQueryParams,
+            app::features::country_connection::presenters::CountryConnectionContent,
+            app::features::country_connection::presenters::MultipleCountryConnectionsResponse,
         )
     ),
     tags(
         (name = "Healthcheck", description = "Healthcheck related endpoints"),
         (name = "Common", description = "Common endpoints like countries, etc."),
-        (name = "Organisation", description = "Organisation related endpoints")
+        (name = "Organisation", description = "Organisation related endpoints"),
+        (name = "CountryConnection", description = "CountryConnection related endpoints")
     )
 )]
 pub struct ApiDoc;
@@ -85,6 +96,7 @@ async fn main() -> std::io::Result<()> {
                     )
                     .configure(app::features::common::config::configure_services)
                     .configure(app::features::organisation::config::configure_services)
+                    .configure(app::features::country_connection::config::configure_services)
             )
     })
     .bind(constants::BIND)?

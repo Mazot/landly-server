@@ -9,12 +9,18 @@ use crate::app::features::common::{
     repositories::CommonRepositoryImpl,
     usecases::CommonUsecase,
 };
+use crate::app::features::country_connection::{
+    repositories::CountryConnectionRepositoryImpl,
+    presenters::CountryConnectionPresenterImpl,
+    usecases::CountryConnectionUsecase,
+};
 use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct DiContainer {
     pub organisation_usecase: OrganisationUsecase,
     pub common_usecase: CommonUsecase,
+    pub country_connection_usecase: CountryConnectionUsecase,
 }
 
 impl DiContainer {
@@ -25,6 +31,9 @@ impl DiContainer {
         let common_repo = CommonRepositoryImpl::new(pool.clone());
         let common_presenter = CommonPresenterImpl::new();
 
+        let country_connection_repo = CountryConnectionRepositoryImpl::new(pool.clone());
+        let country_connection_presenter = CountryConnectionPresenterImpl::new();
+
         Self {
             organisation_usecase: OrganisationUsecase::new(
                 Arc::new(organisation_repo.clone()),
@@ -33,6 +42,10 @@ impl DiContainer {
             common_usecase: CommonUsecase::new(
                 Arc::new(common_repo.clone()),
                 Arc::new(common_presenter.clone()),
+            ),
+            country_connection_usecase: CountryConnectionUsecase::new(
+                Arc::new(country_connection_repo.clone()),
+                Arc::new(country_connection_presenter.clone()),
             ),
         }
     }

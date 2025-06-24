@@ -1,5 +1,5 @@
 use crate::data::{
-    schema::{organisations},
+    schema::organisations,
     models::{Country, OrganisationType},
 };
 use crate::error::*;
@@ -58,6 +58,7 @@ impl Organisation {
         let o = organisations::table
             .find(organisation_id);
         diesel::delete(o).execute(conn)?;
+
         Ok(())
     }
 

@@ -58,7 +58,7 @@ impl From<Vec<Organisation>> for MultipleOrganisationsResponse {
     fn from(items: Vec<Organisation>) -> Self {
         let response_items: Vec<OrganisationContent> = items
             .into_iter()
-            .map(|org| OrganisationContent::from(org))
+            .map(OrganisationContent::from)
             .collect();
         let count = response_items.len() as i64;
 
@@ -68,7 +68,6 @@ impl From<Vec<Organisation>> for MultipleOrganisationsResponse {
         }
     }
 }
-
 
 #[derive(Clone)]
 pub struct OrganisationPresenterImpl {}
