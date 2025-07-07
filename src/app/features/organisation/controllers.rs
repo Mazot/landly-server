@@ -5,6 +5,7 @@ use super::{
 use crate::app::drivers::middlewares::state::AppState;
 use crate::error::AppError;
 use actix_web::{web::{Data, Json, Path, Query}, HttpRequest, HttpResponse};
+use bigdecimal::BigDecimal;
 use uuid::Uuid;
 use std::cmp::min;
 
@@ -102,6 +103,10 @@ pub async fn update(
                 description: form.description.clone(),
                 location_country_id: form.location_country_id,
                 organisation_type_id: form.organisation_type_id,
+                latitude: form.latitude.map(BigDecimal::try_from)
+                    .map(|v| v.expect("Invalid latitude value")),
+                longitude: form.longitude.map(BigDecimal::try_from)
+                    .map(|v| v.expect("Invalid longitude value")),
             }
         )
 }
@@ -160,6 +165,10 @@ pub async fn create(
                 description: form.description.clone(),
                 location_country_id: form.location_country_id,
                 organisation_type_id: form.organisation_type_id,
+                latitude: form.latitude.map(BigDecimal::try_from)
+                    .map(|v| v.expect("Invalid latitude value")),
+                longitude: form.longitude.map(BigDecimal::try_from)
+                    .map(|v| v.expect("Invalid longitude value")),
             }
         )
 }

@@ -1,7 +1,7 @@
 use super::schema::*;
 use crate::error::*;
-use serde::{Deserialize, Serialize};
 use diesel::prelude::*;
+use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 

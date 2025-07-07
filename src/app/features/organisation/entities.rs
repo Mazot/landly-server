@@ -4,6 +4,7 @@ use crate::data::{
 };
 use crate::error::*;
 use diesel::prelude::*;
+use bigdecimal::BigDecimal;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use chrono::NaiveDateTime;
@@ -23,6 +24,8 @@ pub struct Organisation {
     pub organisation_type_id: Option<Uuid>,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
+    pub latitude: Option<BigDecimal>,
+    pub longitude: Option<BigDecimal>,
 }
 
 impl Organisation {
@@ -119,6 +122,8 @@ pub struct CreateOrganisation {
     pub description: Option<String>,
     pub location_country_id: Option<Uuid>,
     pub organisation_type_id: Option<Uuid>,
+    pub latitude: Option<BigDecimal>,
+    pub longitude: Option<BigDecimal>,
 }
 
 #[derive(AsChangeset)]
@@ -132,4 +137,6 @@ pub struct UpdateOrganisation {
     pub location_country_id: Option<Uuid>,
     pub organisation_type_id: Option<Uuid>,
     pub updated_at: NaiveDateTime,
+    pub latitude: Option<BigDecimal>,
+    pub longitude: Option<BigDecimal>,
 }

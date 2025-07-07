@@ -67,6 +67,8 @@ diesel::table! {
         organisation_type_id -> Nullable<Uuid>,
         created_at -> Timestamp,
         updated_at -> Timestamp,
+        latitude -> Nullable<Numeric>,
+        longitude -> Nullable<Numeric>,
     }
 }
 

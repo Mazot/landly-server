@@ -2,6 +2,7 @@ use super::entities::{CreateOrganisation, Organisation, UpdateOrganisation};
 use crate::error::AppError;
 use crate::utils::db::DbPool;
 use uuid::Uuid;
+use bigdecimal::BigDecimal;
 
 pub trait OrganisationRepository: Send + Sync + 'static {
     fn fetch_organisations(
@@ -15,18 +16,18 @@ pub trait OrganisationRepository: Send + Sync + 'static {
     ) -> Result<Organisation, AppError>;
 
     fn delete_organisation(
-        &self, 
+        &self,
         id: Uuid
     ) -> Result<(), AppError>;
 
     fn fetch_organisation(
-        &self, 
+        &self,
         id: Uuid
     ) -> Result<Organisation, AppError>;
 
     fn update_organisation(
-        &self, 
-        id: Uuid, 
+        &self,
+        id: Uuid,
         params: UpdateOrganisationRepositoryInput
     ) -> Result<Organisation, AppError>;
 }
@@ -99,6 +100,8 @@ impl OrganisationRepository for OrganisationRepositoryImpl {
                 description: params.description,
                 location_country_id: params.location_country_id,
                 organisation_type_id: params.organisation_type_id,
+                latitude: params.latitude,
+                longitude: params.longitude,
             }
         )?;
 
@@ -120,8 +123,8 @@ impl OrganisationRepository for OrganisationRepositoryImpl {
     }
 
     fn update_organisation(
-        &self, 
-        id: Uuid, 
+        &self,
+        id: Uuid,
         params: UpdateOrganisationRepositoryInput
     ) -> Result<Organisation, AppError> {
         let connection = &mut self.pool.get()?;
@@ -136,6 +139,8 @@ impl OrganisationRepository for OrganisationRepositoryImpl {
                 description: params.description,
                 location_country_id: params.location_country_id,
                 organisation_type_id: params.organisation_type_id,
+                longitude: params.longitude,
+                latitude: params.latitude,
                 updated_at: chrono::Utc::now().naive_utc(),
             }
         )?;
@@ -152,6 +157,8 @@ pub struct UpdateOrganisationRepositoryInput {
     pub description: Option<String>,
     pub location_country_id: Option<Uuid>,
     pub organisation_type_id: Option<Uuid>,
+    pub latitude: Option<BigDecimal>,
+    pub longitude: Option<BigDecimal>,
 }
 
 pub struct FetchOrganisationsRepositoryInput {
@@ -173,4 +180,6 @@ pub struct CreateOrganisationRepositoryInput {
     pub description: Option<String>,
     pub location_country_id: Option<Uuid>,
     pub organisation_type_id: Option<Uuid>,
+    pub latitude: Option<BigDecimal>,
+    pub longitude: Option<BigDecimal>,
 }

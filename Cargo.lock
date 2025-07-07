@@ -360,6 +360,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "bigdecimal"
+version = "0.4.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1a22f228ab7a1b23027ccc6c350b72868017af7ea8356fbdf19f8d991c690013"
+dependencies = [
+ "autocfg",
+ "libm",
+ "num-bigint",
+ "num-integer",
+ "num-traits",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "bitflags"
 version = "2.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -616,11 +631,15 @@ version = "2.2.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ff3e1edb1f37b4953dd5176916347289ed43d7119cc2e6c7c3f7849ff44ea506"
 dependencies = [
+ "bigdecimal",
  "bitflags",
  "byteorder",
  "chrono",
  "diesel_derives",
  "itoa",
+ "num-bigint",
+ "num-integer",
+ "num-traits",
  "pq-sys",
  "r2d2",
  "serde_json",
@@ -1192,6 +1211,7 @@ dependencies = [
  "actix-web",
  "anyhow",
  "bcrypt",
+ "bigdecimal",
  "chrono",
  "convert_case",
  "diesel",
@@ -1219,6 +1239,12 @@ name = "libc"
 version = "0.2.172"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d750af042f7ef4f724306de029d18836c26c1765a54a6a3f094cbd23a7267ffa"
+
+[[package]]
+name = "libm"
+version = "0.2.15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f9fbbcab51052fe104eb5e5d351cf728d30a5be1fe14d9be8a3b097481fb97de"
 
 [[package]]
 name = "libz-rs-sys"

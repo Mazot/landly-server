@@ -18,6 +18,7 @@ diesel = { version = "2.2.10", features = [
     "chrono",
     "uuid",
     "serde_json",
+    "numeric",
 ]}
 dotenv = "0.15.0"
 env_logger = "0.11.8"
@@ -31,3 +32,4 @@ uuid = { version = "1.17.0", features = ["v4", "serde", "v5"] }
 chrono = { version = "0.4", features = ["serde"] }
 utoipa = { version = "5", features = ["actix_extras", "uuid", "debug", "chrono"] }
 utoipa-swagger-ui = { version = "9", features = ["actix-web"] }
+bigdecimal = { version = "0.4.8", features = ["serde", "serde_json"] }

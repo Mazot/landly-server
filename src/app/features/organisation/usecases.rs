@@ -5,6 +5,7 @@ use super::{
 };
 use std::sync::Arc;
 use actix_web::HttpResponse;
+use bigdecimal::BigDecimal;
 use uuid::Uuid;
 
 #[derive(Clone)]
@@ -38,6 +39,8 @@ impl OrganisationUsecase {
                     description: params.description,
                     location_country_id: params.location_country_id,
                     organisation_type_id: params.organisation_type_id,
+                    latitude: params.latitude,
+                    longitude: params.longitude,
                 }
             )?;
         let response = self.organisation_presenter.to_single_json(new_organisation);
@@ -61,6 +64,8 @@ impl OrganisationUsecase {
                     description: params.description,
                     location_country_id: params.location_country_id,
                     organisation_type_id: params.organisation_type_id,
+                    latitude: params.latitude,
+                    longitude: params.longitude,
                 }
             )?;
         let response = self.organisation_presenter.to_single_json(updated_organisation);
@@ -114,6 +119,8 @@ pub struct UpdateOrganisationUsecaseInput {
     pub description: Option<String>,
     pub location_country_id: Option<Uuid>,
     pub organisation_type_id: Option<Uuid>,
+    pub latitude: Option<BigDecimal>,
+    pub longitude: Option<BigDecimal>,
 }
 
 pub struct CreateOrganisationUsecaseInput {
@@ -124,6 +131,8 @@ pub struct CreateOrganisationUsecaseInput {
     pub description: Option<String>,
     pub location_country_id: Option<Uuid>,
     pub organisation_type_id: Option<Uuid>,
+    pub latitude: Option<BigDecimal>,
+    pub longitude: Option<BigDecimal>,
 }
 
 pub struct FetchOrganisationsUsecaseInput {
