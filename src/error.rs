@@ -5,6 +5,7 @@ use actix_web::{
 use thiserror::Error;
 use diesel::result::{Error as DieselError, DatabaseErrorKind};
 use diesel::r2d2::{Error as R2D2Error, PoolError};
+use redis::{ErrorKind as RedisErrorKind, RedisError};
 use serde_json::{json, Value as JsonValue};
 use uuid::Error as UuidError;
 use utoipa::ToSchema;
@@ -14,19 +15,19 @@ pub enum AppError {
     // 401
     #[error("Unauthorized: {}", _0)]
     Unauthorized(JsonValue),
-    
+
     // 403
     #[error("Forbidden: {}", _0)]
     Forbidden(JsonValue),
-    
+
     // 404
     #[error("Not Found: {}", _0)]
     NotFound(JsonValue),
-    
+
     // 422
     #[error("Unprocessable Entity: {}", _0)]
     UnprocessableEntity(JsonValue),
-    
+
     // 500
     #[error("Internal Server Error")]
     InternalServerError,
@@ -96,5 +97,16 @@ impl From<UuidError> for AppError {
             "error": "Invalid UUID format",
             "details": value.to_string()
         }))
+    }
+}
+
+impl From<RedisError> for AppError {
+    fn from(error: RedisError) -> Self {
+        match error.kind() {
+            // TODO: Handle specific Redis error kinds as needed
+            RedisErrorKind::IoError => AppError::InternalServerError,
+            RedisErrorKind::ResponseError => AppError::InternalServerError,
+            _ => AppError::InternalServerError,
+        }
     }
 }

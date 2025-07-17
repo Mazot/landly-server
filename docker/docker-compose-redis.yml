@@ -1,0 +1,24 @@
+services:
+  redis:
+    image: redis:latest
+    container_name: landly_redis
+    ports:
+      - "6379:6379"
+    environment:
+      REDIS_PASSWORD: redis-pass
+    command: >
+      redis-server
+      --requirepass redis-pass
+      --appendonly yes
+      --appendfsync everysec
+    volumes:
+      - redis_data:/data
+    networks:
+      - test_network
+
+networks:
+  test_network:
+    driver: bridge
+
+volumes:
+  redis_data:

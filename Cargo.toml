@@ -33,3 +33,6 @@ chrono = { version = "0.4", features = ["serde"] }
 utoipa = { version = "5", features = ["actix_extras", "uuid", "debug", "chrono"] }
 utoipa-swagger-ui = { version = "9", features = ["actix-web"] }
 bigdecimal = { version = "0.4.8", features = ["serde", "serde_json"] }
+actix-request-reply-cache = "0.1.7"
+redis = { version = "0.32", features = ["r2d2"] }
+r2d2 = "0.8"
