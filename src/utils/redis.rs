@@ -2,7 +2,7 @@ use crate::constants::env_key;
 use actix_request_reply_cache::{RedisCacheMiddleware, RedisCacheMiddlewareBuilder};
 use dotenv::dotenv;
 use std::env;
-use r2d2::{Pool};
+use r2d2::Pool;
 use redis::Client;
 
 pub type RedisPool = Pool<Client>;
