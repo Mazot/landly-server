@@ -3,7 +3,7 @@ use super::redis::RedisPool;
 use r2d2::PooledConnection;
 use redis::{Client, Commands};
 use serde::{Deserialize, Serialize};
-use std::time::{Duration};
+use std::time::Duration;
 
 pub trait CacheService: Send + Sync + 'static {
     fn get<T>(&self, key: &str) -> Result<Option<T>, AppError>
@@ -267,5 +267,53 @@ impl CacheService for NoOpCacheService {
         T: Serialize
     {
         Ok(())
+    }
+}
+
+// Cache key builders for consistent naming
+pub struct CacheKeys;
+
+impl CacheKeys {
+    pub fn organisation_by_id(id: &uuid::Uuid) -> String {
+        format!("org:id:{}", id)
+    }
+
+    pub fn organisations_list(filters_hash: &str) -> String {
+        format!("org:list:{}", filters_hash)
+    }
+
+    pub fn organisation_pattern() -> String {
+        "org:*".to_string()
+    }
+
+    pub fn organisation_count() -> String {
+        "org:count".to_string()
+    }
+
+    // Country connection cache keys
+    pub fn country_connection_by_id(id: &uuid::Uuid) -> String {
+        format!("cc:id:{}", id)
+    }
+
+    pub fn country_connections_list(filters_hash: &str) -> String {
+        format!("cc:list:{}", filters_hash)
+    }
+
+    pub fn country_connection_pattern() -> String {
+        "cc:*".to_string()
+    }
+
+    // Utility methods
+    fn sanitize_key(input: &str) -> String {
+        input
+            .chars()
+            .filter(|c| c.is_alphanumeric() || *c == '-' || *c == '_')
+            .collect::<String>()
+            .to_lowercase()
+    }
+
+    // Generate versioned keys for cache invalidation
+    pub fn versioned_key(base_key: &str, version: &str) -> String {
+        format!("{}:v:{}", base_key, version)
     }
 }
