@@ -3,31 +3,115 @@ use super::redis::RedisPool;
 use r2d2::PooledConnection;
 use redis::{Client, Commands};
 use serde::{Deserialize, Serialize};
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
 pub trait CacheService: Send + Sync + 'static {
-    fn get<T>(&self, key: &str) -> Result<Option<T>, AppError>
-    where
-        T: for<'de> Deserialize<'de>;
-
-    fn set<T>(&self, key: &str, value: &T, ttl: Option<Duration>) -> Result<(), AppError>
-    where
-        T: Serialize;
-
+    fn get_string(&self, key: &str) -> Result<Option<String>, AppError>;
+    fn set_string(&self, key: &str, value: &str, ttl: Option<Duration>) -> Result<(), AppError>;
     fn delete(&self, key: &str) -> Result<(), AppError>;
-
     fn exists(&self, key: &str) -> Result<bool, AppError>;
-
     fn invalidate_pattern(&self, pattern: &str) -> Result<(), AppError>;
-
-    fn mget<T>(&self, keys: &[String]) -> Result<Vec<Option<T>>, AppError>
-    where
-        T: for<'de> Deserialize<'de>;
-
-    fn mset<T>(&self, items: &[(String, T)], ttl: Option<Duration>) -> Result<(), AppError>
-    where
-        T: Serialize;
+    fn mget_string(&self, keys: &[String]) -> Result<Vec<Option<String>>, AppError>;
+    fn mset_string(&self, items: &[(String, String)], ttl: Option<Duration>) -> Result<(), AppError>;
 }
+
+#[derive(Debug)]
+pub struct TypedCache<T: ?Sized> {
+    cache_service: T,
+}
+
+// ! I prefer using manual Clone implementation for TypedCache because i don't know derive will work correctly with Arc<dyn CacheService>
+impl<T: ?Sized> Clone for TypedCache<Arc<T>> {
+    fn clone(&self) -> Self {
+        TypedCache {
+            cache_service: Arc::clone(&self.cache_service),
+        }
+    }
+}
+
+impl <T: CacheService> TypedCache<T> {
+    pub fn new(cache_service: T) -> Self {
+        Self { cache_service }
+    }
+}
+
+impl<T: CacheService> TypedCache<T> {
+    pub fn get<U>(&self, key: &str) -> Result<Option<U>, AppError>
+    where
+        U: for<'de> Deserialize<'de>,
+    {
+        match self.cache_service.get_string(key)? {
+            Some(json_str) => {
+                serde_json::from_str(&json_str)
+                    .map(Some)
+                    .map_err(|_| {
+                        let _ = self.delete(key);
+                        AppError::InternalServerError
+                    })
+            },
+            None => Ok(None),
+        }
+    }
+
+    pub fn set<U>(&self, key: &str, value: &U, ttl: Option<Duration>) -> Result<(), AppError>
+    where
+        U: Serialize,
+    {
+        let json_str = serde_json::to_string(value)
+            .map_err(|_| AppError::InternalServerError)?;
+
+        self.cache_service.set_string(key, &json_str, ttl)
+    }
+
+    pub fn mget<U>(&self, keys: &[String]) -> Result<Vec<Option<U>>, AppError>
+    where
+        U: for<'de> Deserialize<'de>,
+    {
+        let string_results = self.cache_service.mget_string(keys)?;
+        let mut results = Vec::with_capacity(string_results.len());
+
+        for (i, opt_str) in string_results.into_iter().enumerate() {
+            match opt_str {
+                Some(json_str) => {
+                    match serde_json::from_str(&json_str) {
+                        Ok(parsed_value) => results.push(Some(parsed_value)),
+                        Err(_) => {
+                            let _ = self.delete(&keys[i]);
+                            results.push(None);
+                        }
+                    }
+                },
+                None => results.push(None),
+            }
+        }
+
+        Ok(results)
+    }
+
+    pub fn mset<U>(&self, items: &[(String, U)], ttl: Option<Duration>) -> Result<(), AppError>
+    where
+        U: Serialize,
+    {
+        let key_ser_val_vec: Vec<(String, String)> = items.iter()
+            .map(|(k, v)| (k.clone(), serde_json::to_string(v).unwrap()))
+            .collect();
+
+        self.cache_service.mset_string(&key_ser_val_vec, ttl)
+    }
+
+    pub fn delete(&self, key: &str) -> Result<(), AppError> {
+        self.cache_service.delete(key)
+    }
+
+    pub fn exists(&self, key: &str) -> Result<bool, AppError> {
+        self.cache_service.exists(key)
+    }
+
+    pub fn invalidate_pattern(&self, pattern: &str) -> Result<(), AppError> {
+        self.cache_service.invalidate_pattern(pattern)
+    }
+}
+
 
 #[derive(Clone, Debug)]
 pub struct RedisCacheService {
@@ -37,68 +121,81 @@ pub struct RedisCacheService {
 
 #[derive(Clone, Debug)]
 pub struct CacheConfig {
-    // TODO: Needt to fill config fields
     pub default_ttl: Option<Duration>,
 }
 
 impl Default for CacheConfig {
     fn default() -> Self {
         Self {
-            default_ttl: Some(Duration::from_secs(60)), // Default TTL of 60 seconds
+            default_ttl: Some(Duration::from_secs(3600)),
         }
     }
 }
 
 impl RedisCacheService {
     pub fn new(pool: RedisPool) -> Self {
-        Self { pool, config: CacheConfig::default() }
+        Self {
+            pool,
+            config: CacheConfig::default()
+        }
     }
 
     pub fn new_with_config(pool: RedisPool, config: CacheConfig) -> Self {
         Self { pool, config }
     }
 
-    pub fn get_connection(&self) -> Result<PooledConnection<Client>, AppError> {
+    fn get_connection(&self) -> Result<PooledConnection<Client>, AppError> {
         self.pool.get().map_err(|_| AppError::InternalServerError)
     }
 }
 
-impl CacheService for RedisCacheService {
-    fn get<T>(&self, key: &str) -> Result<Option<T>, AppError>
-    where
-        T: for<'de> Deserialize<'de>
-    {
-        let connection = &mut self.get_connection()?;
-        let res: String = connection.get(key).map_err(|_| AppError::InternalServerError)?;
-
-        if res.is_empty() {
-            Ok(None)
-        } else {
-            match serde_json::from_str(&res) {
-                Ok(value) => Ok(Some(value)),
-                Err(_) => {
-                    let _ = self.delete(key)?;
-                    Err(AppError::InternalServerError)
-                }
-            }
-        }
+impl CacheService for Arc<dyn CacheService> {
+    fn get_string(&self, key: &str) -> Result<Option<String>, AppError> {
+        (**self).get_string(key)
     }
 
-    fn set<T>(&self, key: &str, value: &T, ttl: Option<Duration>) -> Result<(), AppError>
-    where
-        T: Serialize
-    {
+    fn set_string(&self, key: &str, value: &str, ttl: Option<Duration>) -> Result<(), AppError> {
+        (**self).set_string(key, value, ttl)
+    }
+
+    fn mget_string(&self, keys: &[String]) -> Result<Vec<Option<String>>, AppError> {
+        (**self).mget_string(keys)
+    }
+
+    fn mset_string(&self, items: &[(String, String)], ttl: Option<Duration>) -> Result<(), AppError> {
+        (**self).mset_string(items, ttl)
+    }
+
+    fn delete(&self, key: &str) -> Result<(), AppError> {
+        (**self).delete(key)
+    }
+
+    fn exists(&self, key: &str) -> Result<bool, AppError> {
+        (**self).exists(key)
+    }
+
+    fn invalidate_pattern(&self, pattern: &str) -> Result<(), AppError> {
+        (**self).invalidate_pattern(pattern)
+    }
+}
+
+
+impl CacheService for RedisCacheService {
+    fn get_string(&self, key: &str) -> Result<Option<String>, AppError> {
         let connection = &mut self.get_connection()?;
-        let ttl_seconds = ttl.map_or(
-            self.config.default_ttl.unwrap().as_secs(), |d| d.as_secs()
-        );
-        let serialized_value = serde_json::to_string(value)
-            .map_err(|_| AppError::InternalServerError)?;
+        let res: Option<String> = connection.get(key).map_err(|_| AppError::InternalServerError)?;
+
+        Ok(res)
+    }
+
+    fn set_string(&self, key: &str, value: &str, ttl: Option<Duration>) -> Result<(), AppError> {
+        let connection = &mut self.get_connection()?;
+        let ttl_seconds = ttl.unwrap_or(self.config.default_ttl.unwrap()).as_secs();
 
         if ttl_seconds == 0 {
-            let _: () = connection.set(key, serialized_value)?;
+            let _: () = connection.set(key, value)?;
         } else {
-            let _: () = connection.set_ex(key, serialized_value, ttl_seconds)?;
+            let _: () = connection.set_ex(key, value, ttl_seconds)?;
         }
 
         Ok(())
@@ -113,18 +210,16 @@ impl CacheService for RedisCacheService {
 
     fn exists(&self, key: &str) -> Result<bool, AppError> {
         let connection = &mut self.get_connection()?;
-        let exists: bool = connection.exists(key).map_err(|_| AppError::InternalServerError)?;
+        let exist =  connection.exists(key)
+            .map_err(|_| AppError::InternalServerError)?;
 
-        Ok(exists)
+        Ok(exist)
     }
 
     fn invalidate_pattern(&self, pattern: &str) -> Result<(), AppError> {
         /* AI GENERATED CODE */
 
-        let pattern_clone = pattern.to_string();
-        let mut connection = self.get_connection()?;
-
-        // Get all keys matching pattern using SCAN
+        let connection = &mut self.get_connection()?;
         let mut cursor = 0;
         let mut all_keys = Vec::new();
 
@@ -132,10 +227,11 @@ impl CacheService for RedisCacheService {
             let (new_cursor, keys): (u64, Vec<String>) = redis::cmd("SCAN")
                 .arg(cursor)
                 .arg("MATCH")
-                .arg(&pattern_clone)
+                .arg(pattern)
                 .arg("COUNT")
                 .arg(1000)
-                .query(&mut connection)?;
+                .query(connection)
+                .map_err(|_| AppError::InternalServerError)?;
 
             all_keys.extend(keys);
             cursor = new_cursor;
@@ -146,68 +242,39 @@ impl CacheService for RedisCacheService {
         }
 
         if !all_keys.is_empty() {
-            let _: () = connection.del(all_keys)?;
+            let _: () = connection.del(all_keys)
+                .map_err(|_| AppError::InternalServerError)?;
         }
 
         Ok(())
     }
 
-    fn mget<T>(&self, keys: &[String]) -> Result<Vec<Option<T>>, AppError>
-    where
-        T: for<'de> Deserialize<'de>
-    {
+    fn mget_string(&self, keys: &[String]) -> Result<Vec<Option<String>>, AppError> {
         if keys.is_empty() {
             return Ok(vec![]);
         }
 
-        let keys_vec = keys.to_vec();
         let connection = &mut self.get_connection()?;
-        let raw_res_vec: Vec<Option<String>> = connection.mget(&keys_vec)?;
-        let mut results: Vec<Option<T>> = Vec::with_capacity(keys.len());
+        let res: Vec<Option<String>> = connection.mget(keys).map_err(|_| AppError::InternalServerError)?;
 
-        for (i, res) in raw_res_vec.iter().enumerate() {
-            match res {
-                Some(value) => {
-                    match serde_json::from_str(value) {
-                        Ok(parsed_value) => results.push(parsed_value),
-                        Err(_) => {
-                            self.delete(&keys_vec[i])?;
-                            results.push(None);
-                        },
-                    }
-                },
-                None => results.push(None),
-            }
-        }
-
-        Ok(results)
+        Ok(res)
     }
 
-    fn mset<T>(&self, items: &[(String, T)], ttl: Option<Duration>) -> Result<(), AppError>
-    where
-        T: Serialize
-    {
+    fn mset_string(&self, items: &[(String, String)], ttl: Option<Duration>) -> Result<(), AppError> {
         if items.is_empty() {
             return Ok(());
         }
 
         let connection = &mut self.get_connection()?;
-        let ttl_seconds = ttl.map_or(
-            self.config.default_ttl.unwrap().as_secs(), |d| d.as_secs()
-        );
+        let ttl_seconds = ttl.unwrap_or(self.config.default_ttl.unwrap()).as_secs();
 
         if ttl_seconds == 0 {
-            let key_ser_val_vec: Vec<(String, String)> = items.iter()
-                .map(|(k, v)| (k.clone(), serde_json::to_string(v).unwrap()))
-                .collect();
-            let _: () = connection.mset(&key_ser_val_vec)?;
+            let _: () = connection.mset(items)?;
         } else {
             let mut pipe = redis::pipe();
 
             for (key, value) in items {
-                let serialized_value = serde_json::to_string(value)
-                    .map_err(|_| AppError::InternalServerError)?;
-                pipe.set_ex(key, serialized_value, ttl_seconds);
+                pipe.set_ex(key, value, ttl_seconds);
             }
 
             pipe.exec(connection)
@@ -218,23 +285,14 @@ impl CacheService for RedisCacheService {
     }
 }
 
-
-// No-op cache implementation for fallback
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct NoOpCacheService;
-
 impl CacheService for NoOpCacheService {
-    fn get<T>(&self, _key: &str) -> Result<Option<T>, AppError>
-    where
-        T: for<'de> Deserialize<'de>
-    {
+    fn get_string(&self, _key: &str) -> Result<Option<String>, AppError> {
         Ok(None)
     }
 
-    fn set<T>(&self, _key: &str, _value: &T, _ttl: Option<Duration>) -> Result<(), AppError>
-    where
-        T: Serialize
-    {
+    fn set_string(&self, _key: &str, _value: &str, _ttl: Option<Duration>) -> Result<(), AppError> {
         Ok(())
     }
 
@@ -250,29 +308,16 @@ impl CacheService for NoOpCacheService {
         Ok(())
     }
 
-    fn mget<T>(&self, _keys: &[String]) -> Result<Vec<Option<T>>, AppError>
-    where
-        T: for<'de> Deserialize<'de>
-    {
-        let mut result = Vec::with_capacity(_keys.len());
-        for _ in 0.._keys.len() {
-            result.push(None);
-        }
-
-        Ok(result)
+    fn mget_string(&self, _keys: &[String]) -> Result<Vec<Option<String>>, AppError> {
+        Ok(vec![None; _keys.len()])
     }
 
-    fn mset<T>(&self, _items: &[(String, T)], _ttl: Option<Duration>) -> Result<(), AppError>
-    where
-        T: Serialize
-    {
+    fn mset_string(&self, _items: &[(String, String)], _ttl: Option<Duration>) -> Result<(), AppError> {
         Ok(())
     }
 }
 
-// Cache key builders for consistent naming
 pub struct CacheKeys;
-
 impl CacheKeys {
     pub fn organisation_by_id(id: &uuid::Uuid) -> String {
         format!("org:id:{}", id)
@@ -290,7 +335,6 @@ impl CacheKeys {
         "org:count".to_string()
     }
 
-    // Country connection cache keys
     pub fn country_connection_by_id(id: &uuid::Uuid) -> String {
         format!("cc:id:{}", id)
     }
@@ -303,8 +347,7 @@ impl CacheKeys {
         "cc:*".to_string()
     }
 
-    // Utility methods
-    fn sanitize_key(input: &str) -> String {
+    pub fn sanitize_key(input: &str) -> String {
         input
             .chars()
             .filter(|c| c.is_alphanumeric() || *c == '-' || *c == '_')
@@ -312,7 +355,6 @@ impl CacheKeys {
             .to_lowercase()
     }
 
-    // Generate versioned keys for cache invalidation
     pub fn versioned_key(base_key: &str, version: &str) -> String {
         format!("{}:v:{}", base_key, version)
     }

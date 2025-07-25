@@ -1,18 +1,18 @@
-use super::controllers::{create, list, delete, fetch, update};
+use super::controllers::{create_organisation, list_organisations, delete_organisation, fetch_organisation, update_organisation};
 use actix_web::{web, web::ServiceConfig};
 
 pub fn configure_services(cfg: &mut ServiceConfig) -> () {
     cfg.service(
         web::scope("/organisation")
             .route("/create", web::post()
-                .to(create))
+                .to(create_organisation))
             .route("/list", web::get()
-                .to(list))
+                .to(list_organisations))
             .route("/delete/{id}", web::delete()
-                .to(delete))
+                .to(delete_organisation))
             .route("/update/{id}", web::put()
-                .to(update))
+                .to(update_organisation))
             .route("/fetch/{id}", web::get()
-                .to(fetch))
+                .to(fetch_organisation))
     );
 }

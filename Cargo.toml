@@ -30,7 +30,7 @@ serde_json = "1.0.140"
 thiserror = "2.0.12"
 uuid = { version = "1.17.0", features = ["v4", "serde", "v5"] }
 chrono = { version = "0.4", features = ["serde"] }
-utoipa = { version = "5", features = ["actix_extras", "uuid", "debug", "chrono"] }
+utoipa = { version = "5.4", features = ["actix_extras", "uuid", "debug", "chrono"] }
 utoipa-swagger-ui = { version = "9", features = ["actix-web"] }
 bigdecimal = { version = "0.4.8", features = ["serde", "serde_json"] }
 actix-request-reply-cache = "0.1.7"

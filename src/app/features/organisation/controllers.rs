@@ -20,7 +20,7 @@ use std::cmp::min;
     params(OrganisationsListQueryRequest),
     tag = "Organisation"
 )]
-pub async fn list(
+pub async fn list_organisations(
     state: Data<AppState>,
     query: Query<OrganisationsListQueryRequest>
 ) -> Result<HttpResponse, AppError> {
@@ -58,7 +58,7 @@ pub async fn list(
     ),
     tag = "Organisation"
 )]
-pub async fn fetch(
+pub async fn fetch_organisation(
     state: Data<AppState>,
     _req: HttpRequest,
     id: Path<Uuid>
@@ -84,7 +84,7 @@ pub async fn fetch(
     ),
     tag = "Organisation"
 )]
-pub async fn update(
+pub async fn update_organisation(
     state: Data<AppState>,
     _req: HttpRequest,
     form: Json<UpdateOrganisationRequest>,
@@ -125,7 +125,7 @@ pub async fn update(
     ),
     tag = "Organisation"
 )]
-pub async fn delete(
+pub async fn delete_organisation(
     state: Data<AppState>,
     _req: HttpRequest,
     id: Path<Uuid>
@@ -148,7 +148,7 @@ pub async fn delete(
     ),
     tag = "Organisation"
 )]
-pub async fn create(
+pub async fn create_organisation(
     state: Data<AppState>,
     _req: HttpRequest,
     form: Json<CreateOrganisationRequest>
