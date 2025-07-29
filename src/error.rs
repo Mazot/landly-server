@@ -3,6 +3,7 @@ use actix_web::{
     error::ResponseError
 };
 use thiserror::Error;
+use std::env::VarError;
 use diesel::result::{Error as DieselError, DatabaseErrorKind};
 use diesel::r2d2::{Error as R2D2Error, PoolError};
 use redis::{ErrorKind as RedisErrorKind, RedisError};
@@ -107,6 +108,15 @@ impl From<RedisError> for AppError {
             RedisErrorKind::IoError => AppError::InternalServerError,
             RedisErrorKind::ResponseError => AppError::InternalServerError,
             _ => AppError::InternalServerError,
+        }
+    }
+}
+
+impl From<VarError> for AppError {
+    fn from(value: VarError) -> Self {
+        match value {
+            VarError::NotPresent => AppError::InternalServerError,
+            VarError::NotUnicode(_) => AppError::InternalServerError
         }
     }
 }
