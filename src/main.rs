@@ -77,6 +77,9 @@ async fn main() -> std::io::Result<()> {
     };
 
     HttpServer::new(move || {
+        let country_connection_configure_services = app::features::country_connection::config::create_configure_services_closure(app_state.di_container.redis_cache_service.clone());
+        let organisation_configure_services = app::features::organisation::config::create_configure_services_closure(app_state.di_container.redis_cache_service.clone());
+
         App::new()
             .app_data(web::Data::new(app_state.clone()))
             .wrap(Logger::default())
@@ -95,8 +98,8 @@ async fn main() -> std::io::Result<()> {
                             .route("", web::get().to(app::features::healthcheck::controllers::index))
                     )
                     .configure(app::features::common::config::configure_services)
-                    .configure(app::features::organisation::config::configure_services)
-                    .configure(app::features::country_connection::config::configure_services)
+                    .configure(organisation_configure_services)
+                    .configure(country_connection_configure_services)
             )
     })
     .bind(constants::BIND)?

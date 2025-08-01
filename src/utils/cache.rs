@@ -20,7 +20,8 @@ pub struct TypedCache<T: ?Sized> {
     cache_service: T,
 }
 
-// ! I prefer using manual Clone implementation for TypedCache because i don't know derive will work correctly with Arc<dyn CacheService>
+// ! I prefer using manual Clone implementation for TypedCache
+// ! because i don't know derive will work correctly with Arc<dyn CacheService>
 impl<T: ?Sized> Clone for TypedCache<Arc<T>> {
     fn clone(&self) -> Self {
         TypedCache {

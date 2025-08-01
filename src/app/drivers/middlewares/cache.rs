@@ -50,21 +50,24 @@ where
         let cache_service = self.cache_service.clone();
         let fut = self.service.call(req);
 
+        // TODO: Should add request body validation logic to improve cache invalidation for POST/PUT requests.
+        if method == Method::DELETE {
+            let _ = invalidate_cache_for_path(&cache_service, &method, &path);
+        }
+
         Box::pin(async move {
             let res = fut.await?;
 
-            if res.status().is_success() && (method == Method::POST || method == Method::PUT || method == Method::DELETE) {
-                let _ = invalidate_cache_for_path(&cache_service, &method, &path).await;
-            }
-
-            println!("Hi from response");
+            // if res.status().is_success() {
+            //     println!("Hi from res status is success");
+            // }
 
             Ok(res)
         })
     }
 }
 
-async fn invalidate_cache_for_path(
+fn invalidate_cache_for_path(
     cache_service: &TypedCache<Arc<dyn CacheService>>,
     method: &Method,
     path: &str

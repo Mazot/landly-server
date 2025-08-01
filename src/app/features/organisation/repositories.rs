@@ -163,12 +163,20 @@ impl OrganisationRepository for OrganisationRepositoryImpl {
     }
 
     fn fetch_organisation(&self, id: Uuid) -> Result<Organisation, AppError> {
+        let cache_key = CacheKeys::organisation_by_id(&id);
+
+        if let Some(cached) = self.cache_service.get::<Organisation>(&cache_key)? {
+            return Ok(cached);
+        }
+
         let connection = &mut self.pool.get()?;
         let organisation = Organisation::fetch_by_id(connection, id)?;
 
-        // TODO: We should invalidate the cache from CacheInvalidationMiddleware
-        // but for now we do it here to ensure the cache is cleared after creation.
-        let _ = self.cache_service.invalidate_pattern(&CacheKeys::organisation_pattern());
+        let _ = self.cache_service.set::<Organisation>(
+            &cache_key,
+            &organisation,
+            None
+        )?;
 
         Ok(organisation)
     }

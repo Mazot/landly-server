@@ -66,8 +66,8 @@ impl CountryConnectionRepository for CountryConnectionRepositoryImpl {
         let filters_hash = Self::generate_filters_hash(&params);
         let cache_key = CacheKeys::country_connections_list(&filters_hash);
 
-        if let Some(cached_c_c) = self.cache_service.get::<Vec<CountryConnection>>(&cache_key)? {
-            return Ok(cached_c_c);
+        if let Some(cached_c_c_vec) = self.cache_service.get::<Vec<CountryConnection>>(&cache_key)? {
+            return Ok(cached_c_c_vec);
         };
 
         let connection = &mut self.pool.get()?;
@@ -119,10 +119,6 @@ impl CountryConnectionRepository for CountryConnectionRepositoryImpl {
         let connection = &mut self.pool.get()?;
         CountryConnection::delete(connection, id)?;
 
-        // TODO: We should invalidate the cache from CacheInvalidationMiddleware
-        // but for now we do it here to ensure the cache is cleared after creation.
-        let _ = self.cache_service.invalidate_pattern(&CacheKeys::country_connection_pattern())?;
-
         Ok(())
     }
 
@@ -161,8 +157,19 @@ impl CountryConnectionRepository for CountryConnectionRepositoryImpl {
         &self,
         id: Uuid
     ) -> Result<CountryConnection, AppError> {
+        let cache_key = CacheKeys::country_connection_by_id(&id);
+        if let Some(cached_c_c) = self.cache_service.get::<CountryConnection>(&cache_key)? {
+            return Ok(cached_c_c);
+        }
+
         let connection = &mut self.pool.get()?;
         let result = CountryConnection::fetch_by_id(connection, id)?;
+
+        let _ = self.cache_service.set::<CountryConnection>(
+            &cache_key,
+            &result,
+            None
+        )?;
 
         Ok(result)
     }
