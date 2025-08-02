@@ -173,6 +173,7 @@ pub struct OrganisationType {
     #[diesel(column_name = type_)]
     pub org_type: String,
     pub color: Option<String>,
+    pub title: Option<String>,
 }
 
 impl OrganisationType {
@@ -214,4 +215,5 @@ pub struct CreateOrganisationType {
     #[diesel(column_name = type_)]
     pub org_type: String,
     pub color: Option<String>,
+    pub title: Option<String>,
 }

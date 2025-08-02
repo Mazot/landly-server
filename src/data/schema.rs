@@ -52,6 +52,8 @@ diesel::table! {
         #[sql_name = "type"]
         type_ -> Text,
         color -> Nullable<Text>,
+        #[max_length = 255]
+        title -> Nullable<Varchar>,
     }
 }
 
