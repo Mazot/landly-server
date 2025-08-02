@@ -7,6 +7,7 @@ use actix_web::{
 use chrono::NaiveDateTime;
 use utoipa::ToSchema;
 use uuid::Uuid;
+use std::str::FromStr;
 
 pub trait OrganisationPresenter: Send + Sync + 'static {
     fn to_http_res(&self) -> HttpResponse;
@@ -27,12 +28,31 @@ pub struct OrganisationContent {
     pub description: Option<String>,
     pub location_country_id: Option<Uuid>,
     pub organisation_type_id: Option<Uuid>,
+    pub latitude: Option<f64>,
+    pub longitude: Option<f64>,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
 }
 
 impl From<Organisation> for OrganisationContent {
     fn from(org: Organisation) -> Self {
+        let longitude: Option<f64> = match org.longitude {
+            Some(dec_val) => {
+                let str = dec_val.to_string();
+                let value: f64 = f64::from_str(&str).unwrap_or_default();
+                Some(value)
+            },
+            _ => None,
+        };
+        let latitude: Option<f64> = match org.latitude {
+            Some(dec_val) => {
+                let str = dec_val.to_string();
+                let value: f64 = f64::from_str(&str).unwrap_or_default();
+                Some(value)
+            },
+            _ => None,
+        };
+
         Self {
             id: org.id,
             name: org.name,
@@ -42,6 +62,8 @@ impl From<Organisation> for OrganisationContent {
             description: org.description,
             location_country_id: org.location_country_id,
             organisation_type_id: org.organisation_type_id,
+            latitude: latitude,
+            longitude: longitude,
             created_at: org.created_at,
             updated_at: org.updated_at,
         }
