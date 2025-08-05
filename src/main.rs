@@ -26,6 +26,8 @@ use utoipa_swagger_ui::SwaggerUi;
     paths(
         app::features::healthcheck::controllers::index,
         app::features::common::controllers::fetch_all_countries,
+        app::features::common::controllers::fetch_all_organisation_types,
+        app::features::common::controllers::create_organisation_type,
         app::features::organisation::controllers::list_organisations,
         app::features::organisation::controllers::fetch_organisation,
         app::features::organisation::controllers::create_organisation,
@@ -41,6 +43,8 @@ use utoipa_swagger_ui::SwaggerUi;
         schemas(
             app::features::common::presenters::CountryContent,
             app::features::common::presenters::OrganisationTypeContent,
+            app::features::common::controllers::CountriesListQueryParams,
+            app::features::common::controllers::CreateOrganisationTypeRequest,
             app::features::organisation::requests::OrganisationsListQueryRequest,
             app::features::organisation::requests::CreateOrganisationRequest,
             app::features::organisation::requests::UpdateOrganisationRequest,

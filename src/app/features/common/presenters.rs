@@ -8,6 +8,7 @@ use crate::data::models::{Country, OrganisationType};
 pub trait CommonPresenter: Send + Sync + 'static {
     fn to_http_res(&self) -> HttpResponse;
     fn to_single_country_json(&self, item: Country) -> HttpResponse;
+    fn to_single_organization_type_json(&self, item: OrganisationType) -> HttpResponse;
     fn to_multi_country_json(&self, item: Vec<Country>) -> HttpResponse;
     fn to_multi_organization_type_json(&self, item: Vec<OrganisationType>) -> HttpResponse;
 }
@@ -45,6 +46,12 @@ impl CommonPresenter for CommonPresenterImpl {
 
         HttpResponse::Ok().json(response_content)
     }
+
+    fn to_single_organization_type_json(&self, item: OrganisationType) -> HttpResponse {
+        let response_content = OrganisationTypeContent::from(item);
+
+        HttpResponse::Ok().json(response_content)
+    }
 }
 
 #[derive(Deserialize, Serialize, ToSchema)]
@@ -76,6 +83,7 @@ pub struct OrganisationTypeContent {
     pub id: Uuid,
     pub r#type: String,
     pub color: Option<String>,
+    pub title: Option<String>,
 }
 impl From<OrganisationType> for OrganisationTypeContent {
     fn from(val: OrganisationType) -> Self {
@@ -83,6 +91,7 @@ impl From<OrganisationType> for OrganisationTypeContent {
             id: val.id,
             r#type: val.org_type,
             color: val.color,
+            title: val.title
         }
     }
 }

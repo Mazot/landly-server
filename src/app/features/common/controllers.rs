@@ -1,10 +1,8 @@
-use crate::app::drivers::middlewares::state::AppState;
+use crate::app::{drivers::middlewares::state::AppState, features::common::usecases::CreateOrganisationTypeUsecaseInput};
 use crate::error::AppError;
 use super::usecases::FetchAllCountriesUsecaseInput;
-use actix_web::{
-    HttpResponse,
-    web::{Data, Query},
-};
+use actix_web::{web::{Data, Json, Query}, HttpResponse};
+use utoipa::{IntoParams, ToSchema};
 use std::cmp::min;
 use serde::Deserialize;
 
@@ -15,10 +13,7 @@ use serde::Deserialize;
     responses(
         (status = 200, description = "Countries list response", body = Vec<super::presenters::CountryContent>),
     ),
-    params(
-        ("limit" = Option<i64>, Query, description = "Optional limit for the number of countries to fetch, default is 20"),
-        ("offset" = Option<i64>, Query, description = "Optional offset for pagination, default is 0")
-    ),
+    params(CountriesListQueryParams),
     tag = "Common"
 )]
 pub async fn fetch_all_countries(
@@ -39,8 +34,61 @@ pub async fn fetch_all_countries(
         )
 }
 
-#[derive(Deserialize)]
+#[utoipa::path(
+    get,
+    path = "/common/org_types",
+    context_path = "/api",
+    responses(
+        (status = 200, description = "Organisation types list response", body = Vec<super::presenters::OrganisationTypeContent>),
+    ),
+    tag = "Common"
+)]
+pub async fn fetch_all_organisation_types(
+    state: Data<AppState>,
+) -> Result<HttpResponse, AppError> {
+    state
+        .di_container
+        .common_usecase
+        .fetch_organisation_types()
+}
+
+#[utoipa::path(
+    post,
+    path = "/common/org_types",
+    context_path = "/api",
+    request_body = CreateOrganisationTypeRequest,
+    responses(
+        (status = 200, description = "Organisation type created successfully", body = super::presenters::OrganisationTypeContent),
+        (status = 400, description = "Bad request", body = AppError),
+        (status = 500, description = "Internal server error", body = AppError)
+    ),
+    tag = "Common"
+)]
+pub async fn create_organisation_type(
+    state: Data<AppState>,
+    form: Json<CreateOrganisationTypeRequest>,
+) -> Result<HttpResponse, AppError> {
+    state
+        .di_container
+        .common_usecase
+        .create_organisation_type(
+            CreateOrganisationTypeUsecaseInput {
+                org_type: form.org_type.to_owned(),
+                color: form.color.to_owned(),
+                title: form.title.to_owned(),
+            }
+        )
+}
+
+#[derive(Deserialize, ToSchema)]
+pub struct CreateOrganisationTypeRequest {
+    pub org_type: String,
+    pub color: String,
+    pub title: String,
+}
+
+#[derive(Deserialize, ToSchema, IntoParams)]
 pub struct CountriesListQueryParams {
-    limit: Option<i64>,
-    offset: Option<i64>,
+    pub limit: Option<i64>,
+    pub offset: Option<i64>,
 }

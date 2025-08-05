@@ -1,4 +1,7 @@
-use crate::error::AppError;
+use crate::{
+    app::features::common::repositories::CreateOrganisationTypeRepositoryInput,
+    error::AppError,
+};
 use super::{
     presenters::CommonPresenter,
     repositories::{CommonRepository, GetAllCountriesRepositoryInput}
@@ -45,9 +48,29 @@ impl CommonUsecase {
 
         Ok(response)
     }
+
+    pub fn create_organisation_type(&self, params: CreateOrganisationTypeUsecaseInput) -> Result<HttpResponse, AppError> {
+        let org_type = self.common_repo
+            .create_organisation_type(
+                CreateOrganisationTypeRepositoryInput {
+                    org_type: params.org_type,
+                    color: params.color,
+                    title: params.title,
+                }
+            )?;
+        let response = self.common_presenter.to_single_organization_type_json(org_type);
+
+        Ok(response)
+    }
 }
 
 pub struct FetchAllCountriesUsecaseInput {
     pub limit: i64,
     pub offset: i64,
+}
+
+pub struct CreateOrganisationTypeUsecaseInput {
+    pub org_type: String,
+    pub color: String,
+    pub title: String,
 }

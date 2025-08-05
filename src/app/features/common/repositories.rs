@@ -1,4 +1,4 @@
-use crate::data::models::{Country, OrganisationType};
+use crate::data::models::{Country, CreateOrganisationType, OrganisationType};
 use crate::error::AppError;
 use crate::utils::db::DbPool;
 use serde_json::json;
@@ -23,6 +23,11 @@ pub trait CommonRepository: Send + Sync + 'static {
     fn get_all_organisation_types(
         &self
     ) -> Result<Vec<OrganisationType>, AppError>;
+
+    fn create_organisation_type(
+        &self,
+        params: CreateOrganisationTypeRepositoryInput
+    ) -> Result<OrganisationType, AppError>;
 }
 
 #[derive(Clone)]
@@ -88,6 +93,23 @@ impl CommonRepository for CommonRepositoryImpl {
 
         Ok(all_org_types)
     }
+
+    fn create_organisation_type(
+        &self,
+        params: CreateOrganisationTypeRepositoryInput
+    ) -> Result<OrganisationType, AppError> {
+        let connection = &mut self.pool.get()?;
+        let new_org_type = OrganisationType::create(
+            connection,
+            &CreateOrganisationType {
+                org_type: params.org_type,
+                color: Some(params.color),
+                title: Some(params.title),
+            }
+        )?;
+
+        Ok(new_org_type)
+    }
 }
 
 pub struct GetCountryRepositoryInput {
@@ -98,4 +120,10 @@ pub struct GetCountryRepositoryInput {
 pub struct GetAllCountriesRepositoryInput {
     pub limit: i64,
     pub offset: i64,
+}
+
+pub struct CreateOrganisationTypeRepositoryInput {
+    pub org_type: String,
+    pub color: String,
+    pub title: String,
 }
