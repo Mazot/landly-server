@@ -38,6 +38,7 @@ pub async fn list_organisations(
                 address: query.address.clone(),
                 location_country_id: query.location_country_id,
                 organisation_type_id: query.organisation_type_id,
+                founder_country_id: query.founder_country_id,
                 limit,
                 offset,
             }
@@ -103,6 +104,7 @@ pub async fn update_organisation(
                 description: form.description.clone(),
                 location_country_id: form.location_country_id,
                 organisation_type_id: form.organisation_type_id,
+                founder_country_id: form.founder_country_id,
                 latitude: form.latitude.map(BigDecimal::try_from)
                     .map(|v| v.expect("Invalid latitude value")),
                 longitude: form.longitude.map(BigDecimal::try_from)
@@ -165,6 +167,7 @@ pub async fn create_organisation(
                 description: form.description.clone(),
                 location_country_id: form.location_country_id,
                 organisation_type_id: form.organisation_type_id,
+                founder_country_id: form.founder_country_id,
                 latitude: form.latitude.map(BigDecimal::try_from)
                     .map(|v| v.expect("Invalid latitude value")),
                 longitude: form.longitude.map(BigDecimal::try_from)

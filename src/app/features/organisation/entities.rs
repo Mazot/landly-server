@@ -1,6 +1,6 @@
 use crate::data::{
     schema::organisations,
-    models::{Country, OrganisationType},
+    models::OrganisationType,
 };
 use crate::error::*;
 use diesel::prelude::*;
@@ -10,7 +10,8 @@ use uuid::Uuid;
 use chrono::NaiveDateTime;
 
 #[derive(Debug, Associations, Serialize, Deserialize, Queryable, Insertable, Selectable, Clone)]
-#[diesel(belongs_to(Country, foreign_key = location_country_id))]
+// #[diesel(belongs_to(Country, foreign_key = location_country_id))]
+// #[diesel(belongs_to(Country, foreign_key = founder_country_id))]
 #[diesel(belongs_to(OrganisationType, foreign_key = organisation_type_id))]
 #[diesel(table_name = organisations)]
 pub struct Organisation {
@@ -26,6 +27,7 @@ pub struct Organisation {
     pub updated_at: NaiveDateTime,
     pub latitude: Option<BigDecimal>,
     pub longitude: Option<BigDecimal>,
+    pub founder_country_id: Option<Uuid>,
 }
 
 impl Organisation {
@@ -76,7 +78,7 @@ impl Organisation {
         Ok(result)
     }
 
-    pub fn fetch_by_country(
+    pub fn fetch_by_location_country(
         conn: &mut PgConnection,
         country_id: Uuid,
     ) -> Result<Vec<Self>, AppError> {
@@ -110,6 +112,18 @@ impl Organisation {
 
         Ok(result)
     }
+
+    pub fn fetch_ids_by_founder_country(
+        conn: &mut PgConnection,
+        founder_country_id: Uuid,
+    ) -> Result<Vec<Uuid>, AppError> {
+        let result = organisations::table
+            .filter(organisations::founder_country_id.eq(founder_country_id))
+            .select(organisations::id)
+            .load::<Uuid>(conn)?;
+
+        Ok(result)
+    }
 }
 
 #[derive(Insertable, Clone)]
@@ -124,9 +138,10 @@ pub struct CreateOrganisation {
     pub organisation_type_id: Option<Uuid>,
     pub latitude: Option<BigDecimal>,
     pub longitude: Option<BigDecimal>,
+    pub founder_country_id: Option<Uuid>,
 }
 
-#[derive(AsChangeset)]
+#[derive(AsChangeset, Clone)]
 #[diesel(table_name = organisations)]
 pub struct UpdateOrganisation {
     pub name: Option<String>,
@@ -139,4 +154,5 @@ pub struct UpdateOrganisation {
     pub updated_at: NaiveDateTime,
     pub latitude: Option<BigDecimal>,
     pub longitude: Option<BigDecimal>,
+    pub founder_country_id: Option<Uuid>,
 }

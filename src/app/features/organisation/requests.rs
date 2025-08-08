@@ -13,6 +13,7 @@ pub struct CreateOrganisationRequest {
     pub organisation_type_id: Option<Uuid>,
     pub latitude: Option<f64>,
     pub longitude: Option<f64>,
+    pub founder_country_id: Option<Uuid>,
 }
 
 #[derive(Debug, Deserialize, Serialize, ToSchema)]
@@ -26,6 +27,7 @@ pub struct UpdateOrganisationRequest {
     pub organisation_type_id: Option<Uuid>,
     pub latitude: Option<f64>,
     pub longitude: Option<f64>,
+    pub founder_country_id: Option<Uuid>,
 }
 
 #[derive(Deserialize, Serialize, Debug, ToSchema, IntoParams)]
@@ -36,6 +38,7 @@ pub struct OrganisationsListQueryRequest {
     pub address: Option<String>,
     pub location_country_id: Option<Uuid>,
     pub organisation_type_id: Option<Uuid>,
+    pub founder_country_id: Option<Uuid>,
     pub limit: Option<i64>,
     pub offset: Option<i64>,
 }

@@ -37,6 +37,7 @@ impl OrganisationUsecase {
                     email: params.email,
                     address: params.address,
                     description: params.description,
+                    founder_country_id: params.founder_country_id,
                     location_country_id: params.location_country_id,
                     organisation_type_id: params.organisation_type_id,
                     latitude: params.latitude,
@@ -62,6 +63,7 @@ impl OrganisationUsecase {
                     email: params.email,
                     address: params.address,
                     description: params.description,
+                    founder_country_id: params.founder_country_id,
                     location_country_id: params.location_country_id,
                     organisation_type_id: params.organisation_type_id,
                     latitude: params.latitude,
@@ -85,6 +87,7 @@ impl OrganisationUsecase {
                     email: params.email,
                     location_country_id: params.location_country_id,
                     organisation_type_id: params.organisation_type_id,
+                    founder_country_id: params.founder_country_id,
                     address: params.address,
                     limit: params.limit,
                     offset: params.offset,
@@ -121,6 +124,7 @@ pub struct UpdateOrganisationUsecaseInput {
     pub organisation_type_id: Option<Uuid>,
     pub latitude: Option<BigDecimal>,
     pub longitude: Option<BigDecimal>,
+    pub founder_country_id: Option<Uuid>,
 }
 
 pub struct CreateOrganisationUsecaseInput {
@@ -133,6 +137,7 @@ pub struct CreateOrganisationUsecaseInput {
     pub organisation_type_id: Option<Uuid>,
     pub latitude: Option<BigDecimal>,
     pub longitude: Option<BigDecimal>,
+    pub founder_country_id: Option<Uuid>,
 }
 
 pub struct FetchOrganisationsUsecaseInput {
@@ -142,6 +147,7 @@ pub struct FetchOrganisationsUsecaseInput {
     pub address: Option<String>,
     pub location_country_id: Option<Uuid>,
     pub organisation_type_id: Option<Uuid>,
+    pub founder_country_id: Option<Uuid>,
     pub limit: i64,
     pub offset: i64,
 }

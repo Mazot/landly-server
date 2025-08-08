@@ -71,6 +71,28 @@ diesel::table! {
         updated_at -> Timestamp,
         latitude -> Nullable<Numeric>,
         longitude -> Nullable<Numeric>,
+        founder_country_id -> Nullable<Uuid>,
+    }
+}
+
+diesel::table! {
+    users (id) {
+        id -> Uuid,
+        #[max_length = 50]
+        username -> Varchar,
+        #[max_length = 255]
+        email -> Varchar,
+        #[max_length = 255]
+        password_hash -> Varchar,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
+diesel::table! {
+    users_to_languages (user_id, language_id) {
+        user_id -> Uuid,
+        language_id -> Uuid,
     }
 }
 
@@ -78,8 +100,9 @@ diesel::joinable!(chats -> countries_connections (origin_country_connection_id))
 diesel::joinable!(countries_connections -> countries (location_country_id));
 diesel::joinable!(countries_to_languages -> countries (country_id));
 diesel::joinable!(countries_to_languages -> languages (language_id));
-diesel::joinable!(organisations -> countries (location_country_id));
 diesel::joinable!(organisations -> organisation_types (organisation_type_id));
+diesel::joinable!(users_to_languages -> languages (language_id));
+diesel::joinable!(users_to_languages -> users (user_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
     chats,
@@ -89,4 +112,6 @@ diesel::allow_tables_to_appear_in_same_query!(
     languages,
     organisation_types,
     organisations,
+    users,
+    users_to_languages,
 );

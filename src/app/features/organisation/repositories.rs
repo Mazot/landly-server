@@ -102,6 +102,11 @@ impl OrganisationRepository for OrganisationRepositoryImpl {
                 query = query.filter(organisations::id.eq_any(ids));
             }
 
+            if let Some(founder_country_id) = params.founder_country_id {
+                let ids = Organisation::fetch_ids_by_founder_country(connection, founder_country_id)?;
+                query = query.filter(organisations::id.eq_any(ids));
+            }
+
             if let Some(organisation_type_id) = params.organisation_type_id {
                 let ids = Organisation::fetch_ids_by_organisation_type(connection, organisation_type_id)?;
                 query = query.filter(organisations::id.eq_any(ids));
@@ -138,6 +143,7 @@ impl OrganisationRepository for OrganisationRepositoryImpl {
                 organisation_type_id: params.organisation_type_id,
                 latitude: params.latitude,
                 longitude: params.longitude,
+                founder_country_id: params.founder_country_id,
             }
         )?;
 
@@ -200,6 +206,7 @@ impl OrganisationRepository for OrganisationRepositoryImpl {
                 organisation_type_id: params.organisation_type_id,
                 longitude: params.longitude,
                 latitude: params.latitude,
+                founder_country_id: params.founder_country_id,
                 updated_at: chrono::Utc::now().naive_utc(),
             }
         )?;
@@ -229,6 +236,7 @@ pub struct UpdateOrganisationRepositoryInput {
     pub organisation_type_id: Option<Uuid>,
     pub latitude: Option<BigDecimal>,
     pub longitude: Option<BigDecimal>,
+    pub founder_country_id: Option<Uuid>,
 }
 
 pub struct FetchOrganisationsRepositoryInput {
@@ -238,6 +246,7 @@ pub struct FetchOrganisationsRepositoryInput {
     pub address: Option<String>,
     pub location_country_id: Option<Uuid>,
     pub organisation_type_id: Option<Uuid>,
+    pub founder_country_id: Option<Uuid>,
     pub limit: i64,
     pub offset: i64,
 }
@@ -252,4 +261,5 @@ pub struct CreateOrganisationRepositoryInput {
     pub organisation_type_id: Option<Uuid>,
     pub latitude: Option<BigDecimal>,
     pub longitude: Option<BigDecimal>,
+    pub founder_country_id: Option<Uuid>,
 }
