@@ -38,6 +38,11 @@ use utoipa_swagger_ui::SwaggerUi;
         app::features::country_connection::controllers::create,
         app::features::country_connection::controllers::delete,
         app::features::country_connection::controllers::update,
+        app::features::user::controllers::signin,
+        app::features::user::controllers::signup,
+        app::features::user::controllers::add_languages,
+        app::features::user::controllers::delete_language,
+        app::features::user::controllers::fetch_languages,
     ),
     components(
         schemas(
@@ -55,13 +60,20 @@ use utoipa_swagger_ui::SwaggerUi;
             app::features::country_connection::requests::CountryConnectionsListQueryParams,
             app::features::country_connection::presenters::CountryConnectionContent,
             app::features::country_connection::presenters::MultipleCountryConnectionsResponse,
+            app::features::user::requests::SignInRequest,
+            app::features::user::requests::SignUpRequest,
+            app::features::user::requests::AddLanguagesRequest,
+            app::features::user::requests::DeleteLanguageRequest,
+            app::features::user::presenters::AuthUserContent,
+            app::features::user::presenters::UserLanguagesContent,
         )
     ),
     tags(
         (name = "Healthcheck", description = "Healthcheck related endpoints"),
         (name = "Common", description = "Common endpoints like countries, etc."),
         (name = "Organisation", description = "Organisation related endpoints"),
-        (name = "CountryConnection", description = "CountryConnection related endpoints")
+        (name = "CountryConnection", description = "CountryConnection related endpoints"),
+        (name = "User", description = "User related endpoints")
     )
 )]
 pub struct ApiDoc;
@@ -102,6 +114,7 @@ async fn main() -> std::io::Result<()> {
                             .route("", web::get().to(app::features::healthcheck::controllers::index))
                     )
                     .configure(app::features::common::config::configure_services)
+                    .configure(app::features::user::config::configure_services)
                     .configure(organisation_configure_services)
                     .configure(country_connection_configure_services)
             )

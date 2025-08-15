@@ -2,6 +2,7 @@ use actix_web::{
     http::StatusCode, HttpResponse,
     error::ResponseError
 };
+use bcrypt::BcryptError;
 use thiserror::Error;
 use std::env::VarError;
 use diesel::result::{Error as DieselError, DatabaseErrorKind};
@@ -118,5 +119,11 @@ impl From<VarError> for AppError {
             VarError::NotPresent => AppError::InternalServerError,
             VarError::NotUnicode(_) => AppError::InternalServerError
         }
+    }
+}
+
+impl From<BcryptError> for AppError {
+    fn from(_err: BcryptError) -> Self {
+        AppError::InternalServerError
     }
 }

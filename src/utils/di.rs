@@ -14,6 +14,11 @@ use crate::app::features::country_connection::{
     presenters::CountryConnectionPresenterImpl,
     usecases::CountryConnectionUsecase,
 };
+use crate::app::features::user::{
+    usecases::UserUsecase,
+    repositories::UserRepositoryImpl,
+    presenters::UserPresenterImpl,
+};
 use crate::utils::cache::{
     CacheService,
     NoOpCacheService,
@@ -27,6 +32,7 @@ pub struct DiContainer {
     pub organisation_usecase: OrganisationUsecase,
     pub common_usecase: CommonUsecase,
     pub country_connection_usecase: CountryConnectionUsecase,
+    pub user_usecase: UserUsecase,
     pub redis_cache_service: TypedCache<Arc<dyn CacheService>>,
 }
 
@@ -48,6 +54,9 @@ impl DiContainer {
         let country_connection_repo = CountryConnectionRepositoryImpl::new(pool.clone(), typed_cache_service.clone());
         let country_connection_presenter = CountryConnectionPresenterImpl::new();
 
+        let user_repo = UserRepositoryImpl::new(pool.clone());
+        let user_presenter = UserPresenterImpl::new();
+
         Self {
             redis_cache_service: typed_cache_service.clone(),
             organisation_usecase: OrganisationUsecase::new(
@@ -61,6 +70,10 @@ impl DiContainer {
             country_connection_usecase: CountryConnectionUsecase::new(
                 Arc::new(country_connection_repo.clone()),
                 Arc::new(country_connection_presenter.clone()),
+            ),
+            user_usecase: UserUsecase::new(
+                Arc::new(user_repo.clone()),
+                Arc::new(user_presenter.clone()),
             ),
         }
     }

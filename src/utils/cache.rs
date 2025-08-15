@@ -113,7 +113,6 @@ impl<T: CacheService> TypedCache<T> {
     }
 }
 
-
 #[derive(Clone, Debug)]
 pub struct RedisCacheService {
     pool: RedisPool,
@@ -179,7 +178,6 @@ impl CacheService for Arc<dyn CacheService> {
         (**self).invalidate_pattern(pattern)
     }
 }
-
 
 impl CacheService for RedisCacheService {
     fn get_string(&self, key: &str) -> Result<Option<String>, AppError> {
