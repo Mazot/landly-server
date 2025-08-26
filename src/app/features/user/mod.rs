@@ -5,3 +5,4 @@ pub mod usecases;
 pub mod controllers;
 pub mod requests;
 pub mod config;
+pub mod oauth;

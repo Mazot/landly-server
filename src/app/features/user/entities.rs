@@ -1,5 +1,5 @@
-use crate::data::schema::{users, users_to_languages};
-use crate::utils::hash;
+use crate::data::schema::{users, users_to_languages, user_providers};
+use crate::utils::{hash, token};
 use crate::error::*;
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -62,7 +62,7 @@ impl User {
             .values(
                 languages_ids.into_iter().map(|lang_id| {
                     CreateUserToLanguage {
-                        id: user_id,
+                        user_id,
                         language_id: lang_id,
                     }
                 }).collect::<Vec<CreateUserToLanguage>>()
@@ -77,7 +77,7 @@ impl User {
         user_id: Uuid,
     ) -> Result<Vec<UserToLanguage>, AppError> {
         let res = users_to_languages::table
-            .filter(users_to_languages::id.eq(user_id))
+            .filter(users_to_languages::user_id.eq(user_id))
             .load::<UserToLanguage>(conn)?;
 
         Ok(res)
@@ -89,7 +89,7 @@ impl User {
         language_id: Uuid,
     ) -> Result<(), AppError> {
         diesel::delete(users_to_languages::table)
-            .filter(users_to_languages::id.eq(user_id))
+            .filter(users_to_languages::user_id.eq(user_id))
             .filter(users_to_languages::language_id.eq(language_id))
             .execute(conn)?;
 
@@ -121,6 +121,49 @@ impl User {
         Ok(updated_user)
     }
 
+    pub fn find_user_by_provider(conn: &mut PgConnection, provider: &str, provider_user_id: &str) -> Result<Option<User>, AppError> {
+        let user_provider = user_providers::table
+            .filter(user_providers::provider.eq(provider))
+            .filter(user_providers::provider_user_id.eq(provider_user_id))
+            .first::<UserProvider>(conn)
+            .optional()?;
+
+        if let Some(up) = user_provider {
+            let user = users::table
+                .find(up.user_id)
+                .first::<User>(conn)?;
+
+            Ok(Some(user))
+        } else {
+            Ok(None)
+        }
+    }
+
+    pub fn find_by_email(conn: &mut PgConnection, email: &str) -> Result<Option<User>, AppError> {
+        let user = users::table
+            .filter(users::email.eq(email))
+            .first::<User>(conn)
+            .optional()?;
+
+        Ok(user)
+    }
+
+    pub fn create_user_provider(conn: &mut PgConnection, user_id: Uuid, provider: &str, provider_user_id: &str, email: &str) -> Result<(), AppError> {
+        diesel::insert_into(user_providers::table)
+            .values((
+                user_providers::user_id.eq(user_id),
+                user_providers::provider.eq(&provider),
+                user_providers::provider_user_id.eq(&provider_user_id),
+                user_providers::email.eq(&email),
+            )).on_conflict_do_nothing().execute(conn)?;
+
+        Ok(())
+    }
+
+    pub fn generate_token(&self) -> Result<String, AppError> {
+        token::generate_token(self.id)
+    }
+
     fn create(
         conn: &mut PgConnection,
         record: &CreateUser,
@@ -130,10 +173,6 @@ impl User {
             .get_result::<User>(conn)?;
 
         Ok(result)
-    }
-
-    fn generate_token(&self) -> Result<String, AppError> {
-        todo!("Implement token generation logic")
     }
 
     fn update(
@@ -170,13 +209,24 @@ pub struct UpdateUser {
 #[derive(Debug, Serialize, Deserialize, Queryable, Insertable, Selectable, Clone)]
 #[diesel(table_name = users_to_languages)]
 pub struct UserToLanguage {
-    pub id: Uuid,
+    pub user_id: Uuid,
     pub language_id: Uuid,
 }
 
 #[derive(Insertable, Clone)]
 #[diesel(table_name = users_to_languages)]
 pub struct CreateUserToLanguage {
-    pub id: Uuid,
+    pub user_id: Uuid,
     pub language_id: Uuid,
+}
+
+#[derive(Debug, Serialize, Deserialize, Queryable, Insertable, Selectable, Clone)]
+#[diesel(table_name = user_providers)]
+pub struct UserProvider {
+    pub id: Uuid,
+    pub user_id: Uuid,
+    pub provider: String,
+    pub provider_user_id: String,
+    pub email: Option<String>,
+    pub created_at: Option<NaiveDateTime>,
 }

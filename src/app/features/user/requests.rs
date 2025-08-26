@@ -26,3 +26,10 @@ pub struct DeleteLanguageRequest {
     pub user_id: Uuid,
     pub language_id: Uuid,
 }
+
+#[derive(Deserialize, ToSchema, IntoParams)]
+pub struct OAuthCallbackParams {
+    pub code: String,
+    pub state: String,
+    pub scope: Option<String>,
+}

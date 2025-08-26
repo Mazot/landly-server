@@ -1,8 +1,8 @@
 use super::{
-    requests::{SignInRequest, SignUpRequest, AddLanguagesRequest, DeleteLanguageRequest}
+    requests::{SignInRequest, SignUpRequest, AddLanguagesRequest, DeleteLanguageRequest, OAuthCallbackParams}
 };
 use crate::{app::drivers::middlewares::state::AppState, error::AppError};
-use actix_web::{web::{Data, Json, Path}, HttpResponse};
+use actix_web::{web::{Data, Json, Path, Query}, HttpResponse};
 use uuid::Uuid;
 
 #[utoipa::path(
@@ -116,4 +116,58 @@ pub async fn fetch_languages(
         .di_container
         .user_usecase
         .fetch_languages(user_id.into_inner())
+}
+
+#[utoipa::path(
+    get,
+    path = "/user/oauth/google/login",
+    context_path = "/api",
+    responses(
+        (status = 302, description = "Redirect to Google OAuth")
+    ),
+    tag = "User"
+)]
+pub async fn oauth_google_login(
+    state: Data<AppState>
+) -> Result<HttpResponse, AppError> {
+    let (url, _state) = state.
+        di_container
+        .oauth_google
+        .auth_url()?;
+
+    Ok(HttpResponse::Found()
+        .append_header(("Location", url.to_string()))
+        .finish()
+    )
+}
+
+#[utoipa::path(
+    get,
+    path = "/user/oauth/google/callback",
+    context_path = "/api",
+    params(OAuthCallbackParams),
+    responses(
+        (status = 200, description = "Google OAuth callback handled successfully", body = super::presenters::AuthUserContent),
+        (status = 401, description = "Unauthorized", body = AppError),
+        (status = 500, description = "Internal server error", body = AppError)
+    ),
+    tag = "User"
+)]
+pub async fn oauth_google_callback(
+    state: Data<AppState>,
+    query: Query<OAuthCallbackParams>
+) -> Result<HttpResponse, AppError> {
+    let user_info = state
+        .di_container
+        .oauth_google
+        .exchange_and_userinfo(query.code.to_owned(), query.state.to_owned()).await?;
+    let email = user_info.email.ok_or_else(|| AppError::Unauthorized(serde_json::json!({"message":"no email"})))?;
+
+    let response = state
+        .di_container
+        .user_usecase
+        .oauth_google_upsert(email, user_info.sub)
+        ?;
+
+    Ok(response)
 }

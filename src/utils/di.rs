@@ -18,6 +18,7 @@ use crate::app::features::user::{
     usecases::UserUsecase,
     repositories::UserRepositoryImpl,
     presenters::UserPresenterImpl,
+    oauth::google::OAuthGoogle,
 };
 use crate::utils::cache::{
     CacheService,
@@ -34,6 +35,7 @@ pub struct DiContainer {
     pub country_connection_usecase: CountryConnectionUsecase,
     pub user_usecase: UserUsecase,
     pub redis_cache_service: TypedCache<Arc<dyn CacheService>>,
+    pub oauth_google: OAuthGoogle,
 }
 
 impl DiContainer {
@@ -75,6 +77,7 @@ impl DiContainer {
                 Arc::new(user_repo.clone()),
                 Arc::new(user_presenter.clone()),
             ),
+            oauth_google: OAuthGoogle::new(typed_cache_service.clone()),
         }
     }
 }

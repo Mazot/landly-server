@@ -76,6 +76,21 @@ impl UserUsecase {
         Ok(response)
     }
 
+    pub fn oauth_google_upsert(
+        &self,
+        email: String,
+        provider_user_id: String
+    ) -> Result<HttpResponse, AppError> {
+        let (user, token) = self.user_repository.upsert_oauth_user(
+            "google".to_string(),
+            provider_user_id,
+            email
+        )?;
+        let response = self.user_presenter.to_single_json(user, token);
+
+        Ok(response)
+    }
+
     pub fn find_auth_user(&self, user_id: Uuid) -> Result<User, &str> {
         // let maybe_user = self.user_repository.find(user_id);
         // self.user_presenter.to_auth_middleware(maybe_user)

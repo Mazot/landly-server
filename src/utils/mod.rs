@@ -3,3 +3,4 @@ pub mod di;
 pub mod redis;
 pub mod cache;
 pub mod hash;
+pub mod token;

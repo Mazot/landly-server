@@ -21,7 +21,7 @@ pub struct UserLanguagesContent {
 
 impl From<Vec<UserToLanguage>> for UserLanguagesContent {
     fn from(value: Vec<UserToLanguage>) -> Self {
-        let user_id = value.first().map(|v| v.id).unwrap_or_default();
+        let user_id = value.first().map(|v| v.user_id).unwrap_or_default();
         let language_ids: Vec<Uuid> = value.into_iter().map(|v| v.language_id).collect();
 
         Self {
