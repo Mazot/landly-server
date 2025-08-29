@@ -1,5 +1,6 @@
 use crate::error::AppError;
 use crate::utils::cache::{CacheService, TypedCache};
+use crate::constants::env_key;
 use std::sync::Arc;
 use oauth2::basic::BasicTokenType;
 use oauth2::url::Url;
@@ -29,9 +30,9 @@ pub struct GoogleUserInfo {
 
 impl OAuthGoogle {
     pub fn new(cache: TypedCache<Arc<dyn CacheService>>) -> Self {
-        let client_id = std::env::var("GOOGLE_CLIENT_ID").expect("GOOGLE_CLIENT_ID missing");
-        let client_secret = std::env::var("GOOGLE_CLIENT_SECRET").expect("GOOGLE_CLIENT_SECRET missing");
-        let redirect = std::env::var("OAUTH_GOOGLE_REDIRECT_URL").expect("OAUTH_GOOGLE_REDIRECT_URL missing");
+        let client_id = std::env::var(env_key::GOOGLE_CLIENT_ID).expect("GOOGLE_CLIENT_ID missing");
+        let client_secret = std::env::var(env_key::GOOGLE_CLIENT_SECRET).expect("GOOGLE_CLIENT_SECRET missing");
+        let redirect = std::env::var(env_key::OAUTH_GOOGLE_REDIRECT_URL).expect("OAUTH_GOOGLE_REDIRECT_URL missing");
 
         let auth_url = AuthUrl::new("https://accounts.google.com/o/oauth2/v2/auth".to_string()).unwrap();
         let token_url = TokenUrl::new("https://oauth2.googleapis.com/token".to_string()).unwrap();

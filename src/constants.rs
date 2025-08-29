@@ -6,6 +6,7 @@ pub mod env_key {
     pub const REDIS_URL: &str = "REDIS_URL";
     pub const GOOGLE_CLIENT_ID: &str = "GOOGLE_CLIENT_ID";
     pub const GOOGLE_CLIENT_SECRET: &str = "GOOGLE_CLIENT_SECRET";
+    pub const OAUTH_GOOGLE_REDIRECT_URL: &str = "OAUTH_GOOGLE_REDIRECT_URL";
     pub const JWT_SECRET: &str = "JWT_SECRET";
     pub const JWT_EXPIRATION: &str = "JWT_EXPIRATION";
 }
