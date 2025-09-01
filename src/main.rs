@@ -21,7 +21,7 @@ use utoipa_swagger_ui::SwaggerUi;
     ),
     servers(
         (url = "http://localhost:8080", description = "Local development server"),
-        (url = "https://api.orsoft.com", description = "Production server"),
+        (url = "https://api.orsoft.xyz", description = "Production server"),
     ),
     paths(
         app::features::healthcheck::controllers::index,

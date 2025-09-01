@@ -67,7 +67,7 @@ services:
     container_name: landly_server
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-landly-user}:${POSTGRES_PASSWORD:-landly-password}@db:5432/${POSTGRES_DB:-landly}
-      FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://api.orsoft.xyz}
+      FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-https://orsoft.xyz}
       HOST: ${HOST:-0.0.0.0}
       PORT: ${PORT:-8080}
       REDIS_URL: redis://${REDIS_USER:-redis}:${REDIS_PASSWORD:-redis-pass}@redis:6379
