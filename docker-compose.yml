@@ -1,39 +1,118 @@
 services:
   db:
-    image: postgres:17
+    image: postgres:17-alpine
     container_name: landly_postgres
     environment:
-      POSTGRES_USER: landly-user
-      POSTGRES_PASSWORD: landly-password
-      POSTGRES_DB: landly
+      POSTGRES_USER: ${POSTGRES_USER:-landly-user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-landly-password}
+      POSTGRES_DB: ${POSTGRES_DB:-landly}
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256"
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
       - landly_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-landly-user} -d ${POSTGRES_DB:-landly}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+        reservations:
+          memory: 256M
+          cpus: '0.25'
+
+  redis:
+    image: redis:7-alpine
+    container_name: landly_redis_cache
+    environment:
+      REDIS_USER: ${REDIS_USER:-redis}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-redis-pass}
+    command: >
+      sh -c '
+        echo "user ${REDIS_USER:-redis} on +@all ~* >${REDIS_PASSWORD:-redis-pass}" > /tmp/users.acl &&
+        redis-server --appendonly yes --aclfile /tmp/users.acl --requirepass ${REDIS_PASSWORD:-redis-pass}
+      '
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - landly_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.25'
+        reservations:
+          memory: 128M
+          cpus: '0.1'
 
   landly-server:
     build: .
     container_name: landly_server
     environment:
-      - DATABASE_URL=postgresql://landly-user:landly-password@db:5432/landly
-      - FRONTEND_ORIGIN=http://api.orsoft.xyz
-      - HOST=0.0.0.0
-      - PORT=8080
+      DATABASE_URL: postgresql://${POSTGRES_USER:-landly-user}:${POSTGRES_PASSWORD:-landly-password}@db:5432/${POSTGRES_DB:-landly}
+      FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://api.orsoft.xyz}
+      HOST: ${HOST:-0.0.0.0}
+      PORT: ${PORT:-8080}
+      REDIS_URL: redis://${REDIS_USER:-redis}:${REDIS_PASSWORD:-redis-pass}@redis:6379
+      RUST_LOG: ${RUST_LOG:-info}
+      JWT_SECRET: ${JWT_SECRET}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      OAUTH_GOOGLE_REDIRECT_URL: ${OAUTH_GOOGLE_REDIRECT_URL}
     ports:
-      - "127.0.0.1:8080:8080"
+      - "${BIND_ADDRESS:-127.0.0.1}:${EXTERNAL_PORT:-8080}:${PORT:-8080}"
     depends_on:
-      - db
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     networks:
       - landly_network
     restart: unless-stopped
     volumes:
       - ./data:/app/data
+      - ./logs:/app/logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:${PORT:-8080}/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1.0'
+        reservations:
+          memory: 512M
+          cpus: '0.5'
 
 networks:
   landly_network:
     driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
 
 volumes:
   postgres_data:
+    driver: local
+  redis_data:
+    driver: local

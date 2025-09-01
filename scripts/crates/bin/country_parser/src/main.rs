@@ -47,7 +47,7 @@ pub struct GeoFeatureProperties {
 pub struct Geometry {
     #[serde(rename = "type")]
     pub r#type: String,
-    pub coordinates: Value, // Univeral type for coordinates.
+    pub coordinates: Value, // Universal type for coordinates.
 }
 
 #[derive(Debug, Deserialize)]

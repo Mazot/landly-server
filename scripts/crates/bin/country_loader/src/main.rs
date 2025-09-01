@@ -2,6 +2,7 @@ use std::error::Error;
 use std::fs::File;
 use std::io::BufReader;
 use dotenv::dotenv;
+use std::env;
 use serde_json::json;
 use landly_server::data::models::{Country, CreateCountry};
 use landly_server::utils::db::establish_connection;
@@ -11,8 +12,10 @@ fn main() -> Result<(), Box<dyn Error>> {
     dotenv().ok();
 
     let db_pool = establish_connection();
+    let args: Vec<String> = env::args().collect(); // Собираем аргументы в вектор строк
 
-    let file = File::open("./bin/country_parser/data/merged_countries.json")?;
+    let file_path = args[1].clone();
+    let file = File::open(file_path)?;
     let reader = BufReader::new(file);
 
     let countries: Vec<MergedCountry> = serde_json::from_reader(reader)?;

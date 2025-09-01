@@ -12,5 +12,8 @@ export PORT=${PORT:-"8080"}
 echo "Running database migrations..."
 diesel migration run
 
-echo "Starting application..."
+echo "Starting country loader..."
+./country_loader ./country_data/merged_countries.json
+
+echo "Country loader finished. Starting application..."
 exec ./landly-server
