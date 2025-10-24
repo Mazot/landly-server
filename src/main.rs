@@ -6,6 +6,7 @@ pub mod utils;
 
 use crate::app::drivers::middlewares::{
     cors::cors,
+    auth::Authentication,
 };
 use actix_web::middleware::Logger;
 use actix_web::{web, App, HttpServer};
@@ -100,6 +101,7 @@ async fn main() -> std::io::Result<()> {
             .app_data(web::Data::new(app_state.clone()))
             .wrap(Logger::default())
             .wrap(cors())
+            .wrap(Authentication)
             .service(
                 SwaggerUi::new("/swagger-ui/{_:.*}")
                     .url("/api-docs/openapi.json", ApiDoc::openapi())

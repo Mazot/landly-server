@@ -1,16 +1,14 @@
-use actix_web::{
-    http::StatusCode, HttpResponse,
-    error::ResponseError
-};
+use actix_web::{HttpResponse, error::ResponseError, http::StatusCode};
 use bcrypt::BcryptError;
-use thiserror::Error;
-use std::env::VarError;
-use diesel::result::{Error as DieselError, DatabaseErrorKind};
 use diesel::r2d2::{Error as R2D2Error, PoolError};
+use diesel::result::{DatabaseErrorKind, Error as DieselError};
+use jsonwebtoken::errors::{Error as JwtError, ErrorKind as JwtErrorKind};
 use redis::{ErrorKind as RedisErrorKind, RedisError};
-use serde_json::{json, Value as JsonValue};
-use uuid::Error as UuidError;
+use serde_json::{Value as JsonValue, json};
+use std::env::VarError;
+use thiserror::Error;
 use utoipa::ToSchema;
+use uuid::Error as UuidError;
 
 #[derive(Error, ToSchema, Debug)]
 pub enum AppError {
@@ -54,7 +52,7 @@ impl ResponseError for AppError {
             AppError::UnprocessableEntity(msg) => HttpResponse::UnprocessableEntity().json(msg),
             AppError::InternalServerError => {
                 HttpResponse::InternalServerError().json("Internal Server Error")
-            },
+            }
         }
     }
 }
@@ -117,7 +115,7 @@ impl From<VarError> for AppError {
     fn from(value: VarError) -> Self {
         match value {
             VarError::NotPresent => AppError::InternalServerError,
-            VarError::NotUnicode(_) => AppError::InternalServerError
+            VarError::NotUnicode(_) => AppError::InternalServerError,
         }
     }
 }
@@ -125,5 +123,21 @@ impl From<VarError> for AppError {
 impl From<BcryptError> for AppError {
     fn from(_err: BcryptError) -> Self {
         AppError::InternalServerError
+    }
+}
+
+impl From<JwtError> for AppError {
+    fn from(err: JwtError) -> Self {
+        match err.kind() {
+            JwtErrorKind::InvalidToken => {
+                AppError::Unauthorized(json!({ "error": "Invalid Token" }))
+            }
+            JwtErrorKind::InvalidIssuer => {
+                AppError::Unauthorized(json!({ "error": "Invalid Issuer" }))
+            }
+            _ => AppError::Unauthorized(
+                json!({ "error": "An issue was found with the token provided" }),
+            ),
+        }
     }
 }

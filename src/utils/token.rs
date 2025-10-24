@@ -9,7 +9,7 @@ use uuid::Uuid;
 
 // https://auth0.com/docs/secure/tokens/json-web-tokens/json-web-token-claims
 #[derive(Debug, Serialize, Deserialize)]
-struct JwtClaims {
+pub struct JwtClaims {
     pub sub: Uuid,
     exp: usize,
     iat: usize,
@@ -25,6 +25,19 @@ fn get_jwt_expiration_secs() -> usize {
         .ok()
         .and_then(|val| val.parse().ok())
         .unwrap_or(3600)
+}
+
+pub fn decode_token(token: &str) -> Result<JwtClaims, AppError> {
+    let secret = get_jwt_secret();
+    let validation = jsonwebtoken::Validation::default();
+
+    let token_data = jsonwebtoken::decode::<JwtClaims>(
+        token,
+        &jsonwebtoken::DecodingKey::from_secret(secret.as_bytes()),
+        &validation,
+    )?;
+
+    Ok(token_data.claims)
 }
 
 pub fn generate_token(user_id: Uuid) -> Result<String, AppError> {
