@@ -5,28 +5,20 @@ use serde_json::json;
 use uuid::Uuid;
 
 pub trait CommonRepository: Send + Sync + 'static {
-    fn get_country(
-        &self,
-        params: GetCountryRepositoryInput
-    ) -> Result<Country, AppError>;
+    fn get_country(&self, params: GetCountryRepositoryInput) -> Result<Country, AppError>;
 
     fn get_all_countries(
         &self,
-        params: GetAllCountriesRepositoryInput
+        params: GetAllCountriesRepositoryInput,
     ) -> Result<Vec<Country>, AppError>;
 
-    fn get_organisation_type(
-        &self,
-        id: &Uuid
-    ) -> Result<OrganisationType, AppError>;
+    fn get_organisation_type(&self, id: &Uuid) -> Result<OrganisationType, AppError>;
 
-    fn get_all_organisation_types(
-        &self
-    ) -> Result<Vec<OrganisationType>, AppError>;
+    fn get_all_organisation_types(&self) -> Result<Vec<OrganisationType>, AppError>;
 
     fn create_organisation_type(
         &self,
-        params: CreateOrganisationTypeRepositoryInput
+        params: CreateOrganisationTypeRepositoryInput,
     ) -> Result<OrganisationType, AppError>;
 }
 
@@ -44,29 +36,22 @@ impl CommonRepository for CommonRepositoryImpl {
     fn get_country(&self, params: GetCountryRepositoryInput) -> Result<Country, AppError> {
         let connection = &mut self.pool.get()?;
         let country_result = match params.id {
-            Some(id) => {
-                Country::get_by_id(
-                    connection,
-                    &id
-                )
+            Some(id) => Country::get_by_id(connection, &id),
+            None => match params.name {
+                Some(name) => Country::get_by_name(connection, &name.as_str()),
+                None => Err(AppError::NotFound(
+                    json!({ "error": "Empty request params" }),
+                )),
             },
-            None => {
-                match params.name {
-                    Some(name) => {
-                        Country::get_by_name(
-                            connection,
-                            &name.as_str()
-                        )
-                    },
-                    None => Err(AppError::NotFound(json!({ "error": "Empty request params" })))
-                }
-            }
         };
 
         country_result
     }
 
-    fn get_all_countries(&self, params: GetAllCountriesRepositoryInput) -> Result<Vec<Country>, AppError> {
+    fn get_all_countries(
+        &self,
+        params: GetAllCountriesRepositoryInput,
+    ) -> Result<Vec<Country>, AppError> {
         use crate::data::schema::countries;
         use diesel::prelude::*;
 
@@ -96,7 +81,7 @@ impl CommonRepository for CommonRepositoryImpl {
 
     fn create_organisation_type(
         &self,
-        params: CreateOrganisationTypeRepositoryInput
+        params: CreateOrganisationTypeRepositoryInput,
     ) -> Result<OrganisationType, AppError> {
         let connection = &mut self.pool.get()?;
         let new_org_type = OrganisationType::create(
@@ -105,7 +90,7 @@ impl CommonRepository for CommonRepositoryImpl {
                 org_type: params.org_type,
                 color: Some(params.color),
                 title: Some(params.title),
-            }
+            },
         )?;
 
         Ok(new_org_type)

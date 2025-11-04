@@ -3,11 +3,7 @@ use crate::{error::AppError, utils::db::DbPool};
 use uuid::Uuid;
 
 pub trait UserRepository: Send + Sync + 'static {
-    fn signin(
-        &self,
-        email: String,
-        password: String,
-    ) -> Result<(User, String), AppError>;
+    fn signin(&self, email: String, password: String) -> Result<(User, String), AppError>;
 
     fn signup(
         &self,
@@ -22,16 +18,9 @@ pub trait UserRepository: Send + Sync + 'static {
         languages_ids: Vec<Uuid>,
     ) -> Result<Vec<UserToLanguage>, AppError>;
 
-    fn delete_language(
-        &self,
-        user_id: Uuid,
-        language_id: Uuid,
-    ) -> Result<(), AppError>;
+    fn delete_language(&self, user_id: Uuid, language_id: Uuid) -> Result<(), AppError>;
 
-    fn fetch_languages(
-        &self,
-        user_id: Uuid,
-    ) -> Result<Vec<UserToLanguage>, AppError>;
+    fn fetch_languages(&self, user_id: Uuid) -> Result<Vec<UserToLanguage>, AppError>;
 
     fn upsert_oauth_user(
         &self,
@@ -52,11 +41,7 @@ impl UserRepositoryImpl {
 }
 
 impl UserRepository for UserRepositoryImpl {
-    fn signin(
-        &self,
-        email: String,
-        password: String,
-    ) -> Result<(User, String), AppError> {
+    fn signin(&self, email: String, password: String) -> Result<(User, String), AppError> {
         let conn = &mut self.pool.get()?;
 
         User::signin(conn, email, password)
@@ -84,21 +69,14 @@ impl UserRepository for UserRepositoryImpl {
         Ok(res)
     }
 
-    fn delete_language(
-        &self,
-        user_id: Uuid,
-        language_id: Uuid,
-    ) -> Result<(), AppError> {
+    fn delete_language(&self, user_id: Uuid, language_id: Uuid) -> Result<(), AppError> {
         let conn = &mut self.pool.get()?;
         User::delete_language(conn, user_id, language_id)?;
 
         Ok(())
     }
 
-    fn fetch_languages(
-        &self,
-        user_id: Uuid,
-    ) -> Result<Vec<UserToLanguage>, AppError> {
+    fn fetch_languages(&self, user_id: Uuid) -> Result<Vec<UserToLanguage>, AppError> {
         let conn = &mut self.pool.get()?;
         let res = User::fetch_languages(conn, user_id)?;
 

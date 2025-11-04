@@ -1,8 +1,11 @@
-use super::{
-    requests::{SignInRequest, SignUpRequest, AddLanguagesRequest, DeleteLanguageRequest, OAuthCallbackParams}
+use super::requests::{
+    AddLanguagesRequest, DeleteLanguageRequest, OAuthCallbackParams, SignInRequest, SignUpRequest,
 };
 use crate::{app::drivers::middlewares::state::AppState, error::AppError};
-use actix_web::{web::{Data, Json, Path, Query}, HttpResponse};
+use actix_web::{
+    HttpResponse,
+    web::{Data, Json, Path, Query},
+};
 use uuid::Uuid;
 
 #[utoipa::path(
@@ -19,10 +22,10 @@ use uuid::Uuid;
 )]
 pub async fn signin(
     state: Data<AppState>,
-    form: Json<SignInRequest>
+    form: Json<SignInRequest>,
 ) -> Result<HttpResponse, AppError> {
-    state.
-        di_container
+    state
+        .di_container
         .user_usecase
         .signin(form.email.to_owned(), form.password.to_owned())
 }
@@ -41,12 +44,13 @@ pub async fn signin(
 )]
 pub async fn signup(
     state: Data<AppState>,
-    form: Json<SignUpRequest>
+    form: Json<SignUpRequest>,
 ) -> Result<HttpResponse, AppError> {
-    state
-        .di_container
-        .user_usecase
-        .signup(form.username.to_owned(), form.email.to_owned(), form.password.to_owned())
+    state.di_container.user_usecase.signup(
+        form.username.to_owned(),
+        form.email.to_owned(),
+        form.password.to_owned(),
+    )
 }
 
 #[utoipa::path(
@@ -63,7 +67,7 @@ pub async fn signup(
 )]
 pub async fn add_languages(
     state: Data<AppState>,
-    form: Json<AddLanguagesRequest>
+    form: Json<AddLanguagesRequest>,
 ) -> Result<HttpResponse, AppError> {
     state
         .di_container
@@ -85,14 +89,13 @@ pub async fn add_languages(
 )]
 pub async fn delete_language(
     state: Data<AppState>,
-    form: Json<DeleteLanguageRequest>
+    form: Json<DeleteLanguageRequest>,
 ) -> Result<HttpResponse, AppError> {
     state
         .di_container
         .user_usecase
         .delete_language(form.user_id, form.language_id)
 }
-
 
 #[utoipa::path(
     get,
@@ -110,7 +113,7 @@ pub async fn delete_language(
 )]
 pub async fn fetch_languages(
     state: Data<AppState>,
-    user_id: Path<Uuid>
+    user_id: Path<Uuid>,
 ) -> Result<HttpResponse, AppError> {
     state
         .di_container
@@ -127,18 +130,12 @@ pub async fn fetch_languages(
     ),
     tag = "User"
 )]
-pub async fn oauth_google_login(
-    state: Data<AppState>
-) -> Result<HttpResponse, AppError> {
-    let (url, _state) = state.
-        di_container
-        .oauth_google
-        .auth_url()?;
+pub async fn oauth_google_login(state: Data<AppState>) -> Result<HttpResponse, AppError> {
+    let (url, _state) = state.di_container.oauth_google.auth_url()?;
 
     Ok(HttpResponse::Found()
         .append_header(("Location", url.to_string()))
-        .finish()
-    )
+        .finish())
 }
 
 #[utoipa::path(
@@ -155,19 +152,21 @@ pub async fn oauth_google_login(
 )]
 pub async fn oauth_google_callback(
     state: Data<AppState>,
-    query: Query<OAuthCallbackParams>
+    query: Query<OAuthCallbackParams>,
 ) -> Result<HttpResponse, AppError> {
     let user_info = state
         .di_container
         .oauth_google
-        .exchange_and_userinfo(query.code.to_owned(), query.state.to_owned()).await?;
-    let email = user_info.email.ok_or_else(|| AppError::Unauthorized(serde_json::json!({"message":"no email"})))?;
+        .exchange_and_userinfo(query.code.to_owned(), query.state.to_owned())
+        .await?;
+    let email = user_info
+        .email
+        .ok_or_else(|| AppError::Unauthorized(serde_json::json!({"message":"no email"})))?;
 
     let response = state
         .di_container
         .user_usecase
-        .oauth_google_upsert(email, user_info.sub)
-        ?;
+        .oauth_google_upsert(email, user_info.sub)?;
 
     Ok(response)
 }

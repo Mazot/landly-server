@@ -1,7 +1,15 @@
 use crate::{error::AppError, utils::token};
-use actix_web::{body::EitherBody, dev::{forward_ready, Service, ServiceRequest, ServiceResponse, Transform}, http::Method, Error, HttpMessage, HttpResponse};
-use std::{future::{ready, Ready}, pin::Pin};
+use actix_web::{
+    Error, HttpMessage, HttpResponse,
+    body::EitherBody,
+    dev::{Service, ServiceRequest, ServiceResponse, Transform, forward_ready},
+    http::Method,
+};
 use serde_json::json;
+use std::{
+    future::{Ready, ready},
+    pin::Pin,
+};
 use uuid::Uuid;
 
 const AUTH_HEADER: &str = "Authorization";
@@ -68,7 +76,8 @@ where
             });
         }
 
-        req.extensions_mut().insert(is_user_authenticated.unwrap().1);
+        req.extensions_mut()
+            .insert(is_user_authenticated.unwrap().1);
 
         // TODO: Мы должны проверить токен и если он валидный, то пропустить запрос дальше
         // Если токен не валидный, то вернуть ошибку 401
@@ -142,7 +151,9 @@ fn get_user_id_from_token(token_opt: Option<String>) -> Result<Uuid, AppError> {
         return Ok(jwt_claims.sub);
     }
 
-    Err(AppError::Unauthorized(json!({ "error": "Authorization token is missing" })))
+    Err(AppError::Unauthorized(
+        json!({ "error": "Authorization token is missing" }),
+    ))
 }
 
 struct AuthRequiredRoute {

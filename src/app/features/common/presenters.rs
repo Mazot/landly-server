@@ -1,9 +1,9 @@
+use crate::data::models::{Country, OrganisationType};
 use actix_web::HttpResponse;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use utoipa::ToSchema;
 use uuid::Uuid;
-use crate::data::models::{Country, OrganisationType};
 
 pub trait CommonPresenter: Send + Sync + 'static {
     fn to_http_res(&self) -> HttpResponse;
@@ -32,7 +32,8 @@ impl CommonPresenter for CommonPresenterImpl {
     }
 
     fn to_multi_country_json(&self, item: Vec<Country>) -> HttpResponse {
-        let response_content: Vec<CountryContent> = item.iter()
+        let response_content: Vec<CountryContent> = item
+            .iter()
             .map(|country| CountryContent::from(country.to_owned()))
             .collect();
 
@@ -40,7 +41,8 @@ impl CommonPresenter for CommonPresenterImpl {
     }
 
     fn to_multi_organization_type_json(&self, item: Vec<OrganisationType>) -> HttpResponse {
-        let response_content: Vec<OrganisationTypeContent> = item.iter()
+        let response_content: Vec<OrganisationTypeContent> = item
+            .iter()
             .map(|org_type| OrganisationTypeContent::from(org_type.to_owned()))
             .collect();
 
@@ -72,7 +74,7 @@ impl From<Country> for CountryContent {
             geo_json: val.geo_json,
             flag: val.flag,
             capital_city: val.capital_city,
-            description: val.description
+            description: val.description,
         }
     }
 }
@@ -91,7 +93,7 @@ impl From<OrganisationType> for OrganisationTypeContent {
             id: val.id,
             r#type: val.org_type,
             color: val.color,
-            title: val.title
+            title: val.title,
         }
     }
 }

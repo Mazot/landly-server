@@ -1,13 +1,21 @@
 use super::{
-    requests::{CreateOrganisationRequest, OrganisationsListQueryRequest, UpdateOrganisationRequest},
-    usecases::{CreateOrganisationUsecaseInput, FetchOrganisationsUsecaseInput, UpdateOrganisationUsecaseInput},
+    requests::{
+        CreateOrganisationRequest, OrganisationsListQueryRequest, UpdateOrganisationRequest,
+    },
+    usecases::{
+        CreateOrganisationUsecaseInput, FetchOrganisationsUsecaseInput,
+        UpdateOrganisationUsecaseInput,
+    },
 };
 use crate::app::drivers::middlewares::state::AppState;
 use crate::error::AppError;
-use actix_web::{web::{Data, Json, Path, Query}, HttpRequest, HttpResponse};
+use actix_web::{
+    HttpRequest, HttpResponse,
+    web::{Data, Json, Path, Query},
+};
 use bigdecimal::BigDecimal;
-use uuid::Uuid;
 use std::cmp::min;
+use uuid::Uuid;
 
 #[utoipa::path(
     get,
@@ -22,7 +30,7 @@ use std::cmp::min;
 )]
 pub async fn list_organisations(
     state: Data<AppState>,
-    query: Query<OrganisationsListQueryRequest>
+    query: Query<OrganisationsListQueryRequest>,
 ) -> Result<HttpResponse, AppError> {
     let offset = min(query.offset.unwrap_or(0), 150);
     let limit = query.limit.unwrap_or(20);
@@ -30,19 +38,17 @@ pub async fn list_organisations(
     state
         .di_container
         .organisation_usecase
-        .fetch_organisations(
-            FetchOrganisationsUsecaseInput {
-                name: query.name.clone(),
-                tel: query.tel.clone(),
-                email: query.email.clone(),
-                address: query.address.clone(),
-                location_country_id: query.location_country_id,
-                organisation_type_id: query.organisation_type_id,
-                founder_country_id: query.founder_country_id,
-                limit,
-                offset,
-            }
-        )
+        .fetch_organisations(FetchOrganisationsUsecaseInput {
+            name: query.name.clone(),
+            tel: query.tel.clone(),
+            email: query.email.clone(),
+            address: query.address.clone(),
+            location_country_id: query.location_country_id,
+            organisation_type_id: query.organisation_type_id,
+            founder_country_id: query.founder_country_id,
+            limit,
+            offset,
+        })
 }
 
 #[utoipa::path(
@@ -62,7 +68,7 @@ pub async fn list_organisations(
 pub async fn fetch_organisation(
     state: Data<AppState>,
     _req: HttpRequest,
-    id: Path<Uuid>
+    id: Path<Uuid>,
 ) -> Result<HttpResponse, AppError> {
     state
         .di_container
@@ -89,28 +95,29 @@ pub async fn update_organisation(
     state: Data<AppState>,
     _req: HttpRequest,
     form: Json<UpdateOrganisationRequest>,
-    id: Path<Uuid>
+    id: Path<Uuid>,
 ) -> Result<HttpResponse, AppError> {
-    state
-        .di_container
-        .organisation_usecase
-        .update_organisation(
-            id.into_inner(),
-            UpdateOrganisationUsecaseInput {
-                name: form.name.clone(),
-                tel: form.tel.clone(),
-                email: form.email.clone(),
-                address: form.address.clone(),
-                description: form.description.clone(),
-                location_country_id: form.location_country_id,
-                organisation_type_id: form.organisation_type_id,
-                founder_country_id: form.founder_country_id,
-                latitude: form.latitude.map(BigDecimal::try_from)
-                    .map(|v| v.expect("Invalid latitude value")),
-                longitude: form.longitude.map(BigDecimal::try_from)
-                    .map(|v| v.expect("Invalid longitude value")),
-            }
-        )
+    state.di_container.organisation_usecase.update_organisation(
+        id.into_inner(),
+        UpdateOrganisationUsecaseInput {
+            name: form.name.clone(),
+            tel: form.tel.clone(),
+            email: form.email.clone(),
+            address: form.address.clone(),
+            description: form.description.clone(),
+            location_country_id: form.location_country_id,
+            organisation_type_id: form.organisation_type_id,
+            founder_country_id: form.founder_country_id,
+            latitude: form
+                .latitude
+                .map(BigDecimal::try_from)
+                .map(|v| v.expect("Invalid latitude value")),
+            longitude: form
+                .longitude
+                .map(BigDecimal::try_from)
+                .map(|v| v.expect("Invalid longitude value")),
+        },
+    )
 }
 
 #[utoipa::path(
@@ -130,7 +137,7 @@ pub async fn update_organisation(
 pub async fn delete_organisation(
     state: Data<AppState>,
     _req: HttpRequest,
-    id: Path<Uuid>
+    id: Path<Uuid>,
 ) -> Result<HttpResponse, AppError> {
     state
         .di_container
@@ -153,25 +160,27 @@ pub async fn delete_organisation(
 pub async fn create_organisation(
     state: Data<AppState>,
     _req: HttpRequest,
-    form: Json<CreateOrganisationRequest>
+    form: Json<CreateOrganisationRequest>,
 ) -> Result<HttpResponse, AppError> {
     state
         .di_container
         .organisation_usecase
-        .create_organisation(
-            CreateOrganisationUsecaseInput{
-                name: form.name.clone(),
-                tel: form.tel.clone(),
-                email: form.email.clone(),
-                address: form.address.clone(),
-                description: form.description.clone(),
-                location_country_id: form.location_country_id,
-                organisation_type_id: form.organisation_type_id,
-                founder_country_id: form.founder_country_id,
-                latitude: form.latitude.map(BigDecimal::try_from)
-                    .map(|v| v.expect("Invalid latitude value")),
-                longitude: form.longitude.map(BigDecimal::try_from)
-                    .map(|v| v.expect("Invalid longitude value")),
-            }
-        )
+        .create_organisation(CreateOrganisationUsecaseInput {
+            name: form.name.clone(),
+            tel: form.tel.clone(),
+            email: form.email.clone(),
+            address: form.address.clone(),
+            description: form.description.clone(),
+            location_country_id: form.location_country_id,
+            organisation_type_id: form.organisation_type_id,
+            founder_country_id: form.founder_country_id,
+            latitude: form
+                .latitude
+                .map(BigDecimal::try_from)
+                .map(|v| v.expect("Invalid latitude value")),
+            longitude: form
+                .longitude
+                .map(BigDecimal::try_from)
+                .map(|v| v.expect("Invalid longitude value")),
+        })
 }

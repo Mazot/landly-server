@@ -1,13 +1,12 @@
-use crate::{
-    app::features::common::repositories::CreateOrganisationTypeRepositoryInput,
-    error::AppError,
-};
 use super::{
     presenters::CommonPresenter,
-    repositories::{CommonRepository, GetAllCountriesRepositoryInput}
+    repositories::{CommonRepository, GetAllCountriesRepositoryInput},
 };
-use std::sync::Arc;
+use crate::{
+    app::features::common::repositories::CreateOrganisationTypeRepositoryInput, error::AppError,
+};
 use actix_web::HttpResponse;
+use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct CommonUsecase {
@@ -26,39 +25,44 @@ impl CommonUsecase {
         }
     }
 
-    pub fn fetch_all_countries(&self, params: FetchAllCountriesUsecaseInput) -> Result<HttpResponse, AppError> {
-        let countries = self.common_repo
-            .get_all_countries(
-                GetAllCountriesRepositoryInput {
-                    limit: params.limit,
-                    offset: params.offset,
-                }
-            )?;
-        let response = self.common_presenter
-            .to_multi_country_json(countries);
+    pub fn fetch_all_countries(
+        &self,
+        params: FetchAllCountriesUsecaseInput,
+    ) -> Result<HttpResponse, AppError> {
+        let countries = self
+            .common_repo
+            .get_all_countries(GetAllCountriesRepositoryInput {
+                limit: params.limit,
+                offset: params.offset,
+            })?;
+        let response = self.common_presenter.to_multi_country_json(countries);
 
         Ok(response)
     }
 
     pub fn fetch_organisation_types(&self) -> Result<HttpResponse, AppError> {
-        let org_types = self.common_repo
-            .get_all_organisation_types()?;
-        let response = self.common_presenter
+        let org_types = self.common_repo.get_all_organisation_types()?;
+        let response = self
+            .common_presenter
             .to_multi_organization_type_json(org_types);
 
         Ok(response)
     }
 
-    pub fn create_organisation_type(&self, params: CreateOrganisationTypeUsecaseInput) -> Result<HttpResponse, AppError> {
-        let org_type = self.common_repo
-            .create_organisation_type(
-                CreateOrganisationTypeRepositoryInput {
+    pub fn create_organisation_type(
+        &self,
+        params: CreateOrganisationTypeUsecaseInput,
+    ) -> Result<HttpResponse, AppError> {
+        let org_type =
+            self.common_repo
+                .create_organisation_type(CreateOrganisationTypeRepositoryInput {
                     org_type: params.org_type,
                     color: params.color,
                     title: params.title,
-                }
-            )?;
-        let response = self.common_presenter.to_single_organization_type_json(org_type);
+                })?;
+        let response = self
+            .common_presenter
+            .to_single_organization_type_json(org_type);
 
         Ok(response)
     }

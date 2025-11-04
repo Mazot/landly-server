@@ -1,15 +1,12 @@
-mod constants;
 mod app;
-mod error;
+mod constants;
 pub mod data;
+mod error;
 pub mod utils;
 
-use crate::app::drivers::middlewares::{
-    cors::cors,
-    auth::Authentication,
-};
+use crate::app::drivers::middlewares::{auth::Authentication, cors::cors};
 use actix_web::middleware::Logger;
-use actix_web::{web, App, HttpServer};
+use actix_web::{App, HttpServer, web};
 use dotenv::dotenv;
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
@@ -94,8 +91,14 @@ async fn main() -> std::io::Result<()> {
     };
 
     HttpServer::new(move || {
-        let country_connection_configure_services = app::features::country_connection::config::create_configure_services_closure(app_state.di_container.redis_cache_service.clone());
-        let organisation_configure_services = app::features::organisation::config::create_configure_services_closure(app_state.di_container.redis_cache_service.clone());
+        let country_connection_configure_services =
+            app::features::country_connection::config::create_configure_services_closure(
+                app_state.di_container.redis_cache_service.clone(),
+            );
+        let organisation_configure_services =
+            app::features::organisation::config::create_configure_services_closure(
+                app_state.di_container.redis_cache_service.clone(),
+            );
 
         App::new()
             .app_data(web::Data::new(app_state.clone()))
@@ -104,21 +107,19 @@ async fn main() -> std::io::Result<()> {
             .wrap(Authentication)
             .service(
                 SwaggerUi::new("/swagger-ui/{_:.*}")
-                    .url("/api-docs/openapi.json", ApiDoc::openapi())
+                    .url("/api-docs/openapi.json", ApiDoc::openapi()),
             )
-            .service(
-                web::redirect("/swagger-ui", "/swagger-ui/")
-            )
+            .service(web::redirect("/swagger-ui", "/swagger-ui/"))
             .service(
                 web::scope("/api")
-                    .service(
-                        web::scope("/healthcheck")
-                            .route("", web::get().to(app::features::healthcheck::controllers::index))
-                    )
+                    .service(web::scope("/healthcheck").route(
+                        "",
+                        web::get().to(app::features::healthcheck::controllers::index),
+                    ))
                     .configure(app::features::common::config::configure_services)
                     .configure(app::features::user::config::configure_services)
                     .configure(organisation_configure_services)
-                    .configure(country_connection_configure_services)
+                    .configure(country_connection_configure_services),
             )
     })
     .bind(constants::BIND)?
