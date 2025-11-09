@@ -95,3 +95,122 @@ impl From<OrganisationType> for OrganisationTypeContent {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn create_test_country() -> Country {
+        Country {
+            id: Uuid::new_v4(),
+            name: "Test Country".to_string(),
+            geo_json: Some(serde_json::json!({"type": "Feature"})),
+            flag: Some("🏴".to_string()),
+            capital_city: Some("Test Capital".to_string()),
+            description: Some("Test Description".to_string()),
+        }
+    }
+
+    fn create_test_org_type() -> OrganisationType {
+        OrganisationType {
+            id: Uuid::new_v4(),
+            org_type: "test_type".to_string(),
+            color: Some("#FF0000".to_string()),
+            title: Some("Test Type".to_string()),
+        }
+    }
+
+    #[test]
+    fn test_country_content_from_country() {
+        let country = create_test_country();
+        let country_id = country.id;
+        let country_name = country.name.clone();
+        
+        let content = CountryContent::from(country);
+        
+        assert_eq!(content.id, country_id);
+        assert_eq!(content.name, country_name);
+        assert_eq!(content.flag, Some("🏴".to_string()));
+        assert_eq!(content.capital_city, Some("Test Capital".to_string()));
+        assert!(content.geo_json.is_some());
+    }
+
+    #[test]
+    fn test_organisation_type_content_from_org_type() {
+        let org_type = create_test_org_type();
+        let org_type_id = org_type.id;
+        
+        let content = OrganisationTypeContent::from(org_type);
+        
+        assert_eq!(content.id, org_type_id);
+        assert_eq!(content.r#type, "test_type");
+        assert_eq!(content.color, Some("#FF0000".to_string()));
+        assert_eq!(content.title, Some("Test Type".to_string()));
+    }
+
+    #[test]
+    fn test_common_presenter_new() {
+        let presenter = CommonPresenterImpl::new();
+        assert!(std::mem::size_of_val(&presenter) == 0);
+    }
+
+    #[test]
+    fn test_common_presenter_to_http_res() {
+        let presenter = CommonPresenterImpl::new();
+        let response = presenter.to_http_res();
+        
+        assert_eq!(response.status(), actix_web::http::StatusCode::OK);
+    }
+
+    #[test]
+    fn test_common_presenter_to_single_country_json() {
+        let presenter = CommonPresenterImpl::new();
+        let country = create_test_country();
+        
+        let response = presenter.to_single_country_json(country);
+        
+        assert_eq!(response.status(), actix_web::http::StatusCode::OK);
+    }
+
+    #[test]
+    fn test_common_presenter_to_multi_country_json() {
+        let presenter = CommonPresenterImpl::new();
+        let country1 = create_test_country();
+        let country2 = create_test_country();
+        let countries = vec![country1, country2];
+        
+        let response = presenter.to_multi_country_json(countries);
+        
+        assert_eq!(response.status(), actix_web::http::StatusCode::OK);
+    }
+
+    #[test]
+    fn test_common_presenter_to_single_organization_type_json() {
+        let presenter = CommonPresenterImpl::new();
+        let org_type = create_test_org_type();
+        
+        let response = presenter.to_single_organization_type_json(org_type);
+        
+        assert_eq!(response.status(), actix_web::http::StatusCode::OK);
+    }
+
+    #[test]
+    fn test_common_presenter_to_multi_organization_type_json() {
+        let presenter = CommonPresenterImpl::new();
+        let org_type1 = create_test_org_type();
+        let org_type2 = create_test_org_type();
+        let org_types = vec![org_type1, org_type2];
+        
+        let response = presenter.to_multi_organization_type_json(org_types);
+        
+        assert_eq!(response.status(), actix_web::http::StatusCode::OK);
+    }
+
+    #[test]
+    fn test_common_presenter_clone() {
+        let presenter = CommonPresenterImpl::new();
+        let _cloned = presenter.clone();
+        
+        assert!(true);
+    }
+}
