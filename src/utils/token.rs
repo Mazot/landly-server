@@ -58,3 +58,115 @@ pub fn generate_token(user_id: Uuid) -> Result<String, AppError> {
     )
     .map_err(|_| AppError::InternalServerError)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn setup_test_env() {
+        unsafe {
+            std::env::set_var("JWT_SECRET", "test_secret_key_for_testing");
+            std::env::set_var("JWT_EXPIRATION", "3600");
+        }
+    }
+
+    #[test]
+    fn test_generate_token_success() {
+        setup_test_env();
+        let user_id = Uuid::new_v4();
+        let result = generate_token(user_id);
+        assert!(result.is_ok());
+
+        let token = result.unwrap();
+        assert!(!token.is_empty());
+    }
+
+    #[test]
+    fn test_decode_token_success() {
+        setup_test_env();
+        let user_id = Uuid::new_v4();
+        let token = generate_token(user_id).unwrap();
+
+        let result = decode_token(&token);
+        assert!(result.is_ok());
+
+        let claims = result.unwrap();
+        assert_eq!(claims.sub, user_id);
+    }
+
+    #[test]
+    fn test_decode_invalid_token() {
+        setup_test_env();
+        let invalid_token = "invalid.token.here";
+
+        let result = decode_token(invalid_token);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_token_claims_structure() {
+        setup_test_env();
+        let user_id = Uuid::new_v4();
+        let token = generate_token(user_id).unwrap();
+        let claims = decode_token(&token).unwrap();
+
+        assert_eq!(claims.sub, user_id);
+        assert!(claims.exp > claims.iat);
+        assert_eq!(claims.exp - claims.iat, 3600);
+    }
+
+    #[test]
+    fn test_get_jwt_expiration_default() {
+        unsafe {
+            std::env::set_var("JWT_SECRET", "test_secret");
+            std::env::remove_var("JWT_EXPIRATION");
+        }
+
+        let exp = get_jwt_expiration_secs();
+        assert_eq!(exp, 3600);
+    }
+
+    #[test]
+    fn test_get_jwt_expiration_custom() {
+        unsafe {
+            std::env::set_var("JWT_SECRET", "test_secret");
+            std::env::set_var("JWT_EXPIRATION", "7200");
+        }
+
+        let exp = get_jwt_expiration_secs();
+        assert_eq!(exp, 7200);
+    }
+
+    #[test]
+    fn test_different_tokens_for_different_users() {
+        setup_test_env();
+        let user1 = Uuid::new_v4();
+        let user2 = Uuid::new_v4();
+
+        let token1 = generate_token(user1).unwrap();
+        let token2 = generate_token(user2).unwrap();
+
+        assert_ne!(token1, token2);
+
+        let claims1 = decode_token(&token1).unwrap();
+        let claims2 = decode_token(&token2).unwrap();
+
+        assert_eq!(claims1.sub, user1);
+        assert_eq!(claims2.sub, user2);
+    }
+
+    #[test]
+    fn test_token_with_wrong_secret() {
+        setup_test_env();
+        let user_id = Uuid::new_v4();
+        let token = generate_token(user_id).unwrap();
+
+        // Change the secret
+        unsafe {
+            std::env::set_var("JWT_SECRET", "different_secret");
+        }
+
+        let result = decode_token(&token);
+        assert!(result.is_err());
+    }
+}

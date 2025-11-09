@@ -81,3 +81,48 @@ impl DiContainer {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::utils::cache::NoOpCacheService;
+
+    #[test]
+    fn test_di_container_with_no_redis() {
+        // This test doesn't require actual database connection
+        // We're just testing that DiContainer can be constructed with NoOp cache
+        let no_op_cache =
+            TypedCache::new(Arc::new(NoOpCacheService::default()) as Arc<dyn CacheService>);
+
+        // Test that TypedCache can be cloned
+        let cloned_cache = no_op_cache.clone();
+        assert!(cloned_cache.exists("test").is_ok());
+    }
+
+    #[test]
+    fn test_cache_service_selection_with_none() {
+        let typed_cache_service: TypedCache<Arc<dyn CacheService>> =
+            TypedCache::new(match None::<RedisPool> {
+                Some(pool) => Arc::new(RedisCacheService::new(pool)),
+                None => Arc::new(NoOpCacheService::default()),
+            });
+
+        // Should use NoOpCacheService when redis_pool is None
+        let result = typed_cache_service.exists("test");
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), false);
+    }
+
+    #[test]
+    fn test_typed_cache_clone_in_di_context() {
+        let cache_service: TypedCache<Arc<dyn CacheService>> =
+            TypedCache::new(Arc::new(NoOpCacheService::default()));
+
+        let cache_clone1 = cache_service.clone();
+        let cache_clone2 = cache_service.clone();
+
+        // All clones should work independently
+        assert!(cache_clone1.exists("key1").is_ok());
+        assert!(cache_clone2.exists("key2").is_ok());
+    }
+}

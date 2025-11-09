@@ -358,3 +358,160 @@ impl CacheKeys {
         format!("{}:v:{}", base_key, version)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use uuid::Uuid;
+
+    #[test]
+    fn test_no_op_cache_service_get() {
+        let cache = NoOpCacheService::default();
+        let result = cache.get_string("test_key");
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), None);
+    }
+
+    #[test]
+    fn test_no_op_cache_service_set() {
+        let cache = NoOpCacheService::default();
+        let result = cache.set_string("test_key", "test_value", None);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_no_op_cache_service_delete() {
+        let cache = NoOpCacheService::default();
+        let result = cache.delete("test_key");
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_no_op_cache_service_exists() {
+        let cache = NoOpCacheService::default();
+        let result = cache.exists("test_key");
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), false);
+    }
+
+    #[test]
+    fn test_no_op_cache_service_invalidate_pattern() {
+        let cache = NoOpCacheService::default();
+        let result = cache.invalidate_pattern("test_*");
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_no_op_cache_service_mget() {
+        let cache = NoOpCacheService::default();
+        let keys = vec!["key1".to_string(), "key2".to_string()];
+        let result = cache.mget_string(&keys);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), vec![None, None]);
+    }
+
+    #[test]
+    fn test_no_op_cache_service_mset() {
+        let cache = NoOpCacheService::default();
+        let items = vec![
+            ("key1".to_string(), "value1".to_string()),
+            ("key2".to_string(), "value2".to_string()),
+        ];
+        let result = cache.mset_string(&items, None);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_typed_cache_with_no_op() {
+        let no_op_service = NoOpCacheService::default();
+        let typed_cache = TypedCache::new(no_op_service);
+
+        #[derive(Serialize, Deserialize, Debug, PartialEq)]
+        struct TestData {
+            value: i32,
+        }
+
+        let data = TestData { value: 42 };
+        let set_result = typed_cache.set("test_key", &data, None);
+        assert!(set_result.is_ok());
+
+        let get_result: Result<Option<TestData>, AppError> = typed_cache.get("test_key");
+        assert!(get_result.is_ok());
+        assert_eq!(get_result.unwrap(), None);
+    }
+
+    #[test]
+    fn test_typed_cache_clone() {
+        let no_op_service = NoOpCacheService::default();
+        let typed_cache = TypedCache::new(Arc::new(no_op_service) as Arc<dyn CacheService>);
+        let cloned_cache = typed_cache.clone();
+
+        let result = cloned_cache.exists("test_key");
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_cache_keys_organisation_by_id() {
+        let id = Uuid::new_v4();
+        let key = CacheKeys::organisation_by_id(&id);
+        assert_eq!(key, format!("org:id:{}", id));
+    }
+
+    #[test]
+    fn test_cache_keys_organisations_list() {
+        let hash = "test_hash";
+        let key = CacheKeys::organisations_list(hash);
+        assert_eq!(key, "org:list:test_hash");
+    }
+
+    #[test]
+    fn test_cache_keys_organisation_pattern() {
+        let pattern = CacheKeys::organisation_pattern();
+        assert_eq!(pattern, "org:*");
+    }
+
+    #[test]
+    fn test_cache_keys_organisation_count() {
+        let key = CacheKeys::organisation_count();
+        assert_eq!(key, "org:count");
+    }
+
+    #[test]
+    fn test_cache_keys_country_connection_by_id() {
+        let id = Uuid::new_v4();
+        let key = CacheKeys::country_connection_by_id(&id);
+        assert_eq!(key, format!("cc:id:{}", id));
+    }
+
+    #[test]
+    fn test_cache_keys_country_connections_list() {
+        let hash = "test_hash";
+        let key = CacheKeys::country_connections_list(hash);
+        assert_eq!(key, "cc:list:test_hash");
+    }
+
+    #[test]
+    fn test_cache_keys_country_connection_pattern() {
+        let pattern = CacheKeys::country_connection_pattern();
+        assert_eq!(pattern, "cc:*");
+    }
+
+    #[test]
+    fn test_cache_keys_sanitize_key() {
+        assert_eq!(CacheKeys::sanitize_key("Test-Key_123"), "test-key_123");
+        assert_eq!(CacheKeys::sanitize_key("Test@Key!123"), "testkey123");
+        assert_eq!(CacheKeys::sanitize_key("UPPERCASE"), "uppercase");
+    }
+
+    #[test]
+    fn test_cache_keys_versioned_key() {
+        let key = CacheKeys::versioned_key("base_key", "v1.0");
+        assert_eq!(key, "base_key:v:v1.0");
+    }
+
+    #[test]
+    fn test_cache_config_default() {
+        let config = CacheConfig::default();
+        assert_eq!(config.default_ttl, Some(Duration::from_secs(3600)));
+    }
+}
