@@ -39,3 +39,39 @@ pub fn make_common_get_request_cache(cache_prefix: &str, ttl: u64) -> RedisCache
 
     cache
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_establish_connection_without_env() {
+        // This test verifies that the function returns an error when REDIS_URL is not set
+        unsafe {
+            std::env::remove_var("REDIS_URL");
+        }
+        
+        let result = establish_connection();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_establish_connection_with_invalid_url() {
+        unsafe {
+            std::env::set_var("REDIS_URL", "invalid://url");
+        }
+        
+        let result = establish_connection();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    #[should_panic(expected = "REDIS_URL must be set")]
+    fn test_make_common_get_request_cache_panics_without_env() {
+        unsafe {
+            std::env::remove_var("REDIS_URL");
+        }
+        
+        make_common_get_request_cache("test_prefix", 60);
+    }
+}
