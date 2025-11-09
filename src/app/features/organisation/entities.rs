@@ -1,13 +1,10 @@
-use crate::data::{
-    schema::organisations,
-    models::OrganisationType,
-};
+use crate::data::{models::OrganisationType, schema::organisations};
 use crate::error::*;
-use diesel::prelude::*;
 use bigdecimal::BigDecimal;
+use chrono::NaiveDateTime;
+use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-use chrono::NaiveDateTime;
 
 #[derive(Debug, Associations, Serialize, Deserialize, Queryable, Insertable, Selectable, Clone)]
 // #[diesel(belongs_to(Country, foreign_key = location_country_id))]
@@ -31,10 +28,7 @@ pub struct Organisation {
 }
 
 impl Organisation {
-    pub fn create(
-        conn: &mut PgConnection,
-        record: &CreateOrganisation,
-    ) -> Result<Self, AppError> {
+    pub fn create(conn: &mut PgConnection, record: &CreateOrganisation) -> Result<Self, AppError> {
         let result = diesel::insert_into(organisations::table)
             .values(record)
             .get_result::<Organisation>(conn)?;
@@ -42,13 +36,12 @@ impl Organisation {
         Ok(result)
     }
 
-    pub fn update (
+    pub fn update(
         conn: &mut PgConnection,
         organisation_id: Uuid,
         record: &UpdateOrganisation,
     ) -> Result<Self, AppError> {
-        let o = organisations::table
-            .find(organisation_id);
+        let o = organisations::table.find(organisation_id);
         let result = diesel::update(o)
             .set(record)
             .get_result::<Organisation>(conn)?;
@@ -56,21 +49,14 @@ impl Organisation {
         Ok(result)
     }
 
-    pub fn delete (
-        conn: &mut PgConnection,
-        organisation_id: Uuid,
-    ) -> Result<(), AppError> {
-        let o = organisations::table
-            .find(organisation_id);
+    pub fn delete(conn: &mut PgConnection, organisation_id: Uuid) -> Result<(), AppError> {
+        let o = organisations::table.find(organisation_id);
         diesel::delete(o).execute(conn)?;
 
         Ok(())
     }
 
-    pub fn fetch_by_id(
-        conn: &mut PgConnection,
-        organisation_id: Uuid,
-    ) -> Result<Self, AppError> {
+    pub fn fetch_by_id(conn: &mut PgConnection, organisation_id: Uuid) -> Result<Self, AppError> {
         let result = organisations::table
             .find(organisation_id)
             .get_result::<Organisation>(conn)?;

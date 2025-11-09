@@ -1,11 +1,14 @@
-use crate::error::AppError;
 use super::{
     presenters::OrganisationPresenter,
-    repositories::{CreateOrganisationRepositoryInput, FetchOrganisationsRepositoryInput, OrganisationRepository, UpdateOrganisationRepositoryInput},
+    repositories::{
+        CreateOrganisationRepositoryInput, FetchOrganisationsRepositoryInput,
+        OrganisationRepository, UpdateOrganisationRepositoryInput,
+    },
 };
-use std::sync::Arc;
+use crate::error::AppError;
 use actix_web::HttpResponse;
 use bigdecimal::BigDecimal;
+use std::sync::Arc;
 use uuid::Uuid;
 
 #[derive(Clone)]
@@ -29,9 +32,9 @@ impl OrganisationUsecase {
         &self,
         params: CreateOrganisationUsecaseInput,
     ) -> Result<HttpResponse, AppError> {
-        let new_organisation = self.organisation_repo
-            .create_organisation(
-                CreateOrganisationRepositoryInput {
+        let new_organisation =
+            self.organisation_repo
+                .create_organisation(CreateOrganisationRepositoryInput {
                     name: params.name,
                     tel: params.tel,
                     email: params.email,
@@ -42,8 +45,7 @@ impl OrganisationUsecase {
                     organisation_type_id: params.organisation_type_id,
                     latitude: params.latitude,
                     longitude: params.longitude,
-                }
-            )?;
+                })?;
         let response = self.organisation_presenter.to_single_json(new_organisation);
 
         Ok(response)
@@ -54,23 +56,24 @@ impl OrganisationUsecase {
         id: Uuid,
         params: UpdateOrganisationUsecaseInput,
     ) -> Result<HttpResponse, AppError> {
-        let updated_organisation = self.organisation_repo
-            .update_organisation(
-                id,
-                UpdateOrganisationRepositoryInput {
-                    name: params.name,
-                    tel: params.tel,
-                    email: params.email,
-                    address: params.address,
-                    description: params.description,
-                    founder_country_id: params.founder_country_id,
-                    location_country_id: params.location_country_id,
-                    organisation_type_id: params.organisation_type_id,
-                    latitude: params.latitude,
-                    longitude: params.longitude,
-                }
-            )?;
-        let response = self.organisation_presenter.to_single_json(updated_organisation);
+        let updated_organisation = self.organisation_repo.update_organisation(
+            id,
+            UpdateOrganisationRepositoryInput {
+                name: params.name,
+                tel: params.tel,
+                email: params.email,
+                address: params.address,
+                description: params.description,
+                founder_country_id: params.founder_country_id,
+                location_country_id: params.location_country_id,
+                organisation_type_id: params.organisation_type_id,
+                latitude: params.latitude,
+                longitude: params.longitude,
+            },
+        )?;
+        let response = self
+            .organisation_presenter
+            .to_single_json(updated_organisation);
 
         Ok(response)
     }
@@ -79,9 +82,9 @@ impl OrganisationUsecase {
         &self,
         params: FetchOrganisationsUsecaseInput,
     ) -> Result<HttpResponse, AppError> {
-        let organisations = self.organisation_repo
-            .fetch_organisations(
-                FetchOrganisationsRepositoryInput {
+        let organisations =
+            self.organisation_repo
+                .fetch_organisations(FetchOrganisationsRepositoryInput {
                     name: params.name,
                     tel: params.tel,
                     email: params.email,
@@ -91,16 +94,14 @@ impl OrganisationUsecase {
                     address: params.address,
                     limit: params.limit,
                     offset: params.offset,
-                }
-            )?;
+                })?;
         let response = self.organisation_presenter.to_multi_json(organisations);
 
         Ok(response)
     }
 
     pub fn delete_organisation(&self, id: Uuid) -> Result<HttpResponse, AppError> {
-        self.organisation_repo
-            .delete_organisation(id)?;
+        self.organisation_repo.delete_organisation(id)?;
         let response = self.organisation_presenter.to_http_res();
 
         Ok(response)
