@@ -1,10 +1,13 @@
 use super::entities::Organisation;
-use actix_web::{HttpResponse, http::StatusCode};
-use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
-use std::str::FromStr;
+use actix_web::{
+    HttpResponse,
+    http::StatusCode
+};
+use chrono::NaiveDateTime;
 use utoipa::ToSchema;
 use uuid::Uuid;
+use std::str::FromStr;
 
 pub trait OrganisationPresenter: Send + Sync + 'static {
     fn to_http_res(&self) -> HttpResponse;
@@ -39,7 +42,7 @@ impl From<Organisation> for OrganisationContent {
                 let str = dec_val.to_string();
                 let value: f64 = f64::from_str(&str).unwrap_or_default();
                 Some(value)
-            }
+            },
             _ => None,
         };
         let latitude: Option<f64> = match org.latitude {
@@ -47,7 +50,7 @@ impl From<Organisation> for OrganisationContent {
                 let str = dec_val.to_string();
                 let value: f64 = f64::from_str(&str).unwrap_or_default();
                 Some(value)
-            }
+            },
             _ => None,
         };
 
@@ -77,8 +80,10 @@ pub struct MultipleOrganisationsResponse {
 
 impl From<Vec<Organisation>> for MultipleOrganisationsResponse {
     fn from(items: Vec<Organisation>) -> Self {
-        let response_items: Vec<OrganisationContent> =
-            items.into_iter().map(OrganisationContent::from).collect();
+        let response_items: Vec<OrganisationContent> = items
+            .into_iter()
+            .map(OrganisationContent::from)
+            .collect();
         let count = response_items.len() as i64;
 
         Self {
@@ -102,7 +107,9 @@ impl OrganisationPresenter for OrganisationPresenterImpl {
 
     // TODO: Tmp solution
     fn to_single_typed_json(&self, item: Organisation) -> HttpResponse<Organisation> {
-        HttpResponse::<Organisation>::with_body(StatusCode::OK, item)
+        HttpResponse::<Organisation>::with_body(
+            StatusCode::OK, item
+        )
     }
 
     fn to_single_json(&self, item: Organisation) -> HttpResponse {

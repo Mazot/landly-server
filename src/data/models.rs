@@ -38,13 +38,21 @@ pub struct UpdateCountry {
 }
 
 impl Country {
-    pub fn get_by_id(conn: &mut PgConnection, id: &Uuid) -> Result<Self, AppError> {
-        let result = countries::table.find(id).get_result::<Country>(conn)?;
+    pub fn get_by_id(
+        conn: &mut PgConnection,
+        id: &Uuid,
+    ) -> Result<Self, AppError> {
+        let result = countries::table
+            .find(id)
+            .get_result::<Country>(conn)?;
 
         Ok(result)
     }
 
-    pub fn get_by_name(conn: &mut PgConnection, name: &str) -> Result<Self, AppError> {
+    pub fn get_by_name(
+        conn: &mut PgConnection,
+        name: &str,
+    ) -> Result<Self, AppError> {
         let result = countries::table
             .filter(countries::name.eq(name))
             .get_result::<Country>(conn)?;
@@ -52,13 +60,18 @@ impl Country {
         Ok(result)
     }
 
-    pub fn get_all(conn: &mut PgConnection) -> Result<Vec<Self>, AppError> {
+    pub fn get_all(
+        conn: &mut PgConnection,
+    ) -> Result<Vec<Self>, AppError> {
         let result = countries::table.load::<Country>(conn)?;
 
         Ok(result)
     }
 
-    pub fn create(conn: &mut PgConnection, record: &CreateCountry) -> Result<Self, AppError> {
+    pub fn create(
+        conn: &mut PgConnection,
+        record: &CreateCountry,
+    ) -> Result<Self, AppError> {
         let result = diesel::insert_into(countries::table)
             .values(record)
             .get_result::<Country>(conn)?;
@@ -66,19 +79,26 @@ impl Country {
         Ok(result)
     }
 
-    pub fn update(
+    pub fn update (
         conn: &mut PgConnection,
         country_id: Uuid,
         record: &UpdateCountry,
     ) -> Result<Self, AppError> {
-        let c = countries::table.find(country_id);
-        let result = diesel::update(c).set(record).get_result::<Country>(conn)?;
+        let c = countries::table
+            .find(country_id);
+        let result = diesel::update(c)
+            .set(record)
+            .get_result::<Country>(conn)?;
 
         Ok(result)
     }
 
-    pub fn delete(conn: &mut PgConnection, country_id: Uuid) -> Result<(), AppError> {
-        let c = countries::table.find(country_id);
+    pub fn delete (
+        conn: &mut PgConnection,
+        country_id: Uuid,
+    ) -> Result<(), AppError> {
+        let c = countries::table
+            .find(country_id);
         diesel::delete(c).execute(conn)?;
 
         Ok(())
@@ -94,7 +114,10 @@ pub struct Language {
 }
 
 impl Language {
-    pub fn create(conn: &mut PgConnection, record: &Language) -> Result<Self, AppError> {
+    pub fn create(
+        conn: &mut PgConnection,
+        record: &Language,
+    ) -> Result<Self, AppError> {
         let result = diesel::insert_into(languages::table)
             .values(record)
             .get_result::<Language>(conn)?;
@@ -107,14 +130,21 @@ impl Language {
         language_id: Uuid,
         record: &UpdateLanguage,
     ) -> Result<Self, AppError> {
-        let l = languages::table.find(language_id);
-        let result = diesel::update(l).set(record).get_result::<Language>(conn)?;
+        let l = languages::table
+            .find(language_id);
+        let result = diesel::update(l)
+            .set(record)
+            .get_result::<Language>(conn)?;
 
         Ok(result)
     }
 
-    pub fn delete(conn: &mut PgConnection, language_id: Uuid) -> Result<(), AppError> {
-        let l = languages::table.find(language_id);
+    pub fn delete(
+        conn: &mut PgConnection,
+        language_id: Uuid,
+    ) -> Result<(), AppError> {
+        let l = languages::table
+            .find(language_id);
         diesel::delete(l).execute(conn)?;
 
         Ok(())
@@ -158,7 +188,10 @@ impl OrganisationType {
         Ok(result)
     }
 
-    pub fn get_by_id(conn: &mut PgConnection, id: &Uuid) -> Result<Self, AppError> {
+    pub fn get_by_id(
+        conn: &mut PgConnection,
+        id: &Uuid,
+    ) -> Result<Self, AppError> {
         let result = organisation_types::table
             .find(id)
             .get_result::<OrganisationType>(conn)?;
@@ -166,8 +199,11 @@ impl OrganisationType {
         Ok(result)
     }
 
-    pub fn get_all(conn: &mut PgConnection) -> Result<Vec<Self>, AppError> {
-        let result = organisation_types::table.load::<OrganisationType>(conn)?;
+    pub fn get_all(
+        conn: &mut PgConnection,
+    ) -> Result<Vec<Self>, AppError> {
+        let result = organisation_types::table
+            .load::<OrganisationType>(conn)?;
 
         Ok(result)
     }

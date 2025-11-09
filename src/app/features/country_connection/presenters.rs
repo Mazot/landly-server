@@ -1,6 +1,6 @@
 use super::entities::CountryConnection;
-use actix_web::HttpResponse;
 use serde::{Deserialize, Serialize};
+use actix_web::HttpResponse;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
