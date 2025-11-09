@@ -181,7 +181,7 @@ mod tests {
     fn test_diesel_not_found_conversion() {
         let diesel_error = DieselError::NotFound;
         let app_error: AppError = diesel_error.into();
-
+        
         match app_error {
             AppError::NotFound(_) => (),
             _ => panic!("Expected NotFound error"),
@@ -193,10 +193,10 @@ mod tests {
         use uuid::Uuid;
         let parse_result = Uuid::parse_str("not-a-valid-uuid");
         assert!(parse_result.is_err());
-
+        
         let uuid_error = parse_result.unwrap_err();
         let app_error: AppError = uuid_error.into();
-
+        
         match app_error {
             AppError::UnprocessableEntity(json) => {
                 assert!(json.get("error").is_some());
@@ -210,7 +210,7 @@ mod tests {
         use bcrypt::BcryptError;
         let bcrypt_error = BcryptError::CostNotAllowed(1);
         let app_error: AppError = bcrypt_error.into();
-
+        
         match app_error {
             AppError::InternalServerError => (),
             _ => panic!("Expected InternalServerError"),
@@ -221,7 +221,7 @@ mod tests {
     fn test_var_error_not_present_conversion() {
         let var_error = VarError::NotPresent;
         let app_error: AppError = var_error.into();
-
+        
         match app_error {
             AppError::InternalServerError => (),
             _ => panic!("Expected InternalServerError"),

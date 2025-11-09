@@ -1,39 +1,42 @@
 use super::entities::{CreateOrganisation, Organisation, UpdateOrganisation};
 use crate::{
     error::AppError,
-    utils::{
-        cache::{CacheKeys, CacheService, TypedCache},
-        db::DbPool,
-    },
+    utils::{cache::{CacheKeys, CacheService, TypedCache}, db::DbPool}
 };
-use bigdecimal::BigDecimal;
 use std::{
     collections::hash_map::DefaultHasher,
+    time::Duration,
     hash::{Hash, Hasher},
     sync::Arc,
-    time::Duration,
 };
 use uuid::Uuid;
+use bigdecimal::BigDecimal;
 
 pub trait OrganisationRepository: Send + Sync + 'static {
     fn fetch_organisations(
         &self,
-        params: FetchOrganisationsRepositoryInput,
+        params: FetchOrganisationsRepositoryInput
     ) -> Result<Vec<Organisation>, AppError>;
 
     fn create_organisation(
         &self,
-        params: CreateOrganisationRepositoryInput,
+        params: CreateOrganisationRepositoryInput
     ) -> Result<Organisation, AppError>;
 
-    fn delete_organisation(&self, id: Uuid) -> Result<(), AppError>;
+    fn delete_organisation(
+        &self,
+        id: Uuid
+    ) -> Result<(), AppError>;
 
-    fn fetch_organisation(&self, id: Uuid) -> Result<Organisation, AppError>;
+    fn fetch_organisation(
+        &self,
+        id: Uuid
+    ) -> Result<Organisation, AppError>;
 
     fn update_organisation(
         &self,
         id: Uuid,
-        params: UpdateOrganisationRepositoryInput,
+        params: UpdateOrganisationRepositoryInput
     ) -> Result<Organisation, AppError>;
 }
 
@@ -44,10 +47,7 @@ pub struct OrganisationRepositoryImpl {
 }
 impl OrganisationRepositoryImpl {
     pub fn new(pool: DbPool, cache_service: TypedCache<Arc<dyn CacheService>>) -> Self {
-        Self {
-            pool,
-            cache_service,
-        }
+        Self { pool, cache_service }
     }
 
     fn generate_filters_hash(params: &FetchOrganisationsRepositoryInput) -> String {
@@ -66,10 +66,7 @@ impl OrganisationRepositoryImpl {
 }
 
 impl OrganisationRepository for OrganisationRepositoryImpl {
-    fn fetch_organisations(
-        &self,
-        params: FetchOrganisationsRepositoryInput,
-    ) -> Result<Vec<Organisation>, AppError> {
+    fn fetch_organisations(&self, params: FetchOrganisationsRepositoryInput) -> Result<Vec<Organisation>, AppError> {
         use crate::data::schema::organisations;
         use diesel::prelude::*;
 
@@ -101,20 +98,17 @@ impl OrganisationRepository for OrganisationRepositoryImpl {
             }
 
             if let Some(location_country_id) = params.location_country_id {
-                let ids =
-                    Organisation::fetch_ids_by_location_country(connection, location_country_id)?;
+                let ids = Organisation::fetch_ids_by_location_country(connection, location_country_id)?;
                 query = query.filter(organisations::id.eq_any(ids));
             }
 
             if let Some(founder_country_id) = params.founder_country_id {
-                let ids =
-                    Organisation::fetch_ids_by_founder_country(connection, founder_country_id)?;
+                let ids = Organisation::fetch_ids_by_founder_country(connection, founder_country_id)?;
                 query = query.filter(organisations::id.eq_any(ids));
             }
 
             if let Some(organisation_type_id) = params.organisation_type_id {
-                let ids =
-                    Organisation::fetch_ids_by_organisation_type(connection, organisation_type_id)?;
+                let ids = Organisation::fetch_ids_by_organisation_type(connection, organisation_type_id)?;
                 query = query.filter(organisations::id.eq_any(ids));
             }
 
@@ -129,16 +123,13 @@ impl OrganisationRepository for OrganisationRepositoryImpl {
         let _ = self.cache_service.set::<Vec<Organisation>>(
             &cache_key,
             &organisations,
-            Some(Duration::from_secs(5 * 60)), // Cache for 5 minutes
+            Some(Duration::from_secs(5 * 60)) // Cache for 5 minutes
         );
 
         Ok(organisations)
     }
 
-    fn create_organisation(
-        &self,
-        params: CreateOrganisationRepositoryInput,
-    ) -> Result<Organisation, AppError> {
+    fn create_organisation(&self, params: CreateOrganisationRepositoryInput) -> Result<Organisation, AppError> {
         let connection = &mut self.pool.get()?;
         let new_organisation = Organisation::create(
             connection,
@@ -153,19 +144,19 @@ impl OrganisationRepository for OrganisationRepositoryImpl {
                 latitude: params.latitude,
                 longitude: params.longitude,
                 founder_country_id: params.founder_country_id,
-            },
+            }
         )?;
 
         // TODO: We should invalidate the cache from CacheInvalidationMiddleware
         // but for now we do it here to ensure the cache is cleared after creation.
-        let _ = self
-            .cache_service
-            .invalidate_pattern(&CacheKeys::organisation_pattern());
+        let _ = self.cache_service.invalidate_pattern(&CacheKeys::organisation_pattern());
 
         let cache_key = CacheKeys::organisation_by_id(&new_organisation.id);
-        let _ = self
-            .cache_service
-            .set::<Organisation>(&cache_key, &new_organisation, None);
+        let _ = self.cache_service.set::<Organisation>(
+            &cache_key,
+            &new_organisation,
+            None
+        );
 
         Ok(new_organisation)
     }
@@ -187,9 +178,11 @@ impl OrganisationRepository for OrganisationRepositoryImpl {
         let connection = &mut self.pool.get()?;
         let organisation = Organisation::fetch_by_id(connection, id)?;
 
-        let _ = self
-            .cache_service
-            .set::<Organisation>(&cache_key, &organisation, None)?;
+        let _ = self.cache_service.set::<Organisation>(
+            &cache_key,
+            &organisation,
+            None
+        )?;
 
         Ok(organisation)
     }
@@ -197,7 +190,7 @@ impl OrganisationRepository for OrganisationRepositoryImpl {
     fn update_organisation(
         &self,
         id: Uuid,
-        params: UpdateOrganisationRepositoryInput,
+        params: UpdateOrganisationRepositoryInput
     ) -> Result<Organisation, AppError> {
         let connection = &mut self.pool.get()?;
         let updated_organisation = Organisation::update(
@@ -215,19 +208,19 @@ impl OrganisationRepository for OrganisationRepositoryImpl {
                 latitude: params.latitude,
                 founder_country_id: params.founder_country_id,
                 updated_at: chrono::Utc::now().naive_utc(),
-            },
+            }
         )?;
 
         // TODO: We should invalidate the cache from CacheInvalidationMiddleware
         // but for now we do it here to ensure the cache is cleared after creation.
-        let _ = self
-            .cache_service
-            .invalidate_pattern(&CacheKeys::organisation_pattern());
+        let _ = self.cache_service.invalidate_pattern(&CacheKeys::organisation_pattern());
 
         let cache_key = CacheKeys::organisation_by_id(&updated_organisation.id);
-        let _ = self
-            .cache_service
-            .set::<Organisation>(&cache_key, &updated_organisation, None);
+        let _ = self.cache_service.set::<Organisation>(
+            &cache_key,
+            &updated_organisation,
+            None
+        );
 
         Ok(updated_organisation)
     }

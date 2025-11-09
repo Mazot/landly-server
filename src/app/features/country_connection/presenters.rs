@@ -1,6 +1,6 @@
 use super::entities::CountryConnection;
-use actix_web::HttpResponse;
 use serde::{Deserialize, Serialize};
+use actix_web::HttpResponse;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -96,9 +96,9 @@ mod tests {
     fn test_country_connection_content_from_connection() {
         let connection = create_test_country_connection();
         let connection_id = connection.id;
-
+        
         let content = CountryConnectionContent::from(connection);
-
+        
         assert_eq!(content.id, connection_id);
         assert!(content.embassy_org_id.is_some());
         assert!(content.consulate_org_id.is_some());
@@ -115,9 +115,9 @@ mod tests {
             location_country_id: None,
             common_info: None,
         };
-
+        
         let content = CountryConnectionContent::from(connection);
-
+        
         assert!(content.embassy_org_id.is_none());
         assert!(content.consulate_org_id.is_none());
         assert!(content.location_country_id.is_none());
@@ -129,9 +129,9 @@ mod tests {
         let conn1 = create_test_country_connection();
         let conn2 = create_test_country_connection();
         let connections = vec![conn1, conn2];
-
+        
         let response = MultipleCountryConnectionsResponse::from(connections);
-
+        
         assert_eq!(response.total, 2);
         assert_eq!(response.items.len(), 2);
     }
@@ -139,9 +139,9 @@ mod tests {
     #[test]
     fn test_multiple_country_connections_response_empty() {
         let connections: Vec<CountryConnection> = vec![];
-
+        
         let response = MultipleCountryConnectionsResponse::from(connections);
-
+        
         assert_eq!(response.total, 0);
         assert_eq!(response.items.len(), 0);
     }
@@ -156,7 +156,7 @@ mod tests {
     fn test_country_connection_presenter_to_http_res() {
         let presenter = CountryConnectionPresenterImpl::new();
         let response = presenter.to_http_res();
-
+        
         assert_eq!(response.status(), actix_web::http::StatusCode::OK);
     }
 
@@ -164,9 +164,9 @@ mod tests {
     fn test_country_connection_presenter_to_single_json() {
         let presenter = CountryConnectionPresenterImpl::new();
         let connection = create_test_country_connection();
-
+        
         let response = presenter.to_single_json(connection);
-
+        
         assert_eq!(response.status(), actix_web::http::StatusCode::OK);
     }
 
@@ -176,9 +176,9 @@ mod tests {
         let conn1 = create_test_country_connection();
         let conn2 = create_test_country_connection();
         let connections = vec![conn1, conn2];
-
+        
         let response = presenter.to_multi_json(connections);
-
+        
         assert_eq!(response.status(), actix_web::http::StatusCode::OK);
     }
 
@@ -186,7 +186,7 @@ mod tests {
     fn test_country_connection_presenter_clone() {
         let presenter = CountryConnectionPresenterImpl::new();
         let _cloned = presenter.clone();
-
+        
         assert!(true);
     }
 }

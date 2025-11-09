@@ -8,7 +8,8 @@ pub type DbPool = Pool<ConnectionManager<PgConnection>>;
 
 pub fn establish_connection() -> DbPool {
     dotenv().ok();
-    let database_url = env::var(env_key::DATABASE_URL).expect("DATABASE_URL must be set");
+    let database_url = env::var(env_key::DATABASE_URL)
+        .expect("DATABASE_URL must be set");
     let manager = ConnectionManager::<PgConnection>::new(database_url);
 
     // TODO: Need to add connection pool configuration
@@ -28,7 +29,7 @@ mod tests {
         unsafe {
             std::env::set_var("DATABASE_URL", "not_a_valid_postgres_url");
         }
-
+        
         // This should panic with "Failed to create pool"
         establish_connection();
     }
@@ -38,7 +39,7 @@ mod tests {
         // We can't fully test the absence of DATABASE_URL due to test isolation
         // but we can verify the function depends on it being set
         // If DATABASE_URL is not set, establish_connection will panic
-
+        
         // Just verify the function exists and has the right signature
         let _fn_exists: fn() -> DbPool = establish_connection;
     }

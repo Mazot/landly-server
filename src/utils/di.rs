@@ -1,20 +1,31 @@
 use super::{db::DbPool, redis::RedisPool};
-use crate::app::features::common::{
-    presenters::CommonPresenterImpl, repositories::CommonRepositoryImpl, usecases::CommonUsecase,
-};
-use crate::app::features::country_connection::{
-    presenters::CountryConnectionPresenterImpl, repositories::CountryConnectionRepositoryImpl,
-    usecases::CountryConnectionUsecase,
-};
 use crate::app::features::organisation::{
-    presenters::OrganisationPresenterImpl, repositories::OrganisationRepositoryImpl,
+    presenters::OrganisationPresenterImpl,
+    repositories::OrganisationRepositoryImpl,
     usecases::OrganisationUsecase,
 };
-use crate::app::features::user::{
-    oauth::google::OAuthGoogle, presenters::UserPresenterImpl, repositories::UserRepositoryImpl,
-    usecases::UserUsecase,
+use crate::app::features::common::{
+    presenters::CommonPresenterImpl,
+    repositories::CommonRepositoryImpl,
+    usecases::CommonUsecase,
 };
-use crate::utils::cache::{CacheService, NoOpCacheService, RedisCacheService, TypedCache};
+use crate::app::features::country_connection::{
+    repositories::CountryConnectionRepositoryImpl,
+    presenters::CountryConnectionPresenterImpl,
+    usecases::CountryConnectionUsecase,
+};
+use crate::app::features::user::{
+    usecases::UserUsecase,
+    repositories::UserRepositoryImpl,
+    presenters::UserPresenterImpl,
+    oauth::google::OAuthGoogle,
+};
+use crate::utils::cache::{
+    CacheService,
+    NoOpCacheService,
+    RedisCacheService,
+    TypedCache
+};
 use std::sync::Arc;
 
 #[derive(Clone)]
@@ -29,21 +40,20 @@ pub struct DiContainer {
 
 impl DiContainer {
     pub fn new(pool: &DbPool, redis_pool: Option<RedisPool>) -> Self {
-        let typed_cache_service: TypedCache<Arc<dyn CacheService>> =
-            TypedCache::new(match redis_pool {
+        let typed_cache_service: TypedCache<Arc<dyn CacheService>> = TypedCache::new(
+            match redis_pool {
                 Some(pool) => Arc::new(RedisCacheService::new(pool)),
                 None => Arc::new(NoOpCacheService::default()),
-            });
+            }
+        );
 
-        let organisation_repo =
-            OrganisationRepositoryImpl::new(pool.clone(), typed_cache_service.clone());
+        let organisation_repo = OrganisationRepositoryImpl::new(pool.clone(), typed_cache_service.clone());
         let organisation_presenter = OrganisationPresenterImpl::new();
 
         let common_repo = CommonRepositoryImpl::new(pool.clone());
         let common_presenter = CommonPresenterImpl::new();
 
-        let country_connection_repo =
-            CountryConnectionRepositoryImpl::new(pool.clone(), typed_cache_service.clone());
+        let country_connection_repo = CountryConnectionRepositoryImpl::new(pool.clone(), typed_cache_service.clone());
         let country_connection_presenter = CountryConnectionPresenterImpl::new();
 
         let user_repo = UserRepositoryImpl::new(pool.clone());

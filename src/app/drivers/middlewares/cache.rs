@@ -1,15 +1,8 @@
-use crate::{
-    error::AppError,
-    utils::cache::{CacheKeys, CacheService, TypedCache},
-};
-use actix_web::{
-    Error,
-    dev::{Service, ServiceRequest, ServiceResponse, Transform, forward_ready},
-    http::Method,
-};
-use futures::future::LocalBoxFuture;
-use std::future::{Ready, ready};
+use crate::{error::AppError, utils::cache::{CacheKeys, CacheService, TypedCache}};
 use std::sync::Arc;
+use std::future::{ready, Ready};
+use futures::future::LocalBoxFuture;
+use actix_web::{dev::{forward_ready, Service, ServiceRequest, ServiceResponse, Transform}, http::Method, Error};
 
 pub struct CacheInvalidationMiddleware<S> {
     service: S,
@@ -31,7 +24,7 @@ where
     fn new_transform(&self, service: S) -> Self::Future {
         ready(Ok(CacheInvalidationMiddleware {
             service,
-            cache_service: self.clone(),
+            cache_service: self.clone()
         }))
     }
 }
@@ -77,7 +70,7 @@ where
 fn invalidate_cache_for_path(
     cache_service: &TypedCache<Arc<dyn CacheService>>,
     method: &Method,
-    path: &str,
+    path: &str
 ) -> Result<(), AppError> {
     if method == Method::GET {
         return Ok(());
@@ -85,20 +78,12 @@ fn invalidate_cache_for_path(
 
     if path.contains("/organisation") {
         let _ = cache_service.invalidate_pattern(&CacheKeys::organisation_pattern());
-        log::debug!(
-            "Invalidated organisation cache due to {} on {}",
-            method,
-            path
-        );
+        log::debug!("Invalidated organisation cache due to {} on {}", method, path);
     }
 
     if path.contains("/country-connection") {
         let _ = cache_service.invalidate_pattern(&CacheKeys::country_connection_pattern());
-        log::debug!(
-            "Invalidated country connection cache due to {} on {}",
-            method,
-            path
-        );
+        log::debug!("Invalidated country connection cache due to {} on {}", method, path);
     }
 
     Ok(())
@@ -113,7 +98,9 @@ mod tests {
     #[actix_web::test]
     async fn no_op_cache_invalidation() {
         let no_op_service = NoOpCacheService::default();
-        let typed_cache_mw = TypedCache::<Arc<dyn CacheService>>::new(Arc::new(no_op_service))
+        let typed_cache_mw = TypedCache::<Arc<dyn CacheService>>::new(
+            Arc::new(no_op_service)
+        )
             .new_transform(test::ok_service())
             .await
             .unwrap();

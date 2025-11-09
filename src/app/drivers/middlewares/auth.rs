@@ -1,15 +1,7 @@
 use crate::{error::AppError, utils::token};
-use actix_web::{
-    Error, HttpMessage, HttpResponse,
-    body::EitherBody,
-    dev::{Service, ServiceRequest, ServiceResponse, Transform, forward_ready},
-    http::Method,
-};
+use actix_web::{body::EitherBody, dev::{forward_ready, Service, ServiceRequest, ServiceResponse, Transform}, http::Method, Error, HttpMessage, HttpResponse};
+use std::{future::{ready, Ready}, pin::Pin};
 use serde_json::json;
-use std::{
-    future::{Ready, ready},
-    pin::Pin,
-};
 use uuid::Uuid;
 
 const AUTH_HEADER: &str = "Authorization";
@@ -76,8 +68,7 @@ where
             });
         }
 
-        req.extensions_mut()
-            .insert(is_user_authenticated.unwrap().1);
+        req.extensions_mut().insert(is_user_authenticated.unwrap().1);
 
         // TODO: Мы должны проверить токен и если он валидный, то пропустить запрос дальше
         // Если токен не валидный, то вернуть ошибку 401
@@ -151,9 +142,7 @@ fn get_user_id_from_token(token_opt: Option<String>) -> Result<Uuid, AppError> {
         return Ok(jwt_claims.sub);
     }
 
-    Err(AppError::Unauthorized(
-        json!({ "error": "Authorization token is missing" }),
-    ))
+    Err(AppError::Unauthorized(json!({ "error": "Authorization token is missing" })))
 }
 
 struct AuthRequiredRoute {
@@ -220,7 +209,7 @@ mod tests {
     fn test_get_user_id_from_token_without_token() {
         let result = get_user_id_from_token(None);
         assert!(result.is_err());
-
+        
         match result {
             Err(AppError::Unauthorized(_)) => (),
             _ => panic!("Expected Unauthorized error"),
@@ -232,7 +221,7 @@ mod tests {
         unsafe {
             std::env::set_var("JWT_SECRET", "test_secret");
         }
-
+        
         let result = get_user_id_from_token(Some("invalid_token".to_string()));
         assert!(result.is_err());
     }
@@ -243,10 +232,10 @@ mod tests {
             std::env::set_var("JWT_SECRET", "test_secret");
             std::env::set_var("JWT_EXPIRATION", "3600");
         }
-
+        
         let user_id = Uuid::new_v4();
         let token = crate::utils::token::generate_token(user_id).unwrap();
-
+        
         let result = get_user_id_from_token(Some(token));
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), user_id);
@@ -270,33 +259,33 @@ mod tests {
 
     #[test]
     fn test_auth_required_routes_contains_organisation_create() {
-        let has_route = AUTH_REQUIRED_ROUTES
-            .iter()
-            .any(|r| r.path == "/api/organisation/create" && r.method == Method::POST);
+        let has_route = AUTH_REQUIRED_ROUTES.iter().any(|r| {
+            r.path == "/api/organisation/create" && r.method == Method::POST
+        });
         assert!(has_route);
     }
 
     #[test]
     fn test_auth_required_routes_contains_country_connection_create() {
-        let has_route = AUTH_REQUIRED_ROUTES
-            .iter()
-            .any(|r| r.path == "/api/country-connection/create" && r.method == Method::POST);
+        let has_route = AUTH_REQUIRED_ROUTES.iter().any(|r| {
+            r.path == "/api/country-connection/create" && r.method == Method::POST
+        });
         assert!(has_route);
     }
 
     #[test]
     fn test_skip_auth_routes_contains_swagger() {
-        let has_route = SKIP_AUTH_ROUTES
-            .iter()
-            .any(|r| r.path == "/swagger-ui" && r.method == Method::GET);
+        let has_route = SKIP_AUTH_ROUTES.iter().any(|r| {
+            r.path == "/swagger-ui" && r.method == Method::GET
+        });
         assert!(has_route);
     }
 
     #[test]
     fn test_skip_auth_routes_contains_healthcheck() {
-        let has_route = SKIP_AUTH_ROUTES
-            .iter()
-            .any(|r| r.path == "/api/healthcheck" && r.method == Method::GET);
+        let has_route = SKIP_AUTH_ROUTES.iter().any(|r| {
+            r.path == "/api/healthcheck" && r.method == Method::GET
+        });
         assert!(has_route);
     }
 }

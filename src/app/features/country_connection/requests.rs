@@ -120,7 +120,7 @@ mod tests {
     fn test_country_connections_list_query_params_with_filters() {
         let embassy_id = Uuid::new_v4();
         let location_id = Uuid::new_v4();
-
+        
         let params = CountryConnectionsListQueryParams {
             embassy_org_id: Some(embassy_id),
             consulate_org_id: None,

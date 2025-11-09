@@ -23,7 +23,7 @@ mod tests {
         unsafe {
             std::env::remove_var("FRONTEND_ORIGIN");
         }
-
+        
         // The function should not panic and return a Cors instance
         let cors_result = cors();
         // We can't directly test the Cors internals, but we can verify it's created
@@ -35,7 +35,7 @@ mod tests {
         unsafe {
             std::env::set_var("FRONTEND_ORIGIN", "https://example.com");
         }
-
+        
         let cors_result = cors();
         assert!(std::mem::size_of_val(&cors_result) > 0);
     }
@@ -45,9 +45,8 @@ mod tests {
         unsafe {
             std::env::remove_var("FRONTEND_ORIGIN");
         }
-
-        let frontend_origin =
-            env::var(env_key::FRONTEND_ORIGIN).unwrap_or_else(|_| "*".to_string());
+        
+        let frontend_origin = env::var(env_key::FRONTEND_ORIGIN).unwrap_or_else(|_| "*".to_string());
         assert_eq!(frontend_origin, "*");
     }
 }

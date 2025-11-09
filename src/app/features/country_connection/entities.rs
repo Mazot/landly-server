@@ -1,7 +1,10 @@
+use crate::{
+    data::schema::countries_connections,
+    data::models::Country
+};
 use crate::error::*;
-use crate::{data::models::Country, data::schema::countries_connections};
-use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
+use diesel::prelude::*;
 use uuid::Uuid;
 
 #[derive(Debug, Associations, Serialize, Deserialize, Queryable, Insertable, Selectable, Clone)]
@@ -53,7 +56,8 @@ impl CountryConnection {
         connection_id: Uuid,
         record: &UpdateCountryConnection,
     ) -> Result<Self, AppError> {
-        let c = countries_connections::table.find(connection_id);
+        let c = countries_connections::table
+            .find(connection_id);
         let result = diesel::update(c)
             .set(record)
             .returning(CountryConnection::as_select())
@@ -62,14 +66,21 @@ impl CountryConnection {
         Ok(result)
     }
 
-    pub fn delete(conn: &mut PgConnection, connection_id: Uuid) -> Result<(), AppError> {
-        let c = countries_connections::table.find(connection_id);
+    pub fn delete(
+        conn: &mut PgConnection,
+        connection_id: Uuid,
+    ) -> Result<(), AppError> {
+        let c = countries_connections::table
+            .find(connection_id);
         diesel::delete(c).execute(conn)?;
 
         Ok(())
     }
 
-    pub fn fetch_by_id(conn: &mut PgConnection, connection_id: Uuid) -> Result<Self, AppError> {
+    pub fn fetch_by_id(
+        conn: &mut PgConnection,
+        connection_id: Uuid,
+    ) -> Result<Self, AppError> {
         let result = countries_connections::table
             .find(connection_id)
             .select(CountryConnection::as_select())

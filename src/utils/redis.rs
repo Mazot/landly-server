@@ -1,9 +1,9 @@
 use crate::{constants::env_key, error::AppError};
 use actix_request_reply_cache::{RedisCacheMiddleware, RedisCacheMiddlewareBuilder};
 use dotenv::dotenv;
+use std::env;
 use r2d2::Pool;
 use redis::Client;
-use std::env;
 
 pub type RedisPool = Pool<Client>;
 
@@ -23,7 +23,8 @@ pub fn establish_connection() -> Result<RedisPool, AppError> {
 
 pub fn make_common_get_request_cache(cache_prefix: &str, ttl: u64) -> RedisCacheMiddleware {
     dotenv().ok();
-    let redis_url = env::var(env_key::REDIS_URL).expect("REDIS_URL must be set");
+    let redis_url = env::var(env_key::REDIS_URL)
+        .expect("REDIS_URL must be set");
     let cache = RedisCacheMiddlewareBuilder::new(redis_url)
         .cache_prefix(cache_prefix)
         .ttl(ttl)
@@ -49,7 +50,7 @@ mod tests {
         unsafe {
             std::env::remove_var("REDIS_URL");
         }
-
+        
         let result = establish_connection();
         assert!(result.is_err());
     }
@@ -59,7 +60,7 @@ mod tests {
         unsafe {
             std::env::set_var("REDIS_URL", "invalid://url");
         }
-
+        
         let result = establish_connection();
         assert!(result.is_err());
     }
@@ -70,7 +71,7 @@ mod tests {
         unsafe {
             std::env::remove_var("REDIS_URL");
         }
-
+        
         make_common_get_request_cache("test_prefix", 60);
     }
 }
