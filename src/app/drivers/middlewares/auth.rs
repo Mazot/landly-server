@@ -200,3 +200,92 @@ const SKIP_AUTH_ROUTES: [AuthSkipRoute; 3] = [
         method: Method::GET,
     },
 ];
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_get_user_id_from_token_without_token() {
+        let result = get_user_id_from_token(None);
+        assert!(result.is_err());
+        
+        match result {
+            Err(AppError::Unauthorized(_)) => (),
+            _ => panic!("Expected Unauthorized error"),
+        }
+    }
+
+    #[test]
+    fn test_get_user_id_from_token_with_invalid_token() {
+        unsafe {
+            std::env::set_var("JWT_SECRET", "test_secret");
+        }
+        
+        let result = get_user_id_from_token(Some("invalid_token".to_string()));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_get_user_id_from_token_with_valid_token() {
+        unsafe {
+            std::env::set_var("JWT_SECRET", "test_secret");
+            std::env::set_var("JWT_EXPIRATION", "3600");
+        }
+        
+        let user_id = Uuid::new_v4();
+        let token = crate::utils::token::generate_token(user_id).unwrap();
+        
+        let result = get_user_id_from_token(Some(token));
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), user_id);
+    }
+
+    #[test]
+    fn test_auth_constants() {
+        assert_eq!(AUTH_HEADER, "Authorization");
+        assert_eq!(BEARER, "Bearer ");
+    }
+
+    #[test]
+    fn test_auth_required_routes_count() {
+        assert_eq!(AUTH_REQUIRED_ROUTES.len(), 7);
+    }
+
+    #[test]
+    fn test_skip_auth_routes_count() {
+        assert_eq!(SKIP_AUTH_ROUTES.len(), 3);
+    }
+
+    #[test]
+    fn test_auth_required_routes_contains_organisation_create() {
+        let has_route = AUTH_REQUIRED_ROUTES.iter().any(|r| {
+            r.path == "/api/organisation/create" && r.method == Method::POST
+        });
+        assert!(has_route);
+    }
+
+    #[test]
+    fn test_auth_required_routes_contains_country_connection_create() {
+        let has_route = AUTH_REQUIRED_ROUTES.iter().any(|r| {
+            r.path == "/api/country-connection/create" && r.method == Method::POST
+        });
+        assert!(has_route);
+    }
+
+    #[test]
+    fn test_skip_auth_routes_contains_swagger() {
+        let has_route = SKIP_AUTH_ROUTES.iter().any(|r| {
+            r.path == "/swagger-ui" && r.method == Method::GET
+        });
+        assert!(has_route);
+    }
+
+    #[test]
+    fn test_skip_auth_routes_contains_healthcheck() {
+        let has_route = SKIP_AUTH_ROUTES.iter().any(|r| {
+            r.path == "/api/healthcheck" && r.method == Method::GET
+        });
+        assert!(has_route);
+    }
+}
