@@ -1,17 +1,17 @@
+use crate::constants::env_key;
 use crate::error::AppError;
 use crate::utils::cache::{CacheService, TypedCache};
-use crate::constants::env_key;
-use std::sync::Arc;
 use oauth2::basic::BasicTokenType;
 use oauth2::url::Url;
+use oauth2::{AuthUrl, TokenUrl, basic::BasicClient};
 use oauth2::{
-    reqwest, AuthorizationCode, ClientId, ClientSecret, CsrfToken, EmptyExtraTokenFields, EndpointNotSet, EndpointSet, PkceCodeChallenge, PkceCodeVerifier, RedirectUrl, RevocationUrl, Scope, StandardRevocableToken, StandardTokenResponse, TokenResponse,
-};
-use oauth2::{
-    basic::BasicClient, AuthUrl, TokenUrl
+    AuthorizationCode, ClientId, ClientSecret, CsrfToken, EmptyExtraTokenFields, EndpointNotSet,
+    EndpointSet, PkceCodeChallenge, PkceCodeVerifier, RedirectUrl, RevocationUrl, Scope,
+    StandardRevocableToken, StandardTokenResponse, TokenResponse, reqwest,
 };
 use serde::Deserialize;
 use serde_json::json;
+use std::sync::Arc;
 use utoipa::ToSchema;
 
 #[derive(Clone)]
@@ -31,10 +31,13 @@ pub struct GoogleUserInfo {
 impl OAuthGoogle {
     pub fn new(cache: TypedCache<Arc<dyn CacheService>>) -> Self {
         let client_id = std::env::var(env_key::GOOGLE_CLIENT_ID).expect("GOOGLE_CLIENT_ID missing");
-        let client_secret = std::env::var(env_key::GOOGLE_CLIENT_SECRET).expect("GOOGLE_CLIENT_SECRET missing");
-        let redirect = std::env::var(env_key::OAUTH_GOOGLE_REDIRECT_URL).expect("OAUTH_GOOGLE_REDIRECT_URL missing");
+        let client_secret =
+            std::env::var(env_key::GOOGLE_CLIENT_SECRET).expect("GOOGLE_CLIENT_SECRET missing");
+        let redirect = std::env::var(env_key::OAUTH_GOOGLE_REDIRECT_URL)
+            .expect("OAUTH_GOOGLE_REDIRECT_URL missing");
 
-        let auth_url = AuthUrl::new("https://accounts.google.com/o/oauth2/v2/auth".to_string()).unwrap();
+        let auth_url =
+            AuthUrl::new("https://accounts.google.com/o/oauth2/v2/auth".to_string()).unwrap();
         let token_url = TokenUrl::new("https://oauth2.googleapis.com/token".to_string()).unwrap();
 
         let client = BasicClient::new(ClientId::new(client_id))
@@ -56,7 +59,8 @@ impl OAuthGoogle {
         let (pkce_code_challenge, pkce_code_verifier) = PkceCodeChallenge::new_random_sha256();
 
         // Generate the authorization URL to which we'll redirect the user.
-        let (auth_url, csrf_token) = self.client
+        let (auth_url, csrf_token) = self
+            .client
             .authorize_url(CsrfToken::new_random)
             // TODO: We can change scopes and add more
             .add_scope(Scope::new(
@@ -72,22 +76,29 @@ impl OAuthGoogle {
         let key = format!("oauth:google:pkce:{}", csrf_token.secret());
         let verifier = pkce_code_verifier.secret().to_string();
 
-        self.cache.set(&key, &verifier, Some(std::time::Duration::from_secs(300)))?;
+        self.cache
+            .set(&key, &verifier, Some(std::time::Duration::from_secs(300)))?;
 
         Ok((auth_url, csrf_token))
     }
 
     // ! Example URL http://localhost:8080/api/user/oauth/google/callback?state=state&code=code&scope=email+https://www.googleapis.com/auth/userinfo.email+openid&authuser=0&prompt=consent
-    pub async fn exchange_and_userinfo(&self, code: String, state: String) -> Result<GoogleUserInfo, AppError> {
+    pub async fn exchange_and_userinfo(
+        &self,
+        code: String,
+        state: String,
+    ) -> Result<GoogleUserInfo, AppError> {
         let key = format!("oauth:google:pkce:{}", state);
-        let verifier: String = self.cache.get(&key)?
-            .ok_or(AppError::Unauthorized(json!("Invalid CSRF token".to_string())))?;
+        let verifier: String = self.cache.get(&key)?.ok_or(AppError::Unauthorized(json!(
+            "Invalid CSRF token".to_string()
+        )))?;
 
         let _ = self.cache.delete(&key);
 
         let http_client = Self::make_http_client();
 
-        let token_result = self.client
+        let token_result = self
+            .client
             .exchange_code(AuthorizationCode::new(code))
             .set_pkce_verifier(PkceCodeVerifier::new(verifier))
             .request_async(&http_client)
@@ -111,7 +122,10 @@ impl OAuthGoogle {
         Ok(user_info)
     }
 
-    pub async fn revoke_token(&self, token: StandardTokenResponse<EmptyExtraTokenFields, BasicTokenType>) -> Result<(), AppError> {
+    pub async fn revoke_token(
+        &self,
+        token: StandardTokenResponse<EmptyExtraTokenFields, BasicTokenType>,
+    ) -> Result<(), AppError> {
         let http_client = Self::make_http_client();
 
         let token_to_revoke: StandardRevocableToken = match token.refresh_token() {
@@ -120,7 +134,8 @@ impl OAuthGoogle {
         };
 
         self.client
-            .revoke_token(token_to_revoke).expect("Failed to create revocation request")
+            .revoke_token(token_to_revoke)
+            .expect("Failed to create revocation request")
             .request_async(&http_client)
             .await
             .map_err(|_| AppError::InternalServerError)
@@ -134,5 +149,4 @@ impl OAuthGoogle {
 
         http_client
     }
-
 }

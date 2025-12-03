@@ -1,5 +1,5 @@
-use crate::error::AppError;
 use super::redis::RedisPool;
+use crate::error::AppError;
 use r2d2::PooledConnection;
 use redis::{Client, Commands};
 use serde::{Deserialize, Serialize};
@@ -12,7 +12,11 @@ pub trait CacheService: Send + Sync + 'static {
     fn exists(&self, key: &str) -> Result<bool, AppError>;
     fn invalidate_pattern(&self, pattern: &str) -> Result<(), AppError>;
     fn mget_string(&self, keys: &[String]) -> Result<Vec<Option<String>>, AppError>;
-    fn mset_string(&self, items: &[(String, String)], ttl: Option<Duration>) -> Result<(), AppError>;
+    fn mset_string(
+        &self,
+        items: &[(String, String)],
+        ttl: Option<Duration>,
+    ) -> Result<(), AppError>;
 }
 
 #[derive(Debug)]
@@ -30,7 +34,7 @@ impl<T: ?Sized> Clone for TypedCache<Arc<T>> {
     }
 }
 
-impl <T: CacheService> TypedCache<T> {
+impl<T: CacheService> TypedCache<T> {
     pub fn new(cache_service: T) -> Self {
         Self { cache_service }
     }
@@ -42,14 +46,10 @@ impl<T: CacheService> TypedCache<T> {
         U: for<'de> Deserialize<'de>,
     {
         match self.cache_service.get_string(key)? {
-            Some(json_str) => {
-                serde_json::from_str(&json_str)
-                    .map(Some)
-                    .map_err(|_| {
-                        let _ = self.delete(key);
-                        AppError::InternalServerError
-                    })
-            },
+            Some(json_str) => serde_json::from_str(&json_str).map(Some).map_err(|_| {
+                let _ = self.delete(key);
+                AppError::InternalServerError
+            }),
             None => Ok(None),
         }
     }
@@ -58,8 +58,7 @@ impl<T: CacheService> TypedCache<T> {
     where
         U: Serialize,
     {
-        let json_str = serde_json::to_string(value)
-            .map_err(|_| AppError::InternalServerError)?;
+        let json_str = serde_json::to_string(value).map_err(|_| AppError::InternalServerError)?;
 
         self.cache_service.set_string(key, &json_str, ttl)
     }
@@ -73,13 +72,11 @@ impl<T: CacheService> TypedCache<T> {
 
         for (i, opt_str) in string_results.into_iter().enumerate() {
             match opt_str {
-                Some(json_str) => {
-                    match serde_json::from_str(&json_str) {
-                        Ok(parsed_value) => results.push(Some(parsed_value)),
-                        Err(_) => {
-                            let _ = self.delete(&keys[i]);
-                            results.push(None);
-                        }
+                Some(json_str) => match serde_json::from_str(&json_str) {
+                    Ok(parsed_value) => results.push(Some(parsed_value)),
+                    Err(_) => {
+                        let _ = self.delete(&keys[i]);
+                        results.push(None);
                     }
                 },
                 None => results.push(None),
@@ -93,7 +90,8 @@ impl<T: CacheService> TypedCache<T> {
     where
         U: Serialize,
     {
-        let key_ser_val_vec: Vec<(String, String)> = items.iter()
+        let key_ser_val_vec: Vec<(String, String)> = items
+            .iter()
             .map(|(k, v)| (k.clone(), serde_json::to_string(v).unwrap()))
             .collect();
 
@@ -136,7 +134,7 @@ impl RedisCacheService {
     pub fn new(pool: RedisPool) -> Self {
         Self {
             pool,
-            config: CacheConfig::default()
+            config: CacheConfig::default(),
         }
     }
 
@@ -162,7 +160,11 @@ impl CacheService for Arc<dyn CacheService> {
         (**self).mget_string(keys)
     }
 
-    fn mset_string(&self, items: &[(String, String)], ttl: Option<Duration>) -> Result<(), AppError> {
+    fn mset_string(
+        &self,
+        items: &[(String, String)],
+        ttl: Option<Duration>,
+    ) -> Result<(), AppError> {
         (**self).mset_string(items, ttl)
     }
 
@@ -182,7 +184,9 @@ impl CacheService for Arc<dyn CacheService> {
 impl CacheService for RedisCacheService {
     fn get_string(&self, key: &str) -> Result<Option<String>, AppError> {
         let connection = &mut self.get_connection()?;
-        let res: Option<String> = connection.get(key).map_err(|_| AppError::InternalServerError)?;
+        let res: Option<String> = connection
+            .get(key)
+            .map_err(|_| AppError::InternalServerError)?;
 
         Ok(res)
     }
@@ -202,14 +206,17 @@ impl CacheService for RedisCacheService {
 
     fn delete(&self, key: &str) -> Result<(), AppError> {
         let connection = &mut self.get_connection()?;
-        let _: () = connection.del(key).map_err(|_| AppError::InternalServerError)?;
+        let _: () = connection
+            .del(key)
+            .map_err(|_| AppError::InternalServerError)?;
 
         Ok(())
     }
 
     fn exists(&self, key: &str) -> Result<bool, AppError> {
         let connection = &mut self.get_connection()?;
-        let exist =  connection.exists(key)
+        let exist = connection
+            .exists(key)
             .map_err(|_| AppError::InternalServerError)?;
 
         Ok(exist)
@@ -241,7 +248,8 @@ impl CacheService for RedisCacheService {
         }
 
         if !all_keys.is_empty() {
-            let _: () = connection.del(all_keys)
+            let _: () = connection
+                .del(all_keys)
                 .map_err(|_| AppError::InternalServerError)?;
         }
 
@@ -254,12 +262,18 @@ impl CacheService for RedisCacheService {
         }
 
         let connection = &mut self.get_connection()?;
-        let res: Vec<Option<String>> = connection.mget(keys).map_err(|_| AppError::InternalServerError)?;
+        let res: Vec<Option<String>> = connection
+            .mget(keys)
+            .map_err(|_| AppError::InternalServerError)?;
 
         Ok(res)
     }
 
-    fn mset_string(&self, items: &[(String, String)], ttl: Option<Duration>) -> Result<(), AppError> {
+    fn mset_string(
+        &self,
+        items: &[(String, String)],
+        ttl: Option<Duration>,
+    ) -> Result<(), AppError> {
         if items.is_empty() {
             return Ok(());
         }
@@ -311,7 +325,11 @@ impl CacheService for NoOpCacheService {
         Ok(vec![None; _keys.len()])
     }
 
-    fn mset_string(&self, _items: &[(String, String)], _ttl: Option<Duration>) -> Result<(), AppError> {
+    fn mset_string(
+        &self,
+        _items: &[(String, String)],
+        _ttl: Option<Duration>,
+    ) -> Result<(), AppError> {
         Ok(())
     }
 }

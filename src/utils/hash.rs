@@ -1,5 +1,5 @@
 pub use bcrypt::verify;
-use bcrypt::{hash, BcryptResult, DEFAULT_COST};
+use bcrypt::{BcryptResult, DEFAULT_COST, hash};
 
 pub fn hash_password(naive_password: &str) -> BcryptResult<String> {
     hash(naive_password, DEFAULT_COST)

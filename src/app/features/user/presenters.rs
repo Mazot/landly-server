@@ -109,9 +109,9 @@ mod tests {
         let user = create_test_user();
         let user_id = user.id;
         let token = "test_token_123".to_string();
-        
+
         let content = AuthUserContent::from((user, token.clone()));
-        
+
         assert_eq!(content.id, user_id);
         assert_eq!(content.username, "testuser");
         assert_eq!(content.email, "test@example.com");
@@ -124,15 +124,15 @@ mod tests {
         let lang1 = Uuid::new_v4();
         let lang2 = Uuid::new_v4();
         let lang3 = Uuid::new_v4();
-        
+
         let languages = vec![
             create_test_user_to_language(user_id, lang1),
             create_test_user_to_language(user_id, lang2),
             create_test_user_to_language(user_id, lang3),
         ];
-        
+
         let content = UserLanguagesContent::from(languages);
-        
+
         assert_eq!(content.user_id, user_id);
         assert_eq!(content.language_ids.len(), 3);
         assert!(content.language_ids.contains(&lang1));
@@ -143,9 +143,9 @@ mod tests {
     #[test]
     fn test_user_languages_content_from_empty_vec() {
         let languages: Vec<UserToLanguage> = vec![];
-        
+
         let content = UserLanguagesContent::from(languages);
-        
+
         assert_eq!(content.user_id, Uuid::default());
         assert_eq!(content.language_ids.len(), 0);
     }
@@ -154,11 +154,11 @@ mod tests {
     fn test_user_languages_content_single_language() {
         let user_id = Uuid::new_v4();
         let lang_id = Uuid::new_v4();
-        
+
         let languages = vec![create_test_user_to_language(user_id, lang_id)];
-        
+
         let content = UserLanguagesContent::from(languages);
-        
+
         assert_eq!(content.user_id, user_id);
         assert_eq!(content.language_ids.len(), 1);
         assert_eq!(content.language_ids[0], lang_id);
@@ -174,7 +174,7 @@ mod tests {
     fn test_user_presenter_to_http_res() {
         let presenter = UserPresenterImpl::new();
         let response = presenter.to_http_res();
-        
+
         assert_eq!(response.status(), actix_web::http::StatusCode::OK);
     }
 
@@ -183,9 +183,9 @@ mod tests {
         let presenter = UserPresenterImpl::new();
         let user = create_test_user();
         let token = "test_token".to_string();
-        
+
         let response = presenter.to_single_json(user, token);
-        
+
         assert_eq!(response.status(), actix_web::http::StatusCode::OK);
     }
 
@@ -197,9 +197,9 @@ mod tests {
             create_test_user_to_language(user_id, Uuid::new_v4()),
             create_test_user_to_language(user_id, Uuid::new_v4()),
         ];
-        
+
         let response = presenter.to_lang_vec_json(languages);
-        
+
         assert_eq!(response.status(), actix_web::http::StatusCode::OK);
     }
 
@@ -208,9 +208,9 @@ mod tests {
         let presenter = UserPresenterImpl::new();
         let user = create_test_user();
         let user_id = user.id;
-        
+
         let result = presenter.to_auth_middleware(Ok(user));
-        
+
         assert!(result.is_ok());
         assert_eq!(result.unwrap().id, user_id);
     }
@@ -219,9 +219,9 @@ mod tests {
     fn test_user_presenter_to_auth_middleware_failure() {
         let presenter = UserPresenterImpl::new();
         let error = AppError::Unauthorized(serde_json::json!({"error": "test"}));
-        
+
         let result = presenter.to_auth_middleware(Err(error));
-        
+
         assert!(result.is_err());
         assert_eq!(result.unwrap_err(), "Cannot find auth user");
     }
@@ -230,7 +230,7 @@ mod tests {
     fn test_user_presenter_clone() {
         let presenter = UserPresenterImpl::new();
         let _cloned = presenter.clone();
-        
+
         assert!(true);
     }
 
@@ -239,7 +239,7 @@ mod tests {
         let user = create_test_user();
         let token = "test_token".to_string();
         let content = AuthUserContent::from((user, token));
-        
+
         let json = serde_json::to_string(&content).unwrap();
         assert!(json.contains("testuser"));
         assert!(json.contains("test@example.com"));
@@ -253,7 +253,7 @@ mod tests {
             user_id,
             language_ids: vec![Uuid::new_v4(), Uuid::new_v4()],
         };
-        
+
         let json = serde_json::to_string(&content).unwrap();
         assert!(json.contains("userId"));
         assert!(json.contains("languageIds"));

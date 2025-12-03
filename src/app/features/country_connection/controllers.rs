@@ -1,12 +1,21 @@
 use super::{
-    requests::{CreateCountryConnectionRequest, CountryConnectionsListQueryParams, UpdateCountryConnectionRequest},
-    usecases::{CreateCountryConnectionUsecaseInput, FetchCountryConnectionsUsecaseInput, UpdateCountryConnectionUsecaseInput},
+    requests::{
+        CountryConnectionsListQueryParams, CreateCountryConnectionRequest,
+        UpdateCountryConnectionRequest,
+    },
+    usecases::{
+        CreateCountryConnectionUsecaseInput, FetchCountryConnectionsUsecaseInput,
+        UpdateCountryConnectionUsecaseInput,
+    },
 };
 use crate::app::drivers::middlewares::state::AppState;
 use crate::error::AppError;
-use actix_web::{web::{Data, Json, Path, Query}, HttpRequest, HttpResponse};
-use uuid::Uuid;
+use actix_web::{
+    HttpRequest, HttpResponse,
+    web::{Data, Json, Path, Query},
+};
 use std::cmp::min;
+use uuid::Uuid;
 
 #[utoipa::path(
     get,
@@ -21,7 +30,7 @@ use std::cmp::min;
 )]
 pub async fn list(
     state: Data<AppState>,
-    query: Query<CountryConnectionsListQueryParams>
+    query: Query<CountryConnectionsListQueryParams>,
 ) -> Result<HttpResponse, AppError> {
     let offset = min(query.offset.unwrap_or(0), 150);
     let limit = query.limit.unwrap_or(20);
@@ -29,15 +38,13 @@ pub async fn list(
     state
         .di_container
         .country_connection_usecase
-        .fetch_country_connections(
-            FetchCountryConnectionsUsecaseInput {
-                embassy_org_id: query.embassy_org_id,
-                consulate_org_id: query.consulate_org_id,
-                location_country_id: query.location_country_id,
-                limit,
-                offset,
-            }
-        )
+        .fetch_country_connections(FetchCountryConnectionsUsecaseInput {
+            embassy_org_id: query.embassy_org_id,
+            consulate_org_id: query.consulate_org_id,
+            location_country_id: query.location_country_id,
+            limit,
+            offset,
+        })
 }
 
 #[utoipa::path(
@@ -57,7 +64,7 @@ pub async fn list(
 pub async fn fetch(
     state: Data<AppState>,
     _req: HttpRequest,
-    id: Path<Uuid>
+    id: Path<Uuid>,
 ) -> Result<HttpResponse, AppError> {
     state
         .di_container
@@ -80,19 +87,17 @@ pub async fn fetch(
 pub async fn create(
     state: Data<AppState>,
     _req: HttpRequest,
-    form: Json<CreateCountryConnectionRequest>
+    form: Json<CreateCountryConnectionRequest>,
 ) -> Result<HttpResponse, AppError> {
     state
         .di_container
         .country_connection_usecase
-        .create_country_connection(
-            CreateCountryConnectionUsecaseInput {
-                embassy_org_id: form.embassy_org_id,
-                consulate_org_id: form.consulate_org_id,
-                common_info: form.common_info.clone(),
-                location_country_id: form.location_country_id,
-            }
-        )
+        .create_country_connection(CreateCountryConnectionUsecaseInput {
+            embassy_org_id: form.embassy_org_id,
+            consulate_org_id: form.consulate_org_id,
+            common_info: form.common_info.clone(),
+            location_country_id: form.location_country_id,
+        })
 }
 
 #[utoipa::path(
@@ -114,7 +119,7 @@ pub async fn update(
     state: Data<AppState>,
     _req: HttpRequest,
     id: Path<Uuid>,
-    form: Json<UpdateCountryConnectionRequest>
+    form: Json<UpdateCountryConnectionRequest>,
 ) -> Result<HttpResponse, AppError> {
     state
         .di_container
@@ -126,7 +131,7 @@ pub async fn update(
                 consulate_org_id: form.consulate_org_id,
                 location_country_id: form.location_country_id,
                 common_info: form.common_info.clone(),
-            }
+            },
         )
 }
 
@@ -147,7 +152,7 @@ pub async fn update(
 pub async fn delete(
     state: Data<AppState>,
     _req: HttpRequest,
-    id: Path<Uuid>
+    id: Path<Uuid>,
 ) -> Result<HttpResponse, AppError> {
     state
         .di_container
