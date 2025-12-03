@@ -124,11 +124,10 @@ mod tests {
             std::env::remove_var("REDIS_POOL_CONNECTION_TIMEOUT_SECS");
         }
 
-        // The function should use defaults and not panic
-        let result = establish_connection();
-        // We expect an error because we can't actually connect to Redis,
-        // but the pool configuration should be applied correctly
-        assert!(result.is_err() || result.is_ok());
+        // The function should use defaults and not panic during pool configuration
+        // It may error on actual connection, but that's expected in test environment
+        let _result = establish_connection();
+        // Test passes if we reach here without panicking
     }
 
     #[test]
@@ -143,24 +142,24 @@ mod tests {
             std::env::set_var("REDIS_POOL_CONNECTION_TIMEOUT_SECS", "60");
         }
 
-        // The function should use custom values and not panic
-        let result = establish_connection();
-        // We expect an error because we can't actually connect to Redis,
-        // but the pool configuration should be applied correctly
-        assert!(result.is_err() || result.is_ok());
+        // The function should use custom values and not panic during pool configuration
+        // It may error on actual connection, but that's expected in test environment
+        let _result = establish_connection();
+        // Test passes if we reach here without panicking
     }
 
     #[test]
     fn test_pool_config_invalid_values_use_defaults() {
-        // Test that invalid values fallback to defaults
+        // Test that invalid values fallback to defaults without panicking
         unsafe {
             std::env::set_var("REDIS_URL", "redis://localhost:6379");
             std::env::set_var("REDIS_POOL_MAX_SIZE", "not_a_number");
             std::env::set_var("REDIS_POOL_MIN_IDLE", "invalid");
         }
 
-        // The function should fallback to defaults and not panic
-        let result = establish_connection();
-        assert!(result.is_err() || result.is_ok());
+        // The function should fallback to defaults and not panic during configuration parsing
+        // It may error on actual connection, but that's expected in test environment
+        let _result = establish_connection();
+        // Test passes if we reach here without panicking
     }
 }
