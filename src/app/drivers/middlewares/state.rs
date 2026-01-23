@@ -1,4 +1,8 @@
-use crate::utils::{db::DbPool, di::DiContainer, redis::establish_connection};
+use crate::utils::{
+    db::DbPool,
+    di::DiContainer,
+    redis::establish_connection
+};
 
 #[derive(Clone)]
 pub struct AppState {
@@ -9,7 +13,7 @@ impl AppState {
     pub fn new(db_pool: DbPool) -> Self {
         let redis_pool = match establish_connection() {
             Ok(pool) => Some(pool),
-            Err(_) => None,
+            Err(_) => None
         };
 
         Self {

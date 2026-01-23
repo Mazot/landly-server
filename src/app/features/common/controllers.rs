@@ -1,16 +1,10 @@
-use super::usecases::FetchAllCountriesUsecaseInput;
-use crate::app::{
-    drivers::middlewares::state::AppState,
-    features::common::usecases::CreateOrganisationTypeUsecaseInput,
-};
+use crate::app::{drivers::middlewares::state::AppState, features::common::usecases::CreateOrganisationTypeUsecaseInput};
 use crate::error::AppError;
-use actix_web::{
-    HttpResponse,
-    web::{Data, Json, Query},
-};
-use serde::Deserialize;
-use std::cmp::min;
+use super::usecases::FetchAllCountriesUsecaseInput;
+use actix_web::{web::{Data, Json, Query}, HttpResponse};
 use utoipa::{IntoParams, ToSchema};
+use std::cmp::min;
+use serde::Deserialize;
 
 #[utoipa::path(
     get,
@@ -32,7 +26,12 @@ pub async fn fetch_all_countries(
     state
         .di_container
         .common_usecase
-        .fetch_all_countries(FetchAllCountriesUsecaseInput { limit, offset })
+        .fetch_all_countries(
+            FetchAllCountriesUsecaseInput {
+                limit,
+                offset,
+            }
+        )
 }
 
 #[utoipa::path(
@@ -44,8 +43,13 @@ pub async fn fetch_all_countries(
     ),
     tag = "Common"
 )]
-pub async fn fetch_all_organisation_types(state: Data<AppState>) -> Result<HttpResponse, AppError> {
-    state.di_container.common_usecase.fetch_organisation_types()
+pub async fn fetch_all_organisation_types(
+    state: Data<AppState>,
+) -> Result<HttpResponse, AppError> {
+    state
+        .di_container
+        .common_usecase
+        .fetch_organisation_types()
 }
 
 #[utoipa::path(
@@ -67,11 +71,13 @@ pub async fn create_organisation_type(
     state
         .di_container
         .common_usecase
-        .create_organisation_type(CreateOrganisationTypeUsecaseInput {
-            org_type: form.org_type.to_owned(),
-            color: form.color.to_owned(),
-            title: form.title.to_owned(),
-        })
+        .create_organisation_type(
+            CreateOrganisationTypeUsecaseInput {
+                org_type: form.org_type.to_owned(),
+                color: form.color.to_owned(),
+                title: form.title.to_owned(),
+            }
+        )
 }
 
 #[derive(Deserialize, ToSchema)]

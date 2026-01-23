@@ -168,7 +168,7 @@ mod tests {
     fn test_organisations_list_query_request_with_filters() {
         let country_id = Uuid::new_v4();
         let org_type_id = Uuid::new_v4();
-
+        
         let request = OrganisationsListQueryRequest {
             name: Some("Search Term".to_string()),
             tel: Some("+123".to_string()),
