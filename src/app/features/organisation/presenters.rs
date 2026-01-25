@@ -1,13 +1,10 @@
 use super::entities::Organisation;
-use serde::{Deserialize, Serialize};
-use actix_web::{
-    HttpResponse,
-    http::StatusCode
-};
+use actix_web::{HttpResponse, http::StatusCode};
 use chrono::NaiveDateTime;
+use serde::{Deserialize, Serialize};
+use std::str::FromStr;
 use utoipa::ToSchema;
 use uuid::Uuid;
-use std::str::FromStr;
 
 pub trait OrganisationPresenter: Send + Sync + 'static {
     fn to_http_res(&self) -> HttpResponse;
@@ -42,7 +39,7 @@ impl From<Organisation> for OrganisationContent {
                 let str = dec_val.to_string();
                 let value: f64 = f64::from_str(&str).unwrap_or_default();
                 Some(value)
-            },
+            }
             _ => None,
         };
         let latitude: Option<f64> = match org.latitude {
@@ -50,7 +47,7 @@ impl From<Organisation> for OrganisationContent {
                 let str = dec_val.to_string();
                 let value: f64 = f64::from_str(&str).unwrap_or_default();
                 Some(value)
-            },
+            }
             _ => None,
         };
 
@@ -80,10 +77,8 @@ pub struct MultipleOrganisationsResponse {
 
 impl From<Vec<Organisation>> for MultipleOrganisationsResponse {
     fn from(items: Vec<Organisation>) -> Self {
-        let response_items: Vec<OrganisationContent> = items
-            .into_iter()
-            .map(OrganisationContent::from)
-            .collect();
+        let response_items: Vec<OrganisationContent> =
+            items.into_iter().map(OrganisationContent::from).collect();
         let count = response_items.len() as i64;
 
         Self {
@@ -107,9 +102,7 @@ impl OrganisationPresenter for OrganisationPresenterImpl {
 
     // TODO: Tmp solution
     fn to_single_typed_json(&self, item: Organisation) -> HttpResponse<Organisation> {
-        HttpResponse::<Organisation>::with_body(
-            StatusCode::OK, item
-        )
+        HttpResponse::<Organisation>::with_body(StatusCode::OK, item)
     }
 
     fn to_single_json(&self, item: Organisation) -> HttpResponse {
@@ -144,8 +137,14 @@ mod tests {
             founder_country_id: Some(Uuid::new_v4()),
             latitude: Some(BigDecimal::from_str("40.7128").unwrap()),
             longitude: Some(BigDecimal::from_str("-74.0060").unwrap()),
-            created_at: chrono::NaiveDate::from_ymd_opt(2024, 1, 1).unwrap().and_hms_opt(0, 0, 0).unwrap(),
-            updated_at: chrono::NaiveDate::from_ymd_opt(2024, 1, 1).unwrap().and_hms_opt(0, 0, 0).unwrap(),
+            created_at: chrono::NaiveDate::from_ymd_opt(2024, 1, 1)
+                .unwrap()
+                .and_hms_opt(0, 0, 0)
+                .unwrap(),
+            updated_at: chrono::NaiveDate::from_ymd_opt(2024, 1, 1)
+                .unwrap()
+                .and_hms_opt(0, 0, 0)
+                .unwrap(),
         }
     }
 
@@ -154,9 +153,9 @@ mod tests {
         let org = create_test_organisation();
         let org_id = org.id;
         let org_name = org.name.clone();
-        
+
         let content = OrganisationContent::from(org);
-        
+
         assert_eq!(content.id, org_id);
         assert_eq!(content.name, org_name);
         assert_eq!(content.tel, Some("+1234567890".to_string()));
@@ -171,9 +170,9 @@ mod tests {
         let mut org = create_test_organisation();
         org.latitude = None;
         org.longitude = None;
-        
+
         let content = OrganisationContent::from(org);
-        
+
         assert!(content.latitude.is_none());
         assert!(content.longitude.is_none());
     }
@@ -183,9 +182,9 @@ mod tests {
         let org1 = create_test_organisation();
         let org2 = create_test_organisation();
         let orgs = vec![org1, org2];
-        
+
         let response = MultipleOrganisationsResponse::from(orgs);
-        
+
         assert_eq!(response.total, 2);
         assert_eq!(response.items.len(), 2);
     }
@@ -193,9 +192,9 @@ mod tests {
     #[test]
     fn test_multiple_organisations_response_empty() {
         let orgs: Vec<Organisation> = vec![];
-        
+
         let response = MultipleOrganisationsResponse::from(orgs);
-        
+
         assert_eq!(response.total, 0);
         assert_eq!(response.items.len(), 0);
     }
@@ -210,7 +209,7 @@ mod tests {
     fn test_organisation_presenter_to_http_res() {
         let presenter = OrganisationPresenterImpl::new();
         let response = presenter.to_http_res();
-        
+
         assert_eq!(response.status(), StatusCode::OK);
     }
 
@@ -218,9 +217,9 @@ mod tests {
     fn test_organisation_presenter_to_single_json() {
         let presenter = OrganisationPresenterImpl::new();
         let org = create_test_organisation();
-        
+
         let response = presenter.to_single_json(org);
-        
+
         assert_eq!(response.status(), StatusCode::OK);
     }
 
@@ -230,9 +229,9 @@ mod tests {
         let org1 = create_test_organisation();
         let org2 = create_test_organisation();
         let orgs = vec![org1, org2];
-        
+
         let response = presenter.to_multi_json(orgs);
-        
+
         assert_eq!(response.status(), StatusCode::OK);
     }
 
@@ -240,7 +239,7 @@ mod tests {
     fn test_organisation_presenter_clone() {
         let presenter = OrganisationPresenterImpl::new();
         let _cloned = presenter.clone();
-        
+
         // Should not panic and should be cloneable
         assert!(true);
     }

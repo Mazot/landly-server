@@ -53,7 +53,7 @@ mod tests {
     #[test]
     fn test_sign_in_request_deserialization() {
         let json = r#"{"email":"user@test.com","password":"secret"}"#;
-        
+
         let request: SignInRequest = serde_json::from_str(json).unwrap();
         assert_eq!(request.email, "user@test.com");
         assert_eq!(request.password, "secret");
@@ -75,7 +75,7 @@ mod tests {
     #[test]
     fn test_sign_up_request_deserialization() {
         let json = r#"{"username":"testuser","email":"test@example.com","password":"testpass"}"#;
-        
+
         let request: SignUpRequest = serde_json::from_str(json).unwrap();
         assert_eq!(request.username, "testuser");
         assert_eq!(request.email, "test@example.com");
@@ -86,7 +86,7 @@ mod tests {
     fn test_add_languages_request_single_language() {
         let user_id = Uuid::new_v4();
         let lang_id = Uuid::new_v4();
-        
+
         let request = AddLanguagesRequest {
             user_id,
             languages_ids: vec![lang_id],
@@ -103,7 +103,7 @@ mod tests {
         let lang1 = Uuid::new_v4();
         let lang2 = Uuid::new_v4();
         let lang3 = Uuid::new_v4();
-        
+
         let request = AddLanguagesRequest {
             user_id,
             languages_ids: vec![lang1, lang2, lang3],
@@ -118,7 +118,7 @@ mod tests {
     #[test]
     fn test_add_languages_request_empty_list() {
         let user_id = Uuid::new_v4();
-        
+
         let request = AddLanguagesRequest {
             user_id,
             languages_ids: vec![],
@@ -131,7 +131,7 @@ mod tests {
     fn test_delete_language_request() {
         let user_id = Uuid::new_v4();
         let language_id = Uuid::new_v4();
-        
+
         let request = DeleteLanguageRequest {
             user_id,
             language_id,
@@ -145,7 +145,7 @@ mod tests {
     fn test_delete_language_request_serialization() {
         let user_id = Uuid::new_v4();
         let language_id = Uuid::new_v4();
-        
+
         let request = DeleteLanguageRequest {
             user_id,
             language_id,
@@ -159,7 +159,7 @@ mod tests {
     #[test]
     fn test_oauth_callback_params_with_scope() {
         let json = r#"{"code":"auth_code_123","state":"state_xyz","scope":"read write"}"#;
-        
+
         let params: OAuthCallbackParams = serde_json::from_str(json).unwrap();
         assert_eq!(params.code, "auth_code_123");
         assert_eq!(params.state, "state_xyz");
@@ -169,7 +169,7 @@ mod tests {
     #[test]
     fn test_oauth_callback_params_without_scope() {
         let json = r#"{"code":"auth_code_456","state":"state_abc"}"#;
-        
+
         let params: OAuthCallbackParams = serde_json::from_str(json).unwrap();
         assert_eq!(params.code, "auth_code_456");
         assert_eq!(params.state, "state_abc");
@@ -186,7 +186,7 @@ mod tests {
 
         let json = serde_json::to_string(&request).unwrap();
         let deserialized: SignUpRequest = serde_json::from_str(&json).unwrap();
-        
+
         assert_eq!(deserialized.username, request.username);
         assert_eq!(deserialized.email, request.email);
         assert_eq!(deserialized.password, request.password);

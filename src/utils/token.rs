@@ -1,9 +1,6 @@
-use crate::{
-    constants::env_key,
-    error::AppError,
-};
-use jsonwebtoken::{EncodingKey, Header};
+use crate::{constants::env_key, error::AppError};
 use chrono::Utc;
+use jsonwebtoken::{EncodingKey, Header};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -16,8 +13,7 @@ pub struct JwtClaims {
 }
 
 fn get_jwt_secret() -> String {
-    std::env::var(env_key::JWT_SECRET)
-        .expect("JWT_SECRET must be set")
+    std::env::var(env_key::JWT_SECRET).expect("JWT_SECRET must be set")
 }
 
 fn get_jwt_expiration_secs() -> usize {

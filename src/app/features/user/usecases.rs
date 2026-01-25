@@ -1,11 +1,8 @@
-use super::{
-    presenters::UserPresenter,
-    repositories::UserRepository,
-};
+use super::{presenters::UserPresenter, repositories::UserRepository};
 use crate::{app::features::user::entities::User, error::AppError};
 use actix_web::HttpResponse;
-use uuid::Uuid;
 use std::sync::Arc;
+use uuid::Uuid;
 
 #[derive(Clone)]
 pub struct UserUsecase {
@@ -24,11 +21,7 @@ impl UserUsecase {
         }
     }
 
-    pub fn signin(
-        &self,
-        email: String,
-        password: String,
-    ) -> Result<HttpResponse, AppError> {
+    pub fn signin(&self, email: String, password: String) -> Result<HttpResponse, AppError> {
         let (user, token) = self.user_repository.signin(email, password)?;
         let response = self.user_presenter.to_single_json(user, token);
 
@@ -79,12 +72,12 @@ impl UserUsecase {
     pub fn oauth_google_upsert(
         &self,
         email: String,
-        provider_user_id: String
+        provider_user_id: String,
     ) -> Result<HttpResponse, AppError> {
         let (user, token) = self.user_repository.upsert_oauth_user(
             "google".to_string(),
             provider_user_id,
-            email
+            email,
         )?;
         let response = self.user_presenter.to_single_json(user, token);
 
