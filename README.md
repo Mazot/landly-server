@@ -1,10 +1,21 @@
-# 🌍 Landly Server
+# 🌍 Landly APP Server
 
 [![Rust](https://img.shields.io/badge/rust-1.87+-orange.svg)](https://www.rust-lang.org)
 [![Docker](https://img.shields.io/badge/docker-ready-blue.svg)](https://www.docker.com)
 [![PostgreSQL](https://img.shields.io/badge/postgresql-17-blue.svg)](https://www.postgresql.org)
 [![Redis](https://img.shields.io/badge/redis-7-red.svg)](https://redis.io)
 [![codecov](https://codecov.io/gh/Mazot/landly-server/branch/master/graph/badge.svg)](https://codecov.io/gh/Mazot/landly-server)
+
+## About
+
+Landly is a backend server for an application that helps people find businesses, helpers, and official representatives of different nationalities in foreign countries. Whether you're a traveler, expatriate, or immigrant, Landly connects you with culturally familiar services and support networks in your new location.
+
+**Key Features:**
+
+- 🏢 **Business Discovery** - Find businesses run by or catering to your nationality
+- 🤝 **Community Helpers** - Connect with volunteers and community organizers
+- 🏛️ **Official Representatives** - Locate embassies, consulates, and cultural centers
+- 🌐 **Multi-language Support** - Browse content in your preferred language
 
 ## 🛠️ Technology Stack
 
