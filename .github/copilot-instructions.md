@@ -2,7 +2,7 @@
 
 ## Architecture Overview
 
-This is a **Rust/Actix Web backend** following a **layered hexagonal architecture** with strict separation of concerns:
+**Rust/Actix Web backend** with **layered hexagonal architecture** and strict separation of concerns:
 
 ```
 Controllers → Usecases → Repositories → Entities
@@ -10,11 +10,11 @@ Controllers → Usecases → Repositories → Entities
 Presenters ← DI Container → Cache Layer
 ```
 
-**Key architectural decisions:**
-- **Feature-based modules** (`src/app/features/{feature}/`) - each contains: `entities`, `repositories`, `usecases`, `controllers`, `presenters`, `requests`, `config`
-- **Dependency Injection via DiContainer** (`src/utils/di.rs`) - constructs all services with Arc-wrapped trait objects
-- **Redis caching with trait abstraction** - `TypedCache<Arc<dyn CacheService>>` enables fallback to NoOp when Redis unavailable
-- **Error handling via AppError enum** - automatic conversion from Diesel, Redis, JWT, bcrypt errors with proper HTTP status codes
+**Critical architectural patterns:**
+- **Feature-based modules** (`src/app/features/{feature}/`) - standardized 8-file structure per feature
+- **Dependency Injection via DiContainer** (`src/utils/di.rs`) - single source of truth for service construction
+- **Redis caching with graceful degradation** - `TypedCache<Arc<dyn CacheService>>` falls back to NoOp when Redis unavailable
+- **Centralized error handling** - `AppError` enum with automatic HTTP status mapping and `From` trait implementations
 
 ## Core Patterns
 
@@ -154,16 +154,24 @@ docker compose logs -f landly-server
 
 **Environment variables**: Copy `.env.example` to `.env` and configure:
 - `DATABASE_URL`, `REDIS_URL`, `REDIS_USER`, `REDIS_PASSWORD`
-- OAuth: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`
+- OAuth: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `OAUTH_GOOGLE_REDIRECT_URL`
 - JWT: `JWT_SECRET`, `JWT_EXP_SECS`
+- Connection pools: `DB_POOL_*`, `REDIS_POOL_*` settings
 
 ### Testing & Code Quality
 ```bash
 cargo test              # Run tests
-cargo fmt              # Format code
-cargo clippy           # Lint
-cargo build --release  # Production build
+cargo fmt               # Format code (enforced in CI)
+cargo clippy            # Lint
+cargo build --release   # Production build
 ```
+
+**CI/CD**: GitHub Actions workflow (`.github/workflows/rust.yml`) runs:
+1. Format check (`cargo fmt -- --check`) - build fails if code isn't formatted
+2. Build (`cargo build --verbose`)
+3. Tests (`cargo test --verbose`)
+
+Always run `cargo fmt` before committing to pass CI checks.
 
 ## Authentication Flow
 
@@ -188,6 +196,7 @@ cargo build --release  # Production build
 4. **Feature configs must use closure pattern** - to inject middleware at runtime
 5. **Entities live in repositories** - `User::signup()`, `Organisation::create()` are repository methods
 6. **Presenters format responses** - don't build JSON manually in controllers
+7. **Format before committing** - CI enforces `cargo fmt -- --check` and will fail if not formatted
 
 ## Key Files Reference
 

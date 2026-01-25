@@ -4,6 +4,7 @@
 [![Docker](https://img.shields.io/badge/docker-ready-blue.svg)](https://www.docker.com)
 [![PostgreSQL](https://img.shields.io/badge/postgresql-17-blue.svg)](https://www.postgresql.org)
 [![Redis](https://img.shields.io/badge/redis-7-red.svg)](https://redis.io)
+[![codecov](https://codecov.io/gh/Mazot/landly-server/branch/master/graph/badge.svg)](https://codecov.io/gh/Mazot/landly-server)
 
 ## 🛠️ Technology Stack
 
