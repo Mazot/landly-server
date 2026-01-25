@@ -1,0 +1,24 @@
+name: Dependency Update
+
+on:
+  schedule:
+    - cron: '0 0 * * 1'  # Еженедельно по понедельникам в полночь UTC
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Update dependencies
+        run: cargo update
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v5
+        with:
+          commit-message: 'chore: update dependencies'
+          title: 'Update Rust dependencies'
+          branch: dependency-updates
+          body: |
+            Automated dependency update.
+            
+            Please review the changes and ensure all tests pass before merging.

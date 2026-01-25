@@ -1,0 +1,20 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build release
+        run: cargo build --release
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: target/release/landly-server
+          generate_release_notes: true
