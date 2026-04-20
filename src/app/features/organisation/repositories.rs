@@ -57,6 +57,7 @@ impl OrganisationRepositoryImpl {
         params.email.hash(&mut hasher);
         params.address.hash(&mut hasher);
         params.location_country_id.hash(&mut hasher);
+        params.founder_country_id.hash(&mut hasher);
         params.organisation_type_id.hash(&mut hasher);
         params.limit.hash(&mut hasher);
         params.offset.hash(&mut hasher);

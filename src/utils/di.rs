@@ -6,6 +6,9 @@ use crate::app::features::country_connection::{
     presenters::CountryConnectionPresenterImpl, repositories::CountryConnectionRepositoryImpl,
     usecases::CountryConnectionUsecase,
 };
+use crate::app::features::images::{
+    presenters::ImagePresenterImpl, repositories::ImageRepositoryImpl, usecases::ImageUsecase,
+};
 use crate::app::features::organisation::{
     presenters::OrganisationPresenterImpl, repositories::OrganisationRepositoryImpl,
     usecases::OrganisationUsecase,
@@ -15,6 +18,8 @@ use crate::app::features::user::{
     usecases::UserUsecase,
 };
 use crate::utils::cache::{CacheService, NoOpCacheService, RedisCacheService, TypedCache};
+use crate::utils::s3::S3ClientWrapper;
+use crate::utils::storage::{NoOpStorageService, StorageService};
 use std::sync::Arc;
 
 #[derive(Clone)]
@@ -23,7 +28,9 @@ pub struct DiContainer {
     pub common_usecase: CommonUsecase,
     pub country_connection_usecase: CountryConnectionUsecase,
     pub user_usecase: UserUsecase,
+    pub image_usecase: ImageUsecase,
     pub redis_cache_service: TypedCache<Arc<dyn CacheService>>,
+    pub storage_service: Arc<dyn StorageService>,
     pub oauth_google: OAuthGoogle,
 }
 
@@ -35,6 +42,27 @@ impl DiContainer {
                 None => Arc::new(NoOpCacheService::default()),
             });
 
+        // ---------------------------------------------------------------------------
+        // Storage backend — S3 / Cloudflare R2 when env vars are present, NoOp
+        // otherwise (upload / delete calls will return an error at runtime).
+        // ---------------------------------------------------------------------------
+        let storage_service: Arc<dyn StorageService> = match S3ClientWrapper::new() {
+            Ok(svc) => {
+                log::info!("Object storage backend initialised (S3/R2)");
+                Arc::new(svc)
+            }
+            Err(_) => {
+                log::warn!(
+                    "Object storage is not configured (missing S3_* env vars). \
+                     Image upload/delete endpoints will return 500 until storage is configured."
+                );
+                Arc::new(NoOpStorageService::default())
+            }
+        };
+
+        // ---------------------------------------------------------------------------
+        // Feature repositories
+        // ---------------------------------------------------------------------------
         let organisation_repo =
             OrganisationRepositoryImpl::new(pool.clone(), typed_cache_service.clone());
         let organisation_presenter = OrganisationPresenterImpl::new();
@@ -49,8 +77,13 @@ impl DiContainer {
         let user_repo = UserRepositoryImpl::new(pool.clone());
         let user_presenter = UserPresenterImpl::new();
 
+        let image_repo = ImageRepositoryImpl::new(pool.clone(), typed_cache_service.clone());
+        let image_presenter = ImagePresenterImpl::new();
+
         Self {
             redis_cache_service: typed_cache_service.clone(),
+            storage_service: storage_service.clone(),
+
             organisation_usecase: OrganisationUsecase::new(
                 Arc::new(organisation_repo.clone()),
                 Arc::new(organisation_presenter.clone()),
@@ -66,6 +99,11 @@ impl DiContainer {
             user_usecase: UserUsecase::new(
                 Arc::new(user_repo.clone()),
                 Arc::new(user_presenter.clone()),
+            ),
+            image_usecase: ImageUsecase::new(
+                Arc::new(image_repo),
+                Arc::new(image_presenter),
+                storage_service,
             ),
             oauth_google: OAuthGoogle::new(typed_cache_service.clone()),
         }
@@ -114,5 +152,12 @@ mod tests {
         // All clones should work independently
         assert!(cache_clone1.exists("key1").is_ok());
         assert!(cache_clone2.exists("key2").is_ok());
+    }
+
+    #[test]
+    fn test_no_op_storage_service_get_public_url() {
+        let storage = NoOpStorageService::default();
+        let url = storage.get_public_url("images/test/file.jpg");
+        assert_eq!(url, "images/test/file.jpg");
     }
 }

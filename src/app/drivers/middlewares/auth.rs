@@ -161,7 +161,7 @@ struct AuthRequiredRoute {
     method: Method,
 }
 
-const AUTH_REQUIRED_ROUTES: [AuthRequiredRoute; 7] = [
+const AUTH_REQUIRED_ROUTES: [AuthRequiredRoute; 10] = [
     AuthRequiredRoute {
         path: "/api/common/org_types",
         method: Method::POST,
@@ -188,6 +188,18 @@ const AUTH_REQUIRED_ROUTES: [AuthRequiredRoute; 7] = [
     },
     AuthRequiredRoute {
         path: "/api/country-connection/update/{id}",
+        method: Method::PUT,
+    },
+    AuthRequiredRoute {
+        path: "/api/images/upload/",
+        method: Method::POST,
+    },
+    AuthRequiredRoute {
+        path: "/api/images/delete/",
+        method: Method::DELETE,
+    },
+    AuthRequiredRoute {
+        path: "/api/images/set-primary/",
         method: Method::PUT,
     },
 ];
@@ -260,7 +272,7 @@ mod tests {
 
     #[test]
     fn test_auth_required_routes_count() {
-        assert_eq!(AUTH_REQUIRED_ROUTES.len(), 7);
+        assert_eq!(AUTH_REQUIRED_ROUTES.len(), 10);
     }
 
     #[test]
@@ -281,6 +293,30 @@ mod tests {
         let has_route = AUTH_REQUIRED_ROUTES
             .iter()
             .any(|r| r.path == "/api/country-connection/create" && r.method == Method::POST);
+        assert!(has_route);
+    }
+
+    #[test]
+    fn test_auth_required_routes_contains_images_upload() {
+        let has_route = AUTH_REQUIRED_ROUTES
+            .iter()
+            .any(|r| r.path == "/api/images/upload/" && r.method == Method::POST);
+        assert!(has_route);
+    }
+
+    #[test]
+    fn test_auth_required_routes_contains_images_delete() {
+        let has_route = AUTH_REQUIRED_ROUTES
+            .iter()
+            .any(|r| r.path == "/api/images/delete/" && r.method == Method::DELETE);
+        assert!(has_route);
+    }
+
+    #[test]
+    fn test_auth_required_routes_contains_images_set_primary() {
+        let has_route = AUTH_REQUIRED_ROUTES
+            .iter()
+            .any(|r| r.path == "/api/images/set-primary/" && r.method == Method::PUT);
         assert!(has_route);
     }
 

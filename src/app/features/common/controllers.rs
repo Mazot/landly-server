@@ -28,11 +28,12 @@ pub async fn fetch_all_countries(
 ) -> Result<HttpResponse, AppError> {
     let offset = min(params.offset.unwrap_or(0), 150);
     let limit = params.limit.unwrap_or(20);
+    let name = params.name.clone();
 
     state
         .di_container
         .common_usecase
-        .fetch_all_countries(FetchAllCountriesUsecaseInput { limit, offset })
+        .fetch_all_countries(FetchAllCountriesUsecaseInput { limit, offset, name })
 }
 
 #[utoipa::path(
@@ -85,4 +86,5 @@ pub struct CreateOrganisationTypeRequest {
 pub struct CountriesListQueryParams {
     pub limit: Option<i64>,
     pub offset: Option<i64>,
+    pub name: Option<String>,
 }

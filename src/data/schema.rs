@@ -39,6 +39,27 @@ diesel::table! {
 }
 
 diesel::table! {
+    images (id) {
+        id -> Uuid,
+        organisation_id -> Uuid,
+        #[max_length = 512]
+        s3_key -> Varchar,
+        #[max_length = 255]
+        s3_bucket -> Varchar,
+        #[max_length = 255]
+        file_name -> Varchar,
+        #[max_length = 100]
+        content_type -> Varchar,
+        file_size -> Int8,
+        width -> Nullable<Int4>,
+        height -> Nullable<Int4>,
+        is_primary -> Nullable<Bool>,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
+diesel::table! {
     languages (id) {
         id -> Uuid,
         name -> Text,
@@ -114,6 +135,7 @@ diesel::joinable!(chats -> countries_connections (origin_country_connection_id))
 diesel::joinable!(countries_connections -> countries (location_country_id));
 diesel::joinable!(countries_to_languages -> countries (country_id));
 diesel::joinable!(countries_to_languages -> languages (language_id));
+diesel::joinable!(images -> organisations (organisation_id));
 diesel::joinable!(organisations -> organisation_types (organisation_type_id));
 diesel::joinable!(user_providers -> users (user_id));
 diesel::joinable!(users_to_languages -> languages (language_id));
@@ -124,6 +146,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     countries,
     countries_connections,
     countries_to_languages,
+    images,
     languages,
     organisation_types,
     organisations,

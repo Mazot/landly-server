@@ -375,6 +375,18 @@ impl CacheKeys {
     pub fn versioned_key(base_key: &str, version: &str) -> String {
         format!("{}:v:{}", base_key, version)
     }
+
+    pub fn image_by_id(id: &uuid::Uuid) -> String {
+        format!("img:id:{}", id)
+    }
+
+    pub fn images_by_organisation(org_id: &uuid::Uuid) -> String {
+        format!("img:org:{}", org_id)
+    }
+
+    pub fn images_pattern() -> String {
+        "img:*".to_string()
+    }
 }
 
 #[cfg(test)]

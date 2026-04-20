@@ -56,8 +56,17 @@ impl CommonRepository for CommonRepositoryImpl {
         use diesel::prelude::*;
 
         let connection = &mut self.pool.get()?;
-        let countries_list = countries::table
+        let mut query = countries::table
             .select(countries::all_columns)
+            .into_boxed();
+
+        if let Some(ref name) = params.name {
+            let pattern = format!("%{}%", name);
+            query = query.filter(countries::name.ilike(pattern));
+        }
+
+        let countries_list = query
+            .order(countries::name.asc())
             .limit(params.limit)
             .offset(params.offset)
             .load::<Country>(connection)?;
@@ -105,6 +114,7 @@ pub struct GetCountryRepositoryInput {
 pub struct GetAllCountriesRepositoryInput {
     pub limit: i64,
     pub offset: i64,
+    pub name: Option<String>,
 }
 
 pub struct CreateOrganisationTypeRepositoryInput {
