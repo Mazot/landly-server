@@ -7,10 +7,7 @@ pub struct AppState {
 
 impl AppState {
     pub fn new(db_pool: DbPool) -> Self {
-        let redis_pool = match establish_connection() {
-            Ok(pool) => Some(pool),
-            Err(_) => None,
-        };
+        let redis_pool = establish_connection().ok();
 
         Self {
             di_container: DiContainer::new(&db_pool, redis_pool),

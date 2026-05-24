@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 mod app;
 mod constants;
 pub mod data;
@@ -41,6 +42,11 @@ use utoipa_swagger_ui::SwaggerUi;
         app::features::user::controllers::add_languages,
         app::features::user::controllers::delete_language,
         app::features::user::controllers::fetch_languages,
+        app::features::images::controllers::upload_image,
+        app::features::images::controllers::delete_image,
+        app::features::images::controllers::list_images,
+        app::features::images::controllers::fetch_image,
+        app::features::images::controllers::set_primary_image,
     ),
     components(
         schemas(
@@ -64,6 +70,9 @@ use utoipa_swagger_ui::SwaggerUi;
             app::features::user::requests::DeleteLanguageRequest,
             app::features::user::presenters::AuthUserContent,
             app::features::user::presenters::UserLanguagesContent,
+            app::features::images::presenters::ImageContent,
+            app::features::images::presenters::MultipleImagesResponse,
+            app::features::images::requests::ImagesListQueryParams,
         )
     ),
     tags(
@@ -71,7 +80,8 @@ use utoipa_swagger_ui::SwaggerUi;
         (name = "Common", description = "Common endpoints like countries, etc."),
         (name = "Organisation", description = "Organisation related endpoints"),
         (name = "CountryConnection", description = "CountryConnection related endpoints"),
-        (name = "User", description = "User related endpoints")
+        (name = "User", description = "User related endpoints"),
+        (name = "Images", description = "Image upload and management endpoints")
     )
 )]
 pub struct ApiDoc;
@@ -99,6 +109,10 @@ async fn main() -> std::io::Result<()> {
             app::features::organisation::config::create_configure_services_closure(
                 app_state.di_container.redis_cache_service.clone(),
             );
+        let images_configure_services =
+            app::features::images::config::create_configure_services_closure(
+                app_state.di_container.redis_cache_service.clone(),
+            );
 
         App::new()
             .app_data(web::Data::new(app_state.clone()))
@@ -119,7 +133,8 @@ async fn main() -> std::io::Result<()> {
                     .configure(app::features::common::config::configure_services)
                     .configure(app::features::user::config::configure_services)
                     .configure(organisation_configure_services)
-                    .configure(country_connection_configure_services),
+                    .configure(country_connection_configure_services)
+                    .configure(images_configure_services),
             )
     })
     .bind(constants::BIND)?

@@ -1,7 +1,6 @@
 use crate::constants::env_key;
 use diesel::pg::PgConnection;
 use diesel::r2d2::{ConnectionManager, Pool};
-use dotenv::dotenv;
 use std::env;
 use std::time::Duration;
 
@@ -16,7 +15,6 @@ pub type DbPool = Pool<ConnectionManager<PgConnection>>;
 /// - `DB_POOL_IDLE_TIMEOUT_SECS`: Idle connection timeout in seconds (default: 600)
 /// - `DB_POOL_CONNECTION_TIMEOUT_SECS`: Connection acquisition timeout in seconds (default: 30)
 pub fn establish_connection() -> DbPool {
-    dotenv().ok();
     let database_url = env::var(env_key::DATABASE_URL).expect("DATABASE_URL must be set");
     let manager = ConnectionManager::<PgConnection>::new(database_url);
 
@@ -60,8 +58,10 @@ pub fn establish_connection() -> DbPool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serial_test::serial;
 
     #[test]
+    #[serial]
     #[should_panic]
     fn test_establish_connection_with_invalid_url() {
         unsafe {
@@ -83,6 +83,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     #[should_panic(expected = "DATABASE_URL must be set")]
     fn test_establish_connection_without_database_url() {
         unsafe {
@@ -94,6 +95,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_pool_config_defaults() {
         // Test that default values are used when environment variables are not set
         unsafe {
@@ -117,6 +119,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_pool_config_custom_values() {
         // Test that custom values from environment variables are respected
         unsafe {
@@ -140,6 +143,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_pool_config_invalid_values_use_defaults() {
         // Test that invalid values fallback to defaults
         unsafe {

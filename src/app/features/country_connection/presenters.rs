@@ -48,7 +48,7 @@ impl From<Vec<CountryConnection>> for MultipleCountryConnectionsResponse {
 
         Self {
             items: response_items,
-            total: total,
+            total,
         }
     }
 }
@@ -186,7 +186,5 @@ mod tests {
     fn test_country_connection_presenter_clone() {
         let presenter = CountryConnectionPresenterImpl::new();
         let _cloned = presenter.clone();
-
-        assert!(true);
     }
 }

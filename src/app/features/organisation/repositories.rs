@@ -57,6 +57,7 @@ impl OrganisationRepositoryImpl {
         params.email.hash(&mut hasher);
         params.address.hash(&mut hasher);
         params.location_country_id.hash(&mut hasher);
+        params.founder_country_id.hash(&mut hasher);
         params.organisation_type_id.hash(&mut hasher);
         params.limit.hash(&mut hasher);
         params.offset.hash(&mut hasher);
@@ -187,8 +188,7 @@ impl OrganisationRepository for OrganisationRepositoryImpl {
         let connection = &mut self.pool.get()?;
         let organisation = Organisation::fetch_by_id(connection, id)?;
 
-        let _ = self
-            .cache_service
+        self.cache_service
             .set::<Organisation>(&cache_key, &organisation, None)?;
 
         Ok(organisation)

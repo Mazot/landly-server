@@ -86,7 +86,7 @@ impl CountryConnectionRepository for CountryConnectionRepositoryImpl {
             params.offset,
         )?;
 
-        let _ = self.cache_service.set::<Vec<CountryConnection>>(
+        self.cache_service.set::<Vec<CountryConnection>>(
             &cache_key,
             &country_connections,
             Some(Duration::from_secs(5 * 60)),
@@ -112,16 +112,12 @@ impl CountryConnectionRepository for CountryConnectionRepositoryImpl {
 
         // TODO: We should invalidate the cache from CacheInvalidationMiddleware
         // but for now we do it here to ensure the cache is cleared after creation.
-        let _ = self
-            .cache_service
+        self.cache_service
             .invalidate_pattern(&CacheKeys::country_connection_pattern())?;
 
         let cache_key = CacheKeys::country_connection_by_id(&new_country_connection.id);
-        let _ = self.cache_service.set::<CountryConnection>(
-            &cache_key,
-            &new_country_connection,
-            None,
-        )?;
+        self.cache_service
+            .set::<CountryConnection>(&cache_key, &new_country_connection, None)?;
 
         Ok(new_country_connection)
     }
@@ -152,12 +148,11 @@ impl CountryConnectionRepository for CountryConnectionRepositoryImpl {
 
         // TODO: We should invalidate the cache from CacheInvalidationMiddleware
         // but for now we do it here to ensure the cache is cleared after creation.
-        let _ = self
-            .cache_service
+        self.cache_service
             .invalidate_pattern(&CacheKeys::country_connection_pattern())?;
 
         let cache_key = CacheKeys::country_connection_by_id(&updated_country_connection.id);
-        let _ = self.cache_service.set::<CountryConnection>(
+        self.cache_service.set::<CountryConnection>(
             &cache_key,
             &updated_country_connection,
             None,
@@ -175,8 +170,7 @@ impl CountryConnectionRepository for CountryConnectionRepositoryImpl {
         let connection = &mut self.pool.get()?;
         let result = CountryConnection::fetch_by_id(connection, id)?;
 
-        let _ = self
-            .cache_service
+        self.cache_service
             .set::<CountryConnection>(&cache_key, &result, None)?;
 
         Ok(result)

@@ -112,7 +112,7 @@ mod tests {
 
     #[actix_web::test]
     async fn no_op_cache_invalidation() {
-        let no_op_service = NoOpCacheService::default();
+        let no_op_service = NoOpCacheService;
         let typed_cache_mw = TypedCache::<Arc<dyn CacheService>>::new(Arc::new(no_op_service))
             .new_transform(test::ok_service())
             .await

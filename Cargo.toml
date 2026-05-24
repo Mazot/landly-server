@@ -43,3 +43,10 @@ redis = { version = "0.32", features = ["r2d2"] }
 r2d2 = "0.8"
 oauth2 = { version = "5.0.0", features = ["reqwest", "reqwest-blocking"] }
 reqwest = { version = "0.12.23", features = ["json"] }
+aws-sdk-s3 = "1.70"
+aws-config = "1.5"
+mime = "0.3"
+actix-multipart = "0.7"
+
+[dev-dependencies]
+serial_test = "3"

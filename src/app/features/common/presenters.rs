@@ -212,7 +212,5 @@ mod tests {
     fn test_common_presenter_clone() {
         let presenter = CommonPresenterImpl::new();
         let _cloned = presenter.clone();
-
-        assert!(true);
     }
 }

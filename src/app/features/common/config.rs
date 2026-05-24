@@ -4,7 +4,7 @@ use super::controllers::{
 use crate::utils::redis::make_common_get_request_cache;
 use actix_web::{web, web::ServiceConfig};
 
-pub fn configure_services(cfg: &mut ServiceConfig) -> () {
+pub fn configure_services(cfg: &mut ServiceConfig) {
     let countries_cache = make_common_get_request_cache("common:countries:", 60 * 60);
     // TODO: Need to add invalidation for post and put requests.
     // Maybe need to patch lib. https://github.com/densumesh/actix-request-reply-cache/tree/main?tab=readme-ov-file

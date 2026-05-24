@@ -34,6 +34,7 @@ impl CommonUsecase {
             .get_all_countries(GetAllCountriesRepositoryInput {
                 limit: params.limit,
                 offset: params.offset,
+                name: params.name,
             })?;
         let response = self.common_presenter.to_multi_country_json(countries);
 
@@ -71,6 +72,7 @@ impl CommonUsecase {
 pub struct FetchAllCountriesUsecaseInput {
     pub limit: i64,
     pub offset: i64,
+    pub name: Option<String>,
 }
 
 pub struct CreateOrganisationTypeUsecaseInput {

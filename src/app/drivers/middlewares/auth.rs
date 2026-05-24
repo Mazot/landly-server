@@ -100,7 +100,7 @@ fn is_skip_auth_route(req: &ServiceRequest) -> bool {
 
     // TODO: improve this logic
     for route in SKIP_AUTH_ROUTES.iter() {
-        if req.path().starts_with(route.path) && method == &route.method {
+        if req.path().starts_with(route.path) && method == route.method {
             return true;
         }
     }
@@ -113,7 +113,7 @@ fn is_auth_required_route(req: &ServiceRequest) -> bool {
 
     // TODO: Надо заменять {id} в path
     for route in AUTH_REQUIRED_ROUTES.iter() {
-        if req.path().starts_with(route.path) && method == &route.method {
+        if req.path().starts_with(route.path) && method == route.method {
             return true;
         }
     }
@@ -132,16 +132,11 @@ fn is_authenticated_user(req: &ServiceRequest) -> Result<(bool, Uuid), AppError>
 }
 
 fn get_auth_token(req: &ServiceRequest) -> Option<String> {
-    if let Some(auth_header_value) = req.headers().get(AUTH_HEADER) {
-        if let Ok(auth_str) = auth_header_value.to_str() {
-            if auth_str.starts_with(BEARER) {
-                let token = auth_str.trim_start_matches(BEARER).to_string();
-                return Some(token);
-            }
-        }
-    }
-
-    None
+    req.headers()
+        .get(AUTH_HEADER)
+        .and_then(|v| v.to_str().ok())
+        .filter(|s| s.starts_with(BEARER))
+        .map(|s| s.trim_start_matches(BEARER).to_string())
 }
 
 fn get_user_id_from_token(token_opt: Option<String>) -> Result<Uuid, AppError> {
@@ -161,7 +156,7 @@ struct AuthRequiredRoute {
     method: Method,
 }
 
-const AUTH_REQUIRED_ROUTES: [AuthRequiredRoute; 7] = [
+const AUTH_REQUIRED_ROUTES: [AuthRequiredRoute; 10] = [
     AuthRequiredRoute {
         path: "/api/common/org_types",
         method: Method::POST,
@@ -188,6 +183,18 @@ const AUTH_REQUIRED_ROUTES: [AuthRequiredRoute; 7] = [
     },
     AuthRequiredRoute {
         path: "/api/country-connection/update/{id}",
+        method: Method::PUT,
+    },
+    AuthRequiredRoute {
+        path: "/api/images/upload/",
+        method: Method::POST,
+    },
+    AuthRequiredRoute {
+        path: "/api/images/delete/",
+        method: Method::DELETE,
+    },
+    AuthRequiredRoute {
+        path: "/api/images/set-primary/",
         method: Method::PUT,
     },
 ];
@@ -260,7 +267,7 @@ mod tests {
 
     #[test]
     fn test_auth_required_routes_count() {
-        assert_eq!(AUTH_REQUIRED_ROUTES.len(), 7);
+        assert_eq!(AUTH_REQUIRED_ROUTES.len(), 10);
     }
 
     #[test]
@@ -281,6 +288,30 @@ mod tests {
         let has_route = AUTH_REQUIRED_ROUTES
             .iter()
             .any(|r| r.path == "/api/country-connection/create" && r.method == Method::POST);
+        assert!(has_route);
+    }
+
+    #[test]
+    fn test_auth_required_routes_contains_images_upload() {
+        let has_route = AUTH_REQUIRED_ROUTES
+            .iter()
+            .any(|r| r.path == "/api/images/upload/" && r.method == Method::POST);
+        assert!(has_route);
+    }
+
+    #[test]
+    fn test_auth_required_routes_contains_images_delete() {
+        let has_route = AUTH_REQUIRED_ROUTES
+            .iter()
+            .any(|r| r.path == "/api/images/delete/" && r.method == Method::DELETE);
+        assert!(has_route);
+    }
+
+    #[test]
+    fn test_auth_required_routes_contains_images_set_primary() {
+        let has_route = AUTH_REQUIRED_ROUTES
+            .iter()
+            .any(|r| r.path == "/api/images/set-primary/" && r.method == Method::PUT);
         assert!(has_route);
     }
 

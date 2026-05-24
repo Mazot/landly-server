@@ -35,17 +35,16 @@ impl CommonRepositoryImpl {
 impl CommonRepository for CommonRepositoryImpl {
     fn get_country(&self, params: GetCountryRepositoryInput) -> Result<Country, AppError> {
         let connection = &mut self.pool.get()?;
-        let country_result = match params.id {
+
+        match params.id {
             Some(id) => Country::get_by_id(connection, &id),
             None => match params.name {
-                Some(name) => Country::get_by_name(connection, &name.as_str()),
+                Some(name) => Country::get_by_name(connection, name.as_str()),
                 None => Err(AppError::NotFound(
                     json!({ "error": "Empty request params" }),
                 )),
             },
-        };
-
-        country_result
+        }
     }
 
     fn get_all_countries(
@@ -56,8 +55,15 @@ impl CommonRepository for CommonRepositoryImpl {
         use diesel::prelude::*;
 
         let connection = &mut self.pool.get()?;
-        let countries_list = countries::table
-            .select(countries::all_columns)
+        let mut query = countries::table.select(countries::all_columns).into_boxed();
+
+        if let Some(ref name) = params.name {
+            let pattern = format!("%{}%", name);
+            query = query.filter(countries::name.ilike(pattern));
+        }
+
+        let countries_list = query
+            .order(countries::name.asc())
             .limit(params.limit)
             .offset(params.offset)
             .load::<Country>(connection)?;
@@ -105,6 +111,7 @@ pub struct GetCountryRepositoryInput {
 pub struct GetAllCountriesRepositoryInput {
     pub limit: i64,
     pub offset: i64,
+    pub name: Option<String>,
 }
 
 pub struct CreateOrganisationTypeRepositoryInput {

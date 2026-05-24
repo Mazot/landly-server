@@ -230,8 +230,6 @@ mod tests {
     fn test_user_presenter_clone() {
         let presenter = UserPresenterImpl::new();
         let _cloned = presenter.clone();
-
-        assert!(true);
     }
 
     #[test]
