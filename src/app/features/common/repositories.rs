@@ -56,9 +56,7 @@ impl CommonRepository for CommonRepositoryImpl {
         use diesel::prelude::*;
 
         let connection = &mut self.pool.get()?;
-        let mut query = countries::table
-            .select(countries::all_columns)
-            .into_boxed();
+        let mut query = countries::table.select(countries::all_columns).into_boxed();
 
         if let Some(ref name) = params.name {
             let pattern = format!("%{}%", name);

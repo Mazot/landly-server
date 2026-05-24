@@ -4,9 +4,9 @@ use super::{
 };
 use crate::{error::AppError, utils::storage::StorageService};
 use actix_web::HttpResponse;
+use serde_json::json;
 use std::{env, sync::Arc};
 use uuid::Uuid;
-use serde_json::json;
 
 const MAX_FILE_SIZE: usize = 10 * 1024 * 1024; // 10 MB
 
@@ -116,7 +116,11 @@ impl ImageUsecase {
     /// The DB record is deleted first so that no stale reference remains even
     /// if the storage delete fails.  Storage failures are logged but do **not**
     /// cause the endpoint to return an error.
-    pub async fn delete_image(&self, id: Uuid, caller_user_id: Uuid) -> Result<HttpResponse, AppError> {
+    pub async fn delete_image(
+        &self,
+        id: Uuid,
+        caller_user_id: Uuid,
+    ) -> Result<HttpResponse, AppError> {
         // Fetch before deleting so we have the s3_key and can verify ownership.
         let image = self.image_repo.fetch_image(id)?;
 
@@ -185,7 +189,11 @@ impl ImageUsecase {
     ///
     /// Fetches the image first to resolve the `organisation_id`, then delegates
     /// to the repository which runs the swap in a single transaction.
-    pub fn set_primary_image(&self, image_id: Uuid, caller_user_id: Uuid) -> Result<HttpResponse, AppError> {
+    pub fn set_primary_image(
+        &self,
+        image_id: Uuid,
+        caller_user_id: Uuid,
+    ) -> Result<HttpResponse, AppError> {
         // Resolve the organisation the image belongs to and verify ownership.
         let image = self.image_repo.fetch_image(image_id)?;
 

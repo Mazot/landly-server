@@ -32,9 +32,10 @@ pub async fn upload_image(
     org_id: Path<Uuid>,
     mut payload: Multipart,
 ) -> Result<HttpResponse, AppError> {
-    let caller_user_id = *req.extensions().get::<Uuid>().ok_or_else(|| {
-        AppError::Unauthorized(json!({ "error": "Missing authenticated user" }))
-    })?;
+    let caller_user_id = *req
+        .extensions()
+        .get::<Uuid>()
+        .ok_or_else(|| AppError::Unauthorized(json!({ "error": "Missing authenticated user" })))?;
     let organisation_id = org_id.into_inner();
 
     let mut file_bytes: Option<Vec<u8>> = None;
@@ -136,10 +137,15 @@ pub async fn upload_image(
     ),
     tag = "Images"
 )]
-pub async fn delete_image(req: HttpRequest, state: Data<AppState>, id: Path<Uuid>) -> Result<HttpResponse, AppError> {
-    let caller_user_id = *req.extensions().get::<Uuid>().ok_or_else(|| {
-        AppError::Unauthorized(json!({ "error": "Missing authenticated user" }))
-    })?;
+pub async fn delete_image(
+    req: HttpRequest,
+    state: Data<AppState>,
+    id: Path<Uuid>,
+) -> Result<HttpResponse, AppError> {
+    let caller_user_id = *req
+        .extensions()
+        .get::<Uuid>()
+        .ok_or_else(|| AppError::Unauthorized(json!({ "error": "Missing authenticated user" })))?;
 
     state
         .di_container
@@ -216,9 +222,10 @@ pub async fn set_primary_image(
     state: Data<AppState>,
     id: Path<Uuid>,
 ) -> Result<HttpResponse, AppError> {
-    let caller_user_id = *req.extensions().get::<Uuid>().ok_or_else(|| {
-        AppError::Unauthorized(json!({ "error": "Missing authenticated user" }))
-    })?;
+    let caller_user_id = *req
+        .extensions()
+        .get::<Uuid>()
+        .ok_or_else(|| AppError::Unauthorized(json!({ "error": "Missing authenticated user" })))?;
 
     state
         .di_container

@@ -33,7 +33,11 @@ pub async fn fetch_all_countries(
     state
         .di_container
         .common_usecase
-        .fetch_all_countries(FetchAllCountriesUsecaseInput { limit, offset, name })
+        .fetch_all_countries(FetchAllCountriesUsecaseInput {
+            limit,
+            offset,
+            name,
+        })
 }
 
 #[utoipa::path(
