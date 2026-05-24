@@ -59,7 +59,8 @@ pub fn establish_connection() -> Result<RedisPool, AppError> {
 
 pub fn make_common_get_request_cache(cache_prefix: &str, ttl: u64) -> RedisCacheMiddleware {
     let redis_url = env::var(env_key::REDIS_URL).expect("REDIS_URL must be set");
-    let cache = RedisCacheMiddlewareBuilder::new(redis_url)
+
+    RedisCacheMiddlewareBuilder::new(redis_url)
         .cache_prefix(cache_prefix)
         .ttl(ttl)
         .cache_if(|ctx| {
@@ -69,9 +70,7 @@ pub fn make_common_get_request_cache(cache_prefix: &str, ttl: u64) -> RedisCache
 
             true
         })
-        .build();
-
-    cache
+        .build()
 }
 
 #[cfg(test)]

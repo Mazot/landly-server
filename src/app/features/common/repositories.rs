@@ -35,17 +35,16 @@ impl CommonRepositoryImpl {
 impl CommonRepository for CommonRepositoryImpl {
     fn get_country(&self, params: GetCountryRepositoryInput) -> Result<Country, AppError> {
         let connection = &mut self.pool.get()?;
-        let country_result = match params.id {
+
+        match params.id {
             Some(id) => Country::get_by_id(connection, &id),
             None => match params.name {
-                Some(name) => Country::get_by_name(connection, &name.as_str()),
+                Some(name) => Country::get_by_name(connection, name.as_str()),
                 None => Err(AppError::NotFound(
                     json!({ "error": "Empty request params" }),
                 )),
             },
-        };
-
-        country_result
+        }
     }
 
     fn get_all_countries(

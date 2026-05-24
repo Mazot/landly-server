@@ -39,7 +39,7 @@ impl DiContainer {
         let typed_cache_service: TypedCache<Arc<dyn CacheService>> =
             TypedCache::new(match redis_pool {
                 Some(pool) => Arc::new(RedisCacheService::new(pool)),
-                None => Arc::new(NoOpCacheService::default()),
+                None => Arc::new(NoOpCacheService),
             });
 
         // ---------------------------------------------------------------------------
@@ -56,7 +56,7 @@ impl DiContainer {
                     "Object storage is not configured (missing S3_* env vars). \
                      Image upload/delete endpoints will return 500 until storage is configured."
                 );
-                Arc::new(NoOpStorageService::default())
+                Arc::new(NoOpStorageService)
             }
         };
 
@@ -119,8 +119,7 @@ mod tests {
     fn test_di_container_with_no_redis() {
         // This test doesn't require actual database connection
         // We're just testing that DiContainer can be constructed with NoOp cache
-        let no_op_cache =
-            TypedCache::new(Arc::new(NoOpCacheService::default()) as Arc<dyn CacheService>);
+        let no_op_cache = TypedCache::new(Arc::new(NoOpCacheService) as Arc<dyn CacheService>);
 
         // Test that TypedCache can be cloned
         let cloned_cache = no_op_cache.clone();
@@ -132,19 +131,19 @@ mod tests {
         let typed_cache_service: TypedCache<Arc<dyn CacheService>> =
             TypedCache::new(match None::<RedisPool> {
                 Some(pool) => Arc::new(RedisCacheService::new(pool)),
-                None => Arc::new(NoOpCacheService::default()),
+                None => Arc::new(NoOpCacheService),
             });
 
         // Should use NoOpCacheService when redis_pool is None
         let result = typed_cache_service.exists("test");
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), false);
+        assert!(!result.unwrap());
     }
 
     #[test]
     fn test_typed_cache_clone_in_di_context() {
         let cache_service: TypedCache<Arc<dyn CacheService>> =
-            TypedCache::new(Arc::new(NoOpCacheService::default()));
+            TypedCache::new(Arc::new(NoOpCacheService));
 
         let cache_clone1 = cache_service.clone();
         let cache_clone2 = cache_service.clone();
@@ -156,7 +155,7 @@ mod tests {
 
     #[test]
     fn test_no_op_storage_service_get_public_url() {
-        let storage = NoOpStorageService::default();
+        let storage = NoOpStorageService;
         let url = storage.get_public_url("images/test/file.jpg");
         assert_eq!(url, "images/test/file.jpg");
     }

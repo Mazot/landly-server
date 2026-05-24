@@ -396,7 +396,7 @@ mod tests {
 
     #[test]
     fn test_no_op_cache_service_get() {
-        let cache = NoOpCacheService::default();
+        let cache = NoOpCacheService;
         let result = cache.get_string("test_key");
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), None);
@@ -404,36 +404,36 @@ mod tests {
 
     #[test]
     fn test_no_op_cache_service_set() {
-        let cache = NoOpCacheService::default();
+        let cache = NoOpCacheService;
         let result = cache.set_string("test_key", "test_value", None);
         assert!(result.is_ok());
     }
 
     #[test]
     fn test_no_op_cache_service_delete() {
-        let cache = NoOpCacheService::default();
+        let cache = NoOpCacheService;
         let result = cache.delete("test_key");
         assert!(result.is_ok());
     }
 
     #[test]
     fn test_no_op_cache_service_exists() {
-        let cache = NoOpCacheService::default();
+        let cache = NoOpCacheService;
         let result = cache.exists("test_key");
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), false);
+        assert!(!result.unwrap());
     }
 
     #[test]
     fn test_no_op_cache_service_invalidate_pattern() {
-        let cache = NoOpCacheService::default();
+        let cache = NoOpCacheService;
         let result = cache.invalidate_pattern("test_*");
         assert!(result.is_ok());
     }
 
     #[test]
     fn test_no_op_cache_service_mget() {
-        let cache = NoOpCacheService::default();
+        let cache = NoOpCacheService;
         let keys = vec!["key1".to_string(), "key2".to_string()];
         let result = cache.mget_string(&keys);
         assert!(result.is_ok());
@@ -442,7 +442,7 @@ mod tests {
 
     #[test]
     fn test_no_op_cache_service_mset() {
-        let cache = NoOpCacheService::default();
+        let cache = NoOpCacheService;
         let items = vec![
             ("key1".to_string(), "value1".to_string()),
             ("key2".to_string(), "value2".to_string()),
@@ -453,7 +453,7 @@ mod tests {
 
     #[test]
     fn test_typed_cache_with_no_op() {
-        let no_op_service = NoOpCacheService::default();
+        let no_op_service = NoOpCacheService;
         let typed_cache = TypedCache::new(no_op_service);
 
         #[derive(Serialize, Deserialize, Debug, PartialEq)]
@@ -472,7 +472,7 @@ mod tests {
 
     #[test]
     fn test_typed_cache_clone() {
-        let no_op_service = NoOpCacheService::default();
+        let no_op_service = NoOpCacheService;
         let typed_cache = TypedCache::new(Arc::new(no_op_service) as Arc<dyn CacheService>);
         let cloned_cache = typed_cache.clone();
 

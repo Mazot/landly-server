@@ -188,8 +188,7 @@ impl OrganisationRepository for OrganisationRepositoryImpl {
         let connection = &mut self.pool.get()?;
         let organisation = Organisation::fetch_by_id(connection, id)?;
 
-        let _ = self
-            .cache_service
+        self.cache_service
             .set::<Organisation>(&cache_key, &organisation, None)?;
 
         Ok(organisation)

@@ -142,11 +142,9 @@ impl OAuthGoogle {
     }
 
     fn make_http_client() -> reqwest::Client {
-        let http_client = reqwest::ClientBuilder::new()
+        reqwest::ClientBuilder::new()
             .redirect(reqwest::redirect::Policy::none())
             .build()
-            .expect("Failed to build HTTP client");
-
-        http_client
+            .expect("Failed to build HTTP client")
     }
 }

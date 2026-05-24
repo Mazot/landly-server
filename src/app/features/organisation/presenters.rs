@@ -61,8 +61,8 @@ impl From<Organisation> for OrganisationContent {
             location_country_id: org.location_country_id,
             organisation_type_id: org.organisation_type_id,
             founder_country_id: org.founder_country_id,
-            latitude: latitude,
-            longitude: longitude,
+            latitude,
+            longitude,
             created_at: org.created_at,
             updated_at: org.updated_at,
         }
@@ -238,9 +238,6 @@ mod tests {
     #[test]
     fn test_organisation_presenter_clone() {
         let presenter = OrganisationPresenterImpl::new();
-        let _cloned = presenter.clone();
-
-        // Should not panic and should be cloneable
-        assert!(true);
+        let _cloned = presenter.clone(); // Should not panic and should be cloneable
     }
 }

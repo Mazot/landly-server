@@ -100,7 +100,7 @@ fn is_skip_auth_route(req: &ServiceRequest) -> bool {
 
     // TODO: improve this logic
     for route in SKIP_AUTH_ROUTES.iter() {
-        if req.path().starts_with(route.path) && method == &route.method {
+        if req.path().starts_with(route.path) && method == route.method {
             return true;
         }
     }
@@ -113,7 +113,7 @@ fn is_auth_required_route(req: &ServiceRequest) -> bool {
 
     // TODO: Надо заменять {id} в path
     for route in AUTH_REQUIRED_ROUTES.iter() {
-        if req.path().starts_with(route.path) && method == &route.method {
+        if req.path().starts_with(route.path) && method == route.method {
             return true;
         }
     }
@@ -132,16 +132,11 @@ fn is_authenticated_user(req: &ServiceRequest) -> Result<(bool, Uuid), AppError>
 }
 
 fn get_auth_token(req: &ServiceRequest) -> Option<String> {
-    if let Some(auth_header_value) = req.headers().get(AUTH_HEADER) {
-        if let Ok(auth_str) = auth_header_value.to_str() {
-            if auth_str.starts_with(BEARER) {
-                let token = auth_str.trim_start_matches(BEARER).to_string();
-                return Some(token);
-            }
-        }
-    }
-
-    None
+    req.headers()
+        .get(AUTH_HEADER)
+        .and_then(|v| v.to_str().ok())
+        .filter(|s| s.starts_with(BEARER))
+        .map(|s| s.trim_start_matches(BEARER).to_string())
 }
 
 fn get_user_id_from_token(token_opt: Option<String>) -> Result<Uuid, AppError> {

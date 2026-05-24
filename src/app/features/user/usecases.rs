@@ -84,7 +84,7 @@ impl UserUsecase {
         Ok(response)
     }
 
-    pub fn find_auth_user(&self, user_id: Uuid) -> Result<User, &str> {
+    pub fn find_auth_user(&self, _user_id: Uuid) -> Result<User, &str> {
         // let maybe_user = self.user_repository.find(user_id);
         // self.user_presenter.to_auth_middleware(maybe_user)
         todo!("Implement find_auth_user logic")
