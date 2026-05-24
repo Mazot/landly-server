@@ -8,7 +8,6 @@ use actix_web::{
 };
 use futures::StreamExt;
 use serde_json::json;
-use std::cmp::min;
 use uuid::Uuid;
 
 #[utoipa::path(
@@ -173,8 +172,8 @@ pub async fn list_images(
     org_id: Path<Uuid>,
     query: Query<ImagesListQueryParams>,
 ) -> Result<HttpResponse, AppError> {
-    let limit = min(query.limit.unwrap_or(20), 100);
-    let offset = min(query.offset.unwrap_or(0), 500);
+    let limit = query.limit.unwrap_or(20).clamp(0, 100);
+    let offset = query.offset.unwrap_or(0).clamp(0, 500);
 
     state
         .di_container
