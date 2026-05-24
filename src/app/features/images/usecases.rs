@@ -6,6 +6,7 @@ use crate::{error::AppError, utils::storage::StorageService};
 use actix_web::HttpResponse;
 use std::{env, sync::Arc};
 use uuid::Uuid;
+use serde_json::json;
 
 const MAX_FILE_SIZE: usize = 10 * 1024 * 1024; // 10 MB
 
@@ -85,10 +86,14 @@ impl ImageUsecase {
 
         // --- Persist metadata in DB --------------------------------------
 
-        let bucket = env::var("S3_BUCKET").unwrap_or_default();
+        let bucket = env::var("S3_BUCKET").map_err(|_| {
+            log::error!("S3_BUCKET environment variable is not set");
+            AppError::InternalServerError
+        })?;
 
         let image = self.image_repo.create_image(CreateImageRepositoryInput {
             organisation_id: params.organisation_id,
+            uploaded_by: params.uploaded_by,
             s3_key: object_key.clone(),
             s3_bucket: bucket,
             file_name: params.file_name,
@@ -96,7 +101,7 @@ impl ImageUsecase {
             file_size,
             width: None,
             height: None,
-            is_primary: Some(params.is_primary),
+            is_primary: params.is_primary,
         })?;
 
         // --- Build response ----------------------------------------------
@@ -111,9 +116,16 @@ impl ImageUsecase {
     /// The DB record is deleted first so that no stale reference remains even
     /// if the storage delete fails.  Storage failures are logged but do **not**
     /// cause the endpoint to return an error.
-    pub async fn delete_image(&self, id: Uuid) -> Result<HttpResponse, AppError> {
-        // Fetch before deleting so we have the s3_key for storage cleanup.
+    pub async fn delete_image(&self, id: Uuid, caller_user_id: Uuid) -> Result<HttpResponse, AppError> {
+        // Fetch before deleting so we have the s3_key and can verify ownership.
         let image = self.image_repo.fetch_image(id)?;
+
+        if image.uploaded_by != caller_user_id {
+            return Err(AppError::Forbidden(json!({
+                "error": "You do not have permission to delete this image"
+            })));
+        }
+
         let s3_key = image.s3_key.clone();
 
         // Remove from DB first.
@@ -142,6 +154,8 @@ impl ImageUsecase {
             .image_repo
             .fetch_images_by_organisation(organisation_id)?;
 
+        let total = images.len() as i64;
+
         // Apply in-memory pagination (the repository loads the full list so we
         // can still benefit from the cache; for large datasets a DB-level LIMIT
         // / OFFSET query would be more appropriate).
@@ -156,7 +170,7 @@ impl ImageUsecase {
             .map(|img| self.storage_service.get_public_url(&img.s3_key))
             .collect();
 
-        Ok(self.image_presenter.to_multi_json(paginated, urls))
+        Ok(self.image_presenter.to_multi_json(paginated, urls, total))
     }
 
     /// Fetch a single image by its ID.
@@ -171,9 +185,16 @@ impl ImageUsecase {
     ///
     /// Fetches the image first to resolve the `organisation_id`, then delegates
     /// to the repository which runs the swap in a single transaction.
-    pub fn set_primary_image(&self, image_id: Uuid) -> Result<HttpResponse, AppError> {
-        // Resolve the organisation the image belongs to.
+    pub fn set_primary_image(&self, image_id: Uuid, caller_user_id: Uuid) -> Result<HttpResponse, AppError> {
+        // Resolve the organisation the image belongs to and verify ownership.
         let image = self.image_repo.fetch_image(image_id)?;
+
+        if image.uploaded_by != caller_user_id {
+            return Err(AppError::Forbidden(json!({
+                "error": "You do not have permission to set this image as primary"
+            })));
+        }
+
         let org_id = image.organisation_id;
 
         let updated = self.image_repo.set_primary(image_id, org_id)?;
@@ -189,6 +210,8 @@ impl ImageUsecase {
 
 pub struct UploadImageUsecaseInput {
     pub organisation_id: Uuid,
+    /// ID of the authenticated user performing the upload.
+    pub uploaded_by: Uuid,
     /// Raw file bytes.
     pub data: Vec<u8>,
     pub file_name: String,

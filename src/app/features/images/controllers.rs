@@ -3,7 +3,7 @@ use crate::app::drivers::middlewares::state::AppState;
 use crate::error::AppError;
 use actix_multipart::Multipart;
 use actix_web::{
-    HttpResponse,
+    HttpMessage, HttpRequest, HttpResponse,
     web::{Data, Path, Query},
 };
 use futures::StreamExt;
@@ -27,10 +27,14 @@ use uuid::Uuid;
     tag = "Images"
 )]
 pub async fn upload_image(
+    req: HttpRequest,
     state: Data<AppState>,
     org_id: Path<Uuid>,
     mut payload: Multipart,
 ) -> Result<HttpResponse, AppError> {
+    let caller_user_id = *req.extensions().get::<Uuid>().ok_or_else(|| {
+        AppError::Unauthorized(json!({ "error": "Missing authenticated user" }))
+    })?;
     let organisation_id = org_id.into_inner();
 
     let mut file_bytes: Option<Vec<u8>> = None;
@@ -109,6 +113,7 @@ pub async fn upload_image(
         .image_usecase
         .upload_image(UploadImageUsecaseInput {
             organisation_id,
+            uploaded_by: caller_user_id,
             data,
             file_name,
             content_type,
@@ -131,11 +136,15 @@ pub async fn upload_image(
     ),
     tag = "Images"
 )]
-pub async fn delete_image(state: Data<AppState>, id: Path<Uuid>) -> Result<HttpResponse, AppError> {
+pub async fn delete_image(req: HttpRequest, state: Data<AppState>, id: Path<Uuid>) -> Result<HttpResponse, AppError> {
+    let caller_user_id = *req.extensions().get::<Uuid>().ok_or_else(|| {
+        AppError::Unauthorized(json!({ "error": "Missing authenticated user" }))
+    })?;
+
     state
         .di_container
         .image_usecase
-        .delete_image(id.into_inner())
+        .delete_image(id.into_inner(), caller_user_id)
         .await
 }
 
@@ -203,13 +212,18 @@ pub async fn fetch_image(state: Data<AppState>, id: Path<Uuid>) -> Result<HttpRe
     tag = "Images"
 )]
 pub async fn set_primary_image(
+    req: HttpRequest,
     state: Data<AppState>,
     id: Path<Uuid>,
 ) -> Result<HttpResponse, AppError> {
+    let caller_user_id = *req.extensions().get::<Uuid>().ok_or_else(|| {
+        AppError::Unauthorized(json!({ "error": "Missing authenticated user" }))
+    })?;
+
     state
         .di_container
         .image_usecase
-        .set_primary_image(id.into_inner())
+        .set_primary_image(id.into_inner(), caller_user_id)
 }
 
 // ---------------------------------------------------------------------------

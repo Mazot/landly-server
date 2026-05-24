@@ -11,6 +11,7 @@ use uuid::Uuid;
 pub struct Image {
     pub id: Uuid,
     pub organisation_id: Uuid,
+    pub uploaded_by: Uuid,
     pub s3_key: String,
     pub s3_bucket: String,
     pub file_name: String,
@@ -18,7 +19,7 @@ pub struct Image {
     pub file_size: i64,
     pub width: Option<i32>,
     pub height: Option<i32>,
-    pub is_primary: Option<bool>,
+    pub is_primary: bool,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
 }
@@ -74,12 +75,12 @@ impl Image {
         conn.transaction(|conn| {
             // Unset all primaries in the organisation.
             diesel::update(images::table.filter(images::organisation_id.eq(org_id)))
-                .set(images::is_primary.eq(Some(false)))
+                .set(images::is_primary.eq(false))
                 .execute(conn)?;
 
             // Set the chosen image as primary.
             let result = diesel::update(images::table.find(image_id))
-                .set(images::is_primary.eq(Some(true)))
+                .set(images::is_primary.eq(true))
                 .get_result::<Image>(conn)?;
 
             Ok(result)
@@ -95,6 +96,7 @@ impl Image {
 #[diesel(table_name = images)]
 pub struct CreateImage {
     pub organisation_id: Uuid,
+    pub uploaded_by: Uuid,
     pub s3_key: String,
     pub s3_bucket: String,
     pub file_name: String,
@@ -102,6 +104,5 @@ pub struct CreateImage {
     pub file_size: i64,
     pub width: Option<i32>,
     pub height: Option<i32>,
-    /// Defaults to `Some(false)` if not explicitly provided.
-    pub is_primary: Option<bool>,
+    pub is_primary: bool,
 }

@@ -48,6 +48,7 @@ impl ImageRepository for ImageRepositoryImpl {
             conn,
             &CreateImage {
                 organisation_id: params.organisation_id,
+                uploaded_by: params.uploaded_by,
                 s3_key: params.s3_key,
                 s3_bucket: params.s3_bucket,
                 file_name: params.file_name,
@@ -142,6 +143,7 @@ impl ImageRepository for ImageRepositoryImpl {
 
 pub struct CreateImageRepositoryInput {
     pub organisation_id: Uuid,
+    pub uploaded_by: Uuid,
     pub s3_key: String,
     pub s3_bucket: String,
     pub file_name: String,
@@ -149,6 +151,5 @@ pub struct CreateImageRepositoryInput {
     pub file_size: i64,
     pub width: Option<i32>,
     pub height: Option<i32>,
-    /// `Some(true)` to mark as primary immediately on creation.
-    pub is_primary: Option<bool>,
+    pub is_primary: bool,
 }

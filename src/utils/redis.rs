@@ -1,6 +1,5 @@
 use crate::{constants::env_key, error::AppError};
 use actix_request_reply_cache::{RedisCacheMiddleware, RedisCacheMiddlewareBuilder};
-use dotenv::dotenv;
 use r2d2::Pool;
 use redis::Client;
 use std::env;
@@ -17,7 +16,6 @@ pub type RedisPool = Pool<Client>;
 /// - `REDIS_POOL_IDLE_TIMEOUT_SECS`: Idle connection timeout in seconds (default: 600)
 /// - `REDIS_POOL_CONNECTION_TIMEOUT_SECS`: Connection acquisition timeout in seconds (default: 30)
 pub fn establish_connection() -> Result<RedisPool, AppError> {
-    dotenv().ok();
     let redis_url = env::var(env_key::REDIS_URL)?;
     let client = Client::open(redis_url)?;
 
@@ -60,7 +58,6 @@ pub fn establish_connection() -> Result<RedisPool, AppError> {
 }
 
 pub fn make_common_get_request_cache(cache_prefix: &str, ttl: u64) -> RedisCacheMiddleware {
-    dotenv().ok();
     let redis_url = env::var(env_key::REDIS_URL).expect("REDIS_URL must be set");
     let cache = RedisCacheMiddlewareBuilder::new(redis_url)
         .cache_prefix(cache_prefix)
@@ -80,8 +77,10 @@ pub fn make_common_get_request_cache(cache_prefix: &str, ttl: u64) -> RedisCache
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serial_test::serial;
 
     #[test]
+    #[serial]
     fn test_establish_connection_without_env() {
         // This test verifies that the function returns an error when REDIS_URL is not set
         unsafe {
@@ -93,6 +92,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_establish_connection_with_invalid_url() {
         unsafe {
             std::env::set_var("REDIS_URL", "invalid://url");
@@ -103,6 +103,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     #[should_panic(expected = "REDIS_URL must be set")]
     fn test_make_common_get_request_cache_panics_without_env() {
         unsafe {
@@ -113,6 +114,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_pool_config_defaults() {
         // Test that default values are used when environment variables are not set
         unsafe {
@@ -131,6 +133,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_pool_config_custom_values() {
         // Test that custom values from environment variables are respected
         unsafe {
@@ -149,6 +152,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_pool_config_invalid_values_use_defaults() {
         // Test that invalid values fallback to defaults without panicking
         unsafe {

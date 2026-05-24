@@ -8,7 +8,7 @@ use uuid::Uuid;
 pub trait ImagePresenter: Send + Sync + 'static {
     fn to_http_res(&self) -> HttpResponse;
     fn to_single_json(&self, item: Image, url: String) -> HttpResponse;
-    fn to_multi_json(&self, items: Vec<Image>, urls: Vec<String>) -> HttpResponse;
+    fn to_multi_json(&self, items: Vec<Image>, urls: Vec<String>, total: i64) -> HttpResponse;
 }
 
 /// Response DTO for a single image.
@@ -25,7 +25,7 @@ pub struct ImageContent {
     pub file_size: i64,
     pub width: Option<i32>,
     pub height: Option<i32>,
-    pub is_primary: Option<bool>,
+    pub is_primary: bool,
     /// Publicly-accessible URL for this image.
     pub url: String,
     pub created_at: NaiveDateTime,
@@ -75,14 +75,12 @@ impl ImagePresenter for ImagePresenterImpl {
         HttpResponse::Ok().json(content)
     }
 
-    fn to_multi_json(&self, items: Vec<Image>, urls: Vec<String>) -> HttpResponse {
+    fn to_multi_json(&self, items: Vec<Image>, urls: Vec<String>, total: i64) -> HttpResponse {
         let response_items: Vec<ImageContent> = items
             .into_iter()
             .zip(urls)
             .map(|(img, url)| ImageContent::from_image_with_url(img, url))
             .collect();
-
-        let total = response_items.len() as i64;
 
         HttpResponse::Ok().json(MultipleImagesResponse {
             items: response_items,

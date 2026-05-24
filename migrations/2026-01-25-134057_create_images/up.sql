@@ -1,6 +1,7 @@
 CREATE TABLE images (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     organisation_id UUID NOT NULL REFERENCES organisations(id) ON DELETE CASCADE,
+    uploaded_by UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     s3_key VARCHAR(512) NOT NULL,
     s3_bucket VARCHAR(255) NOT NULL,
     file_name VARCHAR(255) NOT NULL,
@@ -8,7 +9,7 @@ CREATE TABLE images (
     file_size BIGINT NOT NULL,
     width INTEGER,
     height INTEGER,
-    is_primary BOOLEAN DEFAULT FALSE,
+    is_primary BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );

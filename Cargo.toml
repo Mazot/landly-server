@@ -47,3 +47,6 @@ aws-sdk-s3 = "1.70"
 aws-config = "1.5"
 mime = "0.3"
 actix-multipart = "0.7"
+
+[dev-dependencies]
+serial_test = "3"
