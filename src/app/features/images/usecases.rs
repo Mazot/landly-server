@@ -8,7 +8,7 @@ use serde_json::json;
 use std::{env, sync::Arc};
 use uuid::Uuid;
 
-const MAX_FILE_SIZE: usize = 10 * 1024 * 1024; // 10 MB
+pub(super) const MAX_FILE_SIZE: usize = 10 * 1024 * 1024; // 10 MB
 
 const ALLOWED_CONTENT_TYPES: &[&str] = &[
     "image/jpeg",
@@ -165,11 +165,7 @@ impl ImageUsecase {
         // Apply in-memory pagination (the repository loads the full list so we
         // can still benefit from the cache; for large datasets a DB-level LIMIT
         // / OFFSET query would be more appropriate).
-        let paginated: Vec<_> = images
-            .into_iter()
-            .skip(offset)
-            .take(limit)
-            .collect();
+        let paginated: Vec<_> = images.into_iter().skip(offset).take(limit).collect();
 
         let urls: Vec<String> = paginated
             .iter()

@@ -66,12 +66,18 @@ pub async fn upload_image(
                     .map(|m| m.to_string())
                     .unwrap_or_else(|| detect_content_type_from_filename(&fname).to_string());
 
+                const MAX_UPLOAD_BYTES: usize = super::usecases::MAX_FILE_SIZE;
                 let mut bytes: Vec<u8> = Vec::new();
                 while let Some(chunk) = field.next().await {
                     let data = chunk.map_err(|e| {
                         log::error!("Error reading multipart chunk: {:?}", e);
                         AppError::InternalServerError
                     })?;
+                    if bytes.len() + data.len() > MAX_UPLOAD_BYTES {
+                        return Err(AppError::UnprocessableEntity(
+                            json!({ "error": "File size exceeds the 10 MB limit." }),
+                        ));
+                    }
                     bytes.extend_from_slice(&data);
                 }
 
