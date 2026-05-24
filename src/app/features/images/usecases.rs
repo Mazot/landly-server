@@ -159,14 +159,16 @@ impl ImageUsecase {
             .fetch_images_by_organisation(organisation_id)?;
 
         let total = images.len() as i64;
+        let offset = offset.max(0) as usize;
+        let limit = limit.max(0) as usize;
 
         // Apply in-memory pagination (the repository loads the full list so we
         // can still benefit from the cache; for large datasets a DB-level LIMIT
         // / OFFSET query would be more appropriate).
         let paginated: Vec<_> = images
             .into_iter()
-            .skip(offset as usize)
-            .take(limit as usize)
+            .skip(offset)
+            .take(limit)
             .collect();
 
         let urls: Vec<String> = paginated
