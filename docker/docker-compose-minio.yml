@@ -1,8 +1,8 @@
 services:
   minio:
-    image: quay.io/minio/minio:latest
+    image: quay.io/minio/aistor/minio:latest
     container_name: landly_minio
-    command: server /data --console-address ":9001"
+    command: server /data --console-address ":9001" --license /minio.license
     environment:
       MINIO_ROOT_USER: minioadmin
       MINIO_ROOT_PASSWORD: minioadmin
@@ -11,10 +11,11 @@ services:
       - "9001:9001"
     volumes:
       - minio_data:/data
+      - ../minio.license:/minio.license:ro
     networks:
       - test_network
     healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
+      test: ["CMD-SHELL", "curl -sf http://localhost:9000/minio/health/live || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -31,7 +32,7 @@ services:
         mc alias set local http://minio:9000 minioadmin minioadmin &&
         mc mb --ignore-existing local/landly-images &&
         mc anonymous set public local/landly-images &&
-        echo 'MinIO bucket landly-images ready.'
+        echo 'AIStor bucket landly-images ready.'
       "
     networks:
       - test_network
