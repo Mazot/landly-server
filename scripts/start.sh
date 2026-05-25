@@ -12,8 +12,15 @@ export PORT=${PORT:-"8080"}
 echo "Running database migrations..."
 diesel migration run
 
-echo "Starting country loader..."
-./country_loader ./country_data/merged_countries.json
+echo "Checking if countries need to be loaded..."
+COUNTRY_COUNT=$(psql "$DATABASE_URL" -t -A -c "SELECT count(*) FROM countries;" 2>/dev/null || echo "0")
+if [ "$COUNTRY_COUNT" -eq "0" ]; then
+  echo "Loading countries..."
+  ./country_loader ./country_data/merged_countries.json
+  echo "Country loader finished."
+else
+  echo "Countries already loaded ($COUNTRY_COUNT records), skipping."
+fi
 
-echo "Country loader finished. Starting application..."
+echo "Starting application..."
 exec ./landly-server
