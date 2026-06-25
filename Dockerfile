@@ -6,11 +6,11 @@ COPY src ./src
 COPY scripts ./scripts
 
 RUN cargo install diesel_cli --no-default-features --features postgres
-RUN cargo build --release
+RUN cargo build --release -j 1
 
 # Build the scripts/crates workspace
 WORKDIR /app/scripts/crates
-RUN cargo build --release
+RUN cargo build --release -j 1
 
 FROM debian:latest
 
