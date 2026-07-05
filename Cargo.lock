@@ -2246,6 +2246,7 @@ dependencies = [
  "serde_json",
  "serial_test",
  "thiserror 2.0.12",
+ "urlencoding",
  "utoipa",
  "utoipa-swagger-ui",
  "uuid",

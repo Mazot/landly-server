@@ -1,7 +1,7 @@
 use super::requests::{
     AddLanguagesRequest, DeleteLanguageRequest, OAuthCallbackParams, SignInRequest, SignUpRequest,
 };
-use crate::{app::drivers::middlewares::state::AppState, error::AppError};
+use crate::{app::drivers::middlewares::state::AppState, constants::env_key, error::AppError};
 use actix_web::{
     HttpResponse,
     web::{Data, Json, Path, Query},
@@ -163,10 +163,24 @@ pub async fn oauth_google_callback(
         .email
         .ok_or_else(|| AppError::Unauthorized(serde_json::json!({"message":"no email"})))?;
 
-    let response = state
+    let auth = state
         .di_container
         .user_usecase
-        .oauth_google_upsert(email, user_info.sub)?;
+        .oauth_google_upsert_content(email, user_info.sub)?;
 
-    Ok(response)
+    let frontend_origin = std::env::var(env_key::FRONTEND_ORIGIN)
+        .unwrap_or_else(|_| "http://localhost:5173".to_string());
+
+    let redirect_url = format!(
+        "{}/auth/google/callback?token={}&id={}&username={}&email={}",
+        frontend_origin,
+        urlencoding::encode(&auth.token),
+        auth.id,
+        urlencoding::encode(&auth.username),
+        urlencoding::encode(&auth.email),
+    );
+
+    Ok(HttpResponse::Found()
+        .append_header(("Location", redirect_url))
+        .finish())
 }

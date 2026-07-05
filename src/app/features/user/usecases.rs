@@ -1,4 +1,4 @@
-use super::{presenters::UserPresenter, repositories::UserRepository};
+use super::{presenters::{AuthUserContent, UserPresenter}, repositories::UserRepository};
 use crate::{app::features::user::entities::User, error::AppError};
 use actix_web::HttpResponse;
 use std::sync::Arc;
@@ -82,6 +82,19 @@ impl UserUsecase {
         let response = self.user_presenter.to_single_json(user, token);
 
         Ok(response)
+    }
+
+    pub fn oauth_google_upsert_content(
+        &self,
+        email: String,
+        provider_user_id: String,
+    ) -> Result<AuthUserContent, AppError> {
+        let (user, token) = self.user_repository.upsert_oauth_user(
+            "google".to_string(),
+            provider_user_id,
+            email,
+        )?;
+        Ok(AuthUserContent::from((user, token)))
     }
 
     pub fn find_auth_user(&self, _user_id: Uuid) -> Result<User, &str> {
