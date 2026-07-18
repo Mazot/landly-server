@@ -2,6 +2,10 @@ use super::{db::DbPool, redis::RedisPool};
 use crate::app::features::common::{
     presenters::CommonPresenterImpl, repositories::CommonRepositoryImpl, usecases::CommonUsecase,
 };
+use crate::app::features::corridor::{
+    presenters::CorridorPresenterImpl, repositories::CorridorRepositoryImpl,
+    usecases::CorridorUsecase,
+};
 use crate::app::features::country_connection::{
     presenters::CountryConnectionPresenterImpl, repositories::CountryConnectionRepositoryImpl,
     usecases::CountryConnectionUsecase,
@@ -26,6 +30,7 @@ use std::sync::Arc;
 pub struct DiContainer {
     pub organisation_usecase: OrganisationUsecase,
     pub common_usecase: CommonUsecase,
+    pub corridor_usecase: CorridorUsecase,
     pub country_connection_usecase: CountryConnectionUsecase,
     pub user_usecase: UserUsecase,
     pub image_usecase: ImageUsecase,
@@ -67,8 +72,11 @@ impl DiContainer {
             OrganisationRepositoryImpl::new(pool.clone(), typed_cache_service.clone());
         let organisation_presenter = OrganisationPresenterImpl::new();
 
-        let common_repo = CommonRepositoryImpl::new(pool.clone());
+        let common_repo = CommonRepositoryImpl::new(pool.clone(), typed_cache_service.clone());
         let common_presenter = CommonPresenterImpl::new();
+
+        let corridor_repo = CorridorRepositoryImpl::new(pool.clone(), typed_cache_service.clone());
+        let corridor_presenter = CorridorPresenterImpl::new();
 
         let country_connection_repo =
             CountryConnectionRepositoryImpl::new(pool.clone(), typed_cache_service.clone());
@@ -91,6 +99,10 @@ impl DiContainer {
             common_usecase: CommonUsecase::new(
                 Arc::new(common_repo.clone()),
                 Arc::new(common_presenter.clone()),
+            ),
+            corridor_usecase: CorridorUsecase::new(
+                Arc::new(corridor_repo.clone()),
+                Arc::new(corridor_presenter.clone()),
             ),
             country_connection_usecase: CountryConnectionUsecase::new(
                 Arc::new(country_connection_repo.clone()),

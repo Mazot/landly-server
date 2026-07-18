@@ -387,6 +387,30 @@ impl CacheKeys {
     pub fn images_pattern() -> String {
         "img:*".to_string()
     }
+
+    pub fn common_pattern() -> String {
+        "common:*".to_string()
+    }
+
+    pub fn corridors_by_user(user_id: &uuid::Uuid) -> String {
+        format!("cor:user:{}", user_id)
+    }
+
+    pub fn corridor_stats(corridor_id: &uuid::Uuid) -> String {
+        format!("cor:stats:{}", corridor_id)
+    }
+
+    pub fn corridor_pattern() -> String {
+        "cor:*".to_string()
+    }
+
+    pub fn common_org_types_pattern() -> String {
+        "common:organisation_types:*".to_string()
+    }
+
+    pub fn common_countries_pattern() -> String {
+        "common:countries:*".to_string()
+    }
 }
 
 #[cfg(test)]

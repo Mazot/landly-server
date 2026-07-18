@@ -41,6 +41,15 @@ impl CommonUsecase {
         Ok(response)
     }
 
+    pub fn fetch_country_detail(&self, id: uuid::Uuid) -> Result<HttpResponse, AppError> {
+        let (country, by_type) = self.common_repo.get_country_detail(id)?;
+        let response = self
+            .common_presenter
+            .to_country_detail_json(country, by_type);
+
+        Ok(response)
+    }
+
     pub fn fetch_organisation_types(&self) -> Result<HttpResponse, AppError> {
         let org_types = self.common_repo.get_all_organisation_types()?;
         let response = self
@@ -60,6 +69,7 @@ impl CommonUsecase {
                     org_type: params.org_type,
                     color: params.color,
                     title: params.title,
+                    slug: params.slug,
                 })?;
         let response = self
             .common_presenter
@@ -79,4 +89,5 @@ pub struct CreateOrganisationTypeUsecaseInput {
     pub org_type: String,
     pub color: String,
     pub title: String,
+    pub slug: Option<String>,
 }

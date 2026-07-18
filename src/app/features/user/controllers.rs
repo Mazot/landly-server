@@ -1,12 +1,23 @@
 use super::requests::{
     AddLanguagesRequest, DeleteLanguageRequest, OAuthCallbackParams, SignInRequest, SignUpRequest,
+    UpdateNotificationSettingsRequest, UpdateProfileRequest,
 };
+use super::usecases::{SignUpUsecaseInput, UpdateProfileUsecaseInput};
 use crate::{app::drivers::middlewares::state::AppState, constants::env_key, error::AppError};
 use actix_web::{
-    HttpResponse,
+    HttpMessage, HttpRequest, HttpResponse,
     web::{Data, Json, Path, Query},
 };
+use serde_json::json;
 use uuid::Uuid;
+
+/// Extracts the authenticated user id inserted by the auth middleware.
+fn caller_user_id(req: &HttpRequest) -> Result<Uuid, AppError> {
+    req.extensions()
+        .get::<Uuid>()
+        .copied()
+        .ok_or_else(|| AppError::Unauthorized(json!({ "error": "Missing authenticated user" })))
+}
 
 #[utoipa::path(
     post,
@@ -46,11 +57,94 @@ pub async fn signup(
     state: Data<AppState>,
     form: Json<SignUpRequest>,
 ) -> Result<HttpResponse, AppError> {
-    state.di_container.user_usecase.signup(
-        form.username.to_owned(),
-        form.email.to_owned(),
-        form.password.to_owned(),
+    state.di_container.user_usecase.signup(SignUpUsecaseInput {
+        username: form.username.to_owned(),
+        email: form.email.to_owned(),
+        password: form.password.to_owned(),
+        name: form.name.to_owned(),
+        locale: form.locale.to_owned(),
+        here_as: form.here_as.to_owned(),
+        home_country_id: form.home_country_id,
+        avatar_color: form.avatar_color.to_owned(),
+        corridor_from_country_id: form.corridor_from_country_id,
+        corridor_to_country_id: form.corridor_to_country_id,
+    })
+}
+
+#[utoipa::path(
+    get,
+    path = "/user/me",
+    context_path = "/api",
+    responses(
+        (status = 200, description = "Authenticated user profile", body = super::presenters::UserProfileContent),
+        (status = 401, description = "Unauthorized", body = AppError),
+        (status = 500, description = "Internal server error", body = AppError)
+    ),
+    tag = "User"
+)]
+pub async fn fetch_me(req: HttpRequest, state: Data<AppState>) -> Result<HttpResponse, AppError> {
+    let user_id = caller_user_id(&req)?;
+
+    state.di_container.user_usecase.fetch_profile(user_id)
+}
+
+#[utoipa::path(
+    put,
+    path = "/user/me",
+    context_path = "/api",
+    request_body = UpdateProfileRequest,
+    responses(
+        (status = 200, description = "Profile updated", body = super::presenters::UserProfileContent),
+        (status = 401, description = "Unauthorized", body = AppError),
+        (status = 422, description = "Unprocessable entity", body = AppError),
+        (status = 500, description = "Internal server error", body = AppError)
+    ),
+    tag = "User"
+)]
+pub async fn update_me(
+    req: HttpRequest,
+    state: Data<AppState>,
+    form: Json<UpdateProfileRequest>,
+) -> Result<HttpResponse, AppError> {
+    let user_id = caller_user_id(&req)?;
+
+    state.di_container.user_usecase.update_profile(
+        user_id,
+        UpdateProfileUsecaseInput {
+            name: form.name.to_owned(),
+            bio: form.bio.to_owned(),
+            city: form.city.to_owned(),
+            home_country_id: form.home_country_id,
+            avatar_color: form.avatar_color.to_owned(),
+            locale: form.locale.to_owned(),
+            here_as: form.here_as.to_owned(),
+        },
     )
+}
+
+#[utoipa::path(
+    put,
+    path = "/user/me/notifications",
+    context_path = "/api",
+    request_body = UpdateNotificationSettingsRequest,
+    responses(
+        (status = 200, description = "Notification settings updated", body = super::presenters::UserProfileContent),
+        (status = 401, description = "Unauthorized", body = AppError),
+        (status = 500, description = "Internal server error", body = AppError)
+    ),
+    tag = "User"
+)]
+pub async fn update_notification_settings(
+    req: HttpRequest,
+    state: Data<AppState>,
+    form: Json<UpdateNotificationSettingsRequest>,
+) -> Result<HttpResponse, AppError> {
+    let user_id = caller_user_id(&req)?;
+
+    state
+        .di_container
+        .user_usecase
+        .update_notification_settings(user_id, form.notification_settings.to_owned())
 }
 
 #[utoipa::path(
@@ -61,18 +155,22 @@ pub async fn signup(
     responses(
         (status = 200, description = "Languages added successfully", body = super::presenters::UserLanguagesContent),
         (status = 400, description = "Bad request", body = AppError),
+        (status = 401, description = "Unauthorized", body = AppError),
         (status = 500, description = "Internal server error", body = AppError)
     ),
     tag = "User"
 )]
 pub async fn add_languages(
+    req: HttpRequest,
     state: Data<AppState>,
     form: Json<AddLanguagesRequest>,
 ) -> Result<HttpResponse, AppError> {
+    let user_id = caller_user_id(&req)?;
+
     state
         .di_container
         .user_usecase
-        .add_languages(form.user_id, form.languages_ids.clone())
+        .add_languages(user_id, form.languages_ids.clone())
 }
 
 #[utoipa::path(
@@ -83,18 +181,22 @@ pub async fn add_languages(
     responses(
         (status = 200, description = "Language deleted successfully"),
         (status = 400, description = "Bad request", body = AppError),
+        (status = 401, description = "Unauthorized", body = AppError),
         (status = 500, description = "Internal server error", body = AppError)
     ),
     tag = "User"
 )]
 pub async fn delete_language(
+    req: HttpRequest,
     state: Data<AppState>,
     form: Json<DeleteLanguageRequest>,
 ) -> Result<HttpResponse, AppError> {
+    let user_id = caller_user_id(&req)?;
+
     state
         .di_container
         .user_usecase
-        .delete_language(form.user_id, form.language_id)
+        .delete_language(user_id, form.language_id)
 }
 
 #[utoipa::path(

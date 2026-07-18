@@ -1,5 +1,11 @@
-use super::{presenters::{AuthUserContent, UserPresenter}, repositories::UserRepository};
-use crate::{app::features::user::entities::User, error::AppError};
+use super::{
+    presenters::{AuthUserContent, UserPresenter},
+    repositories::UserRepository,
+};
+use crate::{
+    app::features::user::entities::{HereAs, Locale, SignUpV2Input, UpdateUserProfile, User},
+    error::AppError,
+};
 use actix_web::HttpResponse;
 use std::sync::Arc;
 use uuid::Uuid;
@@ -28,14 +34,84 @@ impl UserUsecase {
         Ok(response)
     }
 
-    pub fn signup(
-        &self,
-        username: String,
-        email: String,
-        password: String,
-    ) -> Result<HttpResponse, AppError> {
-        let (user, token) = self.user_repository.signup(username, email, password)?;
+    pub fn signup(&self, params: SignUpUsecaseInput) -> Result<HttpResponse, AppError> {
+        // Validate enum-like fields before touching the database.
+        if let Some(locale) = params.locale.as_deref() {
+            Locale::try_from(locale)?;
+        }
+        if let Some(here_as) = params.here_as.as_deref() {
+            HereAs::try_from(here_as)?;
+        }
+
+        let (user, token) = self.user_repository.signup(SignUpV2Input {
+            username: params.username,
+            email: params.email,
+            password: params.password,
+            name: params.name,
+            locale: params.locale,
+            here_as: params.here_as,
+            home_country_id: params.home_country_id,
+            avatar_color: params.avatar_color,
+            corridor_from_country_id: params.corridor_from_country_id,
+            corridor_to_country_id: params.corridor_to_country_id,
+        })?;
         let response = self.user_presenter.to_single_json(user, token);
+
+        Ok(response)
+    }
+
+    pub fn fetch_profile(&self, user_id: Uuid) -> Result<HttpResponse, AppError> {
+        let (user, stats) = self.user_repository.fetch_profile(user_id)?;
+        let response = self.user_presenter.to_profile_json(user, stats);
+
+        Ok(response)
+    }
+
+    pub fn update_profile(
+        &self,
+        user_id: Uuid,
+        params: UpdateProfileUsecaseInput,
+    ) -> Result<HttpResponse, AppError> {
+        if let Some(locale) = params.locale.as_deref() {
+            Locale::try_from(locale)?;
+        }
+        if let Some(here_as) = params.here_as.as_deref() {
+            HereAs::try_from(here_as)?;
+        }
+
+        let (user, stats) = self.user_repository.update_profile(
+            user_id,
+            UpdateUserProfile {
+                name: params.name,
+                bio: params.bio,
+                city: params.city,
+                home_country_id: params.home_country_id,
+                avatar_color: params.avatar_color,
+                locale: params.locale,
+                here_as: params.here_as,
+                notification_settings: None,
+                updated_at: Some(chrono::Utc::now().naive_utc()),
+            },
+        )?;
+        let response = self.user_presenter.to_profile_json(user, stats);
+
+        Ok(response)
+    }
+
+    pub fn update_notification_settings(
+        &self,
+        user_id: Uuid,
+        notification_settings: serde_json::Value,
+    ) -> Result<HttpResponse, AppError> {
+        let (user, stats) = self.user_repository.update_profile(
+            user_id,
+            UpdateUserProfile {
+                notification_settings: Some(notification_settings),
+                updated_at: Some(chrono::Utc::now().naive_utc()),
+                ..UpdateUserProfile::default()
+            },
+        )?;
+        let response = self.user_presenter.to_profile_json(user, stats);
 
         Ok(response)
     }
@@ -102,4 +178,27 @@ impl UserUsecase {
         // self.user_presenter.to_auth_middleware(maybe_user)
         todo!("Implement find_auth_user logic")
     }
+}
+
+pub struct SignUpUsecaseInput {
+    pub username: String,
+    pub email: String,
+    pub password: String,
+    pub name: Option<String>,
+    pub locale: Option<String>,
+    pub here_as: Option<String>,
+    pub home_country_id: Option<Uuid>,
+    pub avatar_color: Option<String>,
+    pub corridor_from_country_id: Option<Uuid>,
+    pub corridor_to_country_id: Option<Uuid>,
+}
+
+pub struct UpdateProfileUsecaseInput {
+    pub name: Option<String>,
+    pub bio: Option<String>,
+    pub city: Option<String>,
+    pub home_country_id: Option<Uuid>,
+    pub avatar_color: Option<String>,
+    pub locale: Option<String>,
+    pub here_as: Option<String>,
 }

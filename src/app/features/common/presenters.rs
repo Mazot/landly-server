@@ -8,6 +8,7 @@ use uuid::Uuid;
 pub trait CommonPresenter: Send + Sync + 'static {
     fn to_http_res(&self) -> HttpResponse;
     fn to_single_country_json(&self, item: Country) -> HttpResponse;
+    fn to_country_detail_json(&self, item: Country, by_type: Vec<(String, i64)>) -> HttpResponse;
     fn to_single_organization_type_json(&self, item: OrganisationType) -> HttpResponse;
     fn to_multi_country_json(&self, item: Vec<Country>) -> HttpResponse;
     fn to_multi_organization_type_json(&self, item: Vec<OrganisationType>) -> HttpResponse;
@@ -27,6 +28,12 @@ impl CommonPresenter for CommonPresenterImpl {
 
     fn to_single_country_json(&self, item: Country) -> HttpResponse {
         let response_content = CountryContent::from(item);
+
+        HttpResponse::Ok().json(response_content)
+    }
+
+    fn to_country_detail_json(&self, item: Country, by_type: Vec<(String, i64)>) -> HttpResponse {
+        let response_content = CountryDetailContent::from((item, by_type));
 
         HttpResponse::Ok().json(response_content)
     }
@@ -65,6 +72,9 @@ pub struct CountryContent {
     pub flag: Option<String>,
     pub capital_city: Option<String>,
     pub description: Option<String>,
+    pub currency: Option<String>,
+    pub phone_code: Option<String>,
+    pub top_cities: Option<Value>,
 }
 impl From<Country> for CountryContent {
     fn from(val: Country) -> Self {
@@ -75,6 +85,46 @@ impl From<Country> for CountryContent {
             flag: val.flag,
             capital_city: val.capital_city,
             description: val.description,
+            currency: val.currency,
+            phone_code: val.phone_code,
+            top_cities: val.top_cities,
+        }
+    }
+}
+
+#[derive(Deserialize, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CountryPlacesByType {
+    pub slug: String,
+    pub count: i64,
+}
+
+/// Country page payload with live-organisation breakdown by org type
+/// (design: country-full.jsx).
+#[derive(Deserialize, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CountryDetailContent {
+    #[serde(flatten)]
+    pub country: CountryContent,
+    pub total_places: i64,
+    pub places_by_type: Vec<CountryPlacesByType>,
+}
+
+impl From<(Country, Vec<(String, i64)>)> for CountryDetailContent {
+    fn from((country, by_type): (Country, Vec<(String, i64)>)) -> Self {
+        let mut total_places = 0;
+        let places_by_type = by_type
+            .into_iter()
+            .map(|(slug, count)| {
+                total_places += count;
+                CountryPlacesByType { slug, count }
+            })
+            .collect();
+
+        Self {
+            country: CountryContent::from(country),
+            total_places,
+            places_by_type,
         }
     }
 }
@@ -86,6 +136,7 @@ pub struct OrganisationTypeContent {
     pub r#type: String,
     pub color: Option<String>,
     pub title: Option<String>,
+    pub slug: Option<String>,
 }
 impl From<OrganisationType> for OrganisationTypeContent {
     fn from(val: OrganisationType) -> Self {
@@ -94,6 +145,7 @@ impl From<OrganisationType> for OrganisationTypeContent {
             r#type: val.org_type,
             color: val.color,
             title: val.title,
+            slug: val.slug,
         }
     }
 }
@@ -110,6 +162,9 @@ mod tests {
             flag: Some("🏴".to_string()),
             capital_city: Some("Test Capital".to_string()),
             description: Some("Test Description".to_string()),
+            currency: Some("EUR".to_string()),
+            phone_code: Some("+49".to_string()),
+            top_cities: Some(serde_json::json!(["Berlin", "Munich"])),
         }
     }
 
@@ -119,6 +174,7 @@ mod tests {
             org_type: "test_type".to_string(),
             color: Some("#FF0000".to_string()),
             title: Some("Test Type".to_string()),
+            slug: Some("test_type".to_string()),
         }
     }
 

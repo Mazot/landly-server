@@ -1,4 +1,5 @@
 use super::entities::{User, UserToLanguage};
+use super::repositories::ProfileStats;
 use crate::error::AppError;
 use actix_web::HttpResponse;
 use serde::{Deserialize, Serialize};
@@ -8,8 +9,62 @@ use uuid::Uuid;
 pub trait UserPresenter: Send + Sync + 'static {
     fn to_http_res(&self) -> HttpResponse;
     fn to_single_json(&self, user: User, token: String) -> HttpResponse;
+    fn to_profile_json(&self, user: User, stats: ProfileStats) -> HttpResponse;
     fn to_lang_vec_json(&self, languages: Vec<UserToLanguage>) -> HttpResponse;
     fn to_auth_middleware(&self, maybe_user: Result<User, AppError>) -> Result<User, &str>;
+}
+
+#[derive(Deserialize, Serialize, Clone, Debug, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct UserProfileStatsContent {
+    pub places_added: i64,
+    pub people_recommended: i64,
+    pub people_helped: i64,
+    pub rating: Option<f64>,
+}
+
+/// Account screen payload (design: account.jsx). Never exposes password_hash.
+#[derive(Deserialize, Serialize, Clone, Debug, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct UserProfileContent {
+    pub id: Uuid,
+    pub username: String,
+    pub email: String,
+    pub name: Option<String>,
+    pub bio: Option<String>,
+    pub city: Option<String>,
+    pub home_country_id: Option<Uuid>,
+    pub avatar_color: Option<String>,
+    pub locale: String,
+    pub here_as: Option<String>,
+    pub role: String,
+    pub notification_settings: Option<serde_json::Value>,
+    pub stats: UserProfileStatsContent,
+}
+
+impl From<(User, ProfileStats)> for UserProfileContent {
+    fn from((user, stats): (User, ProfileStats)) -> Self {
+        Self {
+            id: user.id,
+            username: user.username,
+            email: user.email,
+            name: user.name,
+            bio: user.bio,
+            city: user.city,
+            home_country_id: user.home_country_id,
+            avatar_color: user.avatar_color,
+            locale: user.locale,
+            here_as: user.here_as,
+            role: user.role,
+            notification_settings: user.notification_settings,
+            stats: UserProfileStatsContent {
+                places_added: stats.places_added,
+                people_recommended: stats.people_recommended,
+                people_helped: stats.people_helped,
+                rating: stats.rating,
+            },
+        }
+    }
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug, ToSchema)]
@@ -70,6 +125,12 @@ impl UserPresenter for UserPresenterImpl {
         HttpResponse::Ok().json(response_content)
     }
 
+    fn to_profile_json(&self, user: User, stats: ProfileStats) -> HttpResponse {
+        let response_content = UserProfileContent::from((user, stats));
+
+        HttpResponse::Ok().json(response_content)
+    }
+
     fn to_auth_middleware(&self, maybe_user: Result<User, AppError>) -> Result<User, &str> {
         maybe_user.map_err(|_err| "Cannot find auth user")
     }
@@ -94,6 +155,15 @@ mod tests {
             password_hash: "$2b$12$test_hash".to_string(),
             created_at: NaiveDateTime::default(),
             updated_at: NaiveDateTime::default(),
+            name: Some("Test User".to_string()),
+            bio: None,
+            city: Some("Berlin".to_string()),
+            home_country_id: None,
+            avatar_color: Some("#D97757".to_string()),
+            locale: "en".to_string(),
+            here_as: Some("newcomer".to_string()),
+            role: "user".to_string(),
+            notification_settings: None,
         }
     }
 

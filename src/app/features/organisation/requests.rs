@@ -14,6 +14,19 @@ pub struct CreateOrganisationRequest {
     pub latitude: Option<f64>,
     pub longitude: Option<f64>,
     pub founder_country_id: Option<Uuid>,
+    pub city: Option<String>,
+    pub website: Option<String>,
+    pub telegram: Option<String>,
+    pub whatsapp: Option<String>,
+    pub services: Option<Vec<String>>,
+    pub languages: Option<Vec<String>>,
+    /// Structured hours by weekday, e.g. {"mon": [["09:00","13:00"]], ...}
+    pub opening_hours: Option<serde_json::Value>,
+    /// IANA timezone name used to compute `openNow`, e.g. "Europe/Berlin"
+    pub timezone: Option<String>,
+    pub cost: Option<String>,
+    pub added_by: Option<String>,
+    pub google_place_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize, ToSchema)]
@@ -28,6 +41,41 @@ pub struct UpdateOrganisationRequest {
     pub latitude: Option<f64>,
     pub longitude: Option<f64>,
     pub founder_country_id: Option<Uuid>,
+    pub city: Option<String>,
+    pub website: Option<String>,
+    pub telegram: Option<String>,
+    pub whatsapp: Option<String>,
+    pub services: Option<Vec<String>>,
+    pub languages: Option<Vec<String>>,
+    pub opening_hours: Option<serde_json::Value>,
+    pub timezone: Option<String>,
+    pub cost: Option<String>,
+}
+
+/// Map search (design: map.jsx + map-filters.jsx). Either a bbox
+/// (min_lat/min_lng/max_lat/max_lng) or an origin point with radius_km.
+#[derive(Deserialize, Serialize, Debug, ToSchema, IntoParams)]
+pub struct SearchOrganisationsQueryRequest {
+    pub min_lat: Option<f64>,
+    pub min_lng: Option<f64>,
+    pub max_lat: Option<f64>,
+    pub max_lng: Option<f64>,
+    pub lat: Option<f64>,
+    pub lng: Option<f64>,
+    pub radius_km: Option<f64>,
+    /// Comma-separated org type slugs, e.g. "embassy,community"
+    pub types: Option<String>,
+    pub open_now: Option<bool>,
+    /// Comma-separated language names, e.g. "Russian,English"
+    pub languages: Option<String>,
+    pub verified: Option<bool>,
+    pub min_rating: Option<f64>,
+    pub added_by: Option<String>,
+    pub cost: Option<String>,
+    /// One of: nearest (default when origin given), recent, verified
+    pub sort: Option<String>,
+    pub limit: Option<i64>,
+    pub offset: Option<i64>,
 }
 
 #[derive(Deserialize, Serialize, Debug, ToSchema, IntoParams)]
@@ -60,6 +108,17 @@ mod tests {
             latitude: Some(40.7128),
             longitude: Some(-74.0060),
             founder_country_id: Some(Uuid::new_v4()),
+            city: Some("Berlin".to_string()),
+            website: None,
+            telegram: None,
+            whatsapp: None,
+            services: Some(vec!["Notary".to_string()]),
+            languages: Some(vec!["Russian".to_string(), "German".to_string()]),
+            opening_hours: None,
+            timezone: Some("Europe/Berlin".to_string()),
+            cost: Some("free".to_string()),
+            added_by: Some("community".to_string()),
+            google_place_id: None,
         };
 
         let json = serde_json::to_string(&request).unwrap();
@@ -101,6 +160,15 @@ mod tests {
             latitude: None,
             longitude: None,
             founder_country_id: None,
+            city: None,
+            website: None,
+            telegram: None,
+            whatsapp: None,
+            services: None,
+            languages: None,
+            opening_hours: None,
+            timezone: None,
+            cost: None,
         };
 
         let json = serde_json::to_string(&request).unwrap();
@@ -120,6 +188,15 @@ mod tests {
             latitude: None,
             longitude: None,
             founder_country_id: None,
+            city: None,
+            website: None,
+            telegram: None,
+            whatsapp: None,
+            services: None,
+            languages: None,
+            opening_hours: None,
+            timezone: None,
+            cost: None,
         };
 
         assert_eq!(request.name, Some("Updated Name".to_string()));

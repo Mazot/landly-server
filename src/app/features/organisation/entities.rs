@@ -4,7 +4,104 @@ use bigdecimal::BigDecimal;
 use chrono::NaiveDateTime;
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use uuid::Uuid;
+
+/// Moderation status stored in `organisations.status` (TEXT + CHECK constraint).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OrganisationStatus {
+    Pending,
+    Live,
+    Rejected,
+}
+
+impl OrganisationStatus {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            OrganisationStatus::Pending => "pending",
+            OrganisationStatus::Live => "live",
+            OrganisationStatus::Rejected => "rejected",
+        }
+    }
+}
+
+impl TryFrom<&str> for OrganisationStatus {
+    type Error = AppError;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        match value {
+            "pending" => Ok(OrganisationStatus::Pending),
+            "live" => Ok(OrganisationStatus::Live),
+            "rejected" => Ok(OrganisationStatus::Rejected),
+            other => Err(AppError::UnprocessableEntity(
+                json!({ "error": format!("Unknown organisation status: {}", other) }),
+            )),
+        }
+    }
+}
+
+/// Provenance of the listing (`organisations.added_by`, TEXT + CHECK constraint).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AddedBy {
+    Official,
+    Community,
+    Volunteer,
+}
+
+impl AddedBy {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            AddedBy::Official => "official",
+            AddedBy::Community => "community",
+            AddedBy::Volunteer => "volunteer",
+        }
+    }
+}
+
+impl TryFrom<&str> for AddedBy {
+    type Error = AppError;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        match value {
+            "official" => Ok(AddedBy::Official),
+            "community" => Ok(AddedBy::Community),
+            "volunteer" => Ok(AddedBy::Volunteer),
+            other => Err(AppError::UnprocessableEntity(
+                json!({ "error": format!("Unknown added_by value: {}", other) }),
+            )),
+        }
+    }
+}
+
+/// Whether the service costs money (`organisations.cost`, TEXT + CHECK constraint).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Cost {
+    Free,
+    Paid,
+}
+
+impl Cost {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Cost::Free => "free",
+            Cost::Paid => "paid",
+        }
+    }
+}
+
+impl TryFrom<&str> for Cost {
+    type Error = AppError;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        match value {
+            "free" => Ok(Cost::Free),
+            "paid" => Ok(Cost::Paid),
+            other => Err(AppError::UnprocessableEntity(
+                json!({ "error": format!("Unknown cost value: {}", other) }),
+            )),
+        }
+    }
+}
 
 #[derive(Debug, Associations, Serialize, Deserialize, Queryable, Insertable, Selectable, Clone)]
 // #[diesel(belongs_to(Country, foreign_key = location_country_id))]
@@ -25,6 +122,25 @@ pub struct Organisation {
     pub latitude: Option<BigDecimal>,
     pub longitude: Option<BigDecimal>,
     pub founder_country_id: Option<Uuid>,
+    pub created_by: Option<Uuid>,
+    pub verified: bool,
+    pub status: String,
+    pub moderation_note: Option<String>,
+    pub added_by: Option<String>,
+    pub city: Option<String>,
+    pub website: Option<String>,
+    pub telegram: Option<String>,
+    pub whatsapp: Option<String>,
+    pub services: Vec<Option<String>>,
+    pub languages: Vec<Option<String>>,
+    pub opening_hours: Option<serde_json::Value>,
+    pub timezone: Option<String>,
+    pub cost: Option<String>,
+    pub google_place_id: Option<String>,
+    pub google_rating: Option<f64>,
+    pub visits_count: i64,
+    pub rating_avg: Option<f64>,
+    pub reviews_count: i64,
 }
 
 impl Organisation {
@@ -62,6 +178,18 @@ impl Organisation {
             .get_result::<Organisation>(conn)?;
 
         Ok(result)
+    }
+
+    pub fn increment_visits(
+        conn: &mut PgConnection,
+        organisation_id: Uuid,
+    ) -> Result<i64, AppError> {
+        let visits = diesel::update(organisations::table.find(organisation_id))
+            .set(organisations::visits_count.eq(organisations::visits_count + 1))
+            .returning(organisations::visits_count)
+            .get_result::<i64>(conn)?;
+
+        Ok(visits)
     }
 
     pub fn fetch_by_location_country(
@@ -125,6 +253,19 @@ pub struct CreateOrganisation {
     pub latitude: Option<BigDecimal>,
     pub longitude: Option<BigDecimal>,
     pub founder_country_id: Option<Uuid>,
+    pub created_by: Option<Uuid>,
+    pub status: String,
+    pub added_by: Option<String>,
+    pub city: Option<String>,
+    pub website: Option<String>,
+    pub telegram: Option<String>,
+    pub whatsapp: Option<String>,
+    pub services: Vec<Option<String>>,
+    pub languages: Vec<Option<String>>,
+    pub opening_hours: Option<serde_json::Value>,
+    pub timezone: Option<String>,
+    pub cost: Option<String>,
+    pub google_place_id: Option<String>,
 }
 
 #[derive(AsChangeset, Clone)]
@@ -141,4 +282,13 @@ pub struct UpdateOrganisation {
     pub latitude: Option<BigDecimal>,
     pub longitude: Option<BigDecimal>,
     pub founder_country_id: Option<Uuid>,
+    pub city: Option<String>,
+    pub website: Option<String>,
+    pub telegram: Option<String>,
+    pub whatsapp: Option<String>,
+    pub services: Option<Vec<Option<String>>>,
+    pub languages: Option<Vec<Option<String>>>,
+    pub opening_hours: Option<serde_json::Value>,
+    pub timezone: Option<String>,
+    pub cost: Option<String>,
 }

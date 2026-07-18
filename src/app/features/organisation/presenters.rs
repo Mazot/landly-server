@@ -1,6 +1,6 @@
 use super::entities::Organisation;
 use actix_web::{HttpResponse, http::StatusCode};
-use chrono::NaiveDateTime;
+use chrono::{Datelike, NaiveDateTime};
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 use utoipa::ToSchema;
@@ -12,6 +12,58 @@ pub trait OrganisationPresenter: Send + Sync + 'static {
     fn to_single_typed_json(&self, item: Organisation) -> HttpResponse<Organisation>;
     fn to_single_json(&self, item: Organisation) -> HttpResponse;
     fn to_multi_json(&self, items: Vec<Organisation>) -> HttpResponse;
+    fn to_search_json(&self, items: Vec<(Organisation, Option<f64>)>) -> HttpResponse;
+    fn to_visits_json(&self, visits: i64) -> HttpResponse;
+}
+
+/// Computes whether a place is open right now from its structured hours and
+/// IANA timezone. `opening_hours` format: {"mon": [["09:00","13:00"], ...], ...}
+/// Returns None when hours or timezone are missing/invalid — the client shows
+/// "hours unknown" in that case.
+pub fn compute_open_now(
+    opening_hours: &Option<serde_json::Value>,
+    timezone: &Option<String>,
+) -> Option<bool> {
+    let hours = opening_hours.as_ref()?.as_object()?;
+    let tz: chrono_tz::Tz = timezone.as_deref()?.parse().ok()?;
+    let now = chrono::Utc::now().with_timezone(&tz);
+
+    let day_key = match now.weekday() {
+        chrono::Weekday::Mon => "mon",
+        chrono::Weekday::Tue => "tue",
+        chrono::Weekday::Wed => "wed",
+        chrono::Weekday::Thu => "thu",
+        chrono::Weekday::Fri => "fri",
+        chrono::Weekday::Sat => "sat",
+        chrono::Weekday::Sun => "sun",
+    };
+
+    let intervals = match hours.get(day_key) {
+        Some(v) => v.as_array()?,
+        None => return Some(false),
+    };
+
+    // "HH:MM" strings compare correctly lexicographically.
+    let current = now.format("%H:%M").to_string();
+
+    Some(intervals.iter().any(|interval| {
+        interval
+            .as_array()
+            .and_then(|pair| {
+                let open = pair.first()?.as_str()?;
+                let close = pair.get(1)?.as_str()?;
+                Some(open <= current.as_str() && current.as_str() < close)
+            })
+            .unwrap_or(false)
+    }))
+}
+
+fn decimal_to_f64(value: Option<bigdecimal::BigDecimal>) -> Option<f64> {
+    value.map(|dec_val| f64::from_str(&dec_val.to_string()).unwrap_or_default())
+}
+
+fn flatten_text_array(values: Vec<Option<String>>) -> Vec<String> {
+    values.into_iter().flatten().collect()
 }
 
 #[derive(Deserialize, Serialize, ToSchema)]
@@ -28,28 +80,37 @@ pub struct OrganisationContent {
     pub founder_country_id: Option<Uuid>,
     pub latitude: Option<f64>,
     pub longitude: Option<f64>,
+    pub created_by: Option<Uuid>,
+    pub verified: bool,
+    pub status: String,
+    pub added_by: Option<String>,
+    pub city: Option<String>,
+    pub website: Option<String>,
+    pub telegram: Option<String>,
+    pub whatsapp: Option<String>,
+    pub services: Vec<String>,
+    pub languages: Vec<String>,
+    pub opening_hours: Option<serde_json::Value>,
+    pub timezone: Option<String>,
+    /// Computed from opening_hours + timezone at response time; never stored.
+    pub open_now: Option<bool>,
+    pub cost: Option<String>,
+    pub google_place_id: Option<String>,
+    pub google_rating: Option<f64>,
+    pub visits_count: i64,
+    pub rating_avg: Option<f64>,
+    pub reviews_count: i64,
+    /// Distance from the search origin in km; present only in /search
+    /// responses when an origin point was given.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub distance_km: Option<f64>,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
 }
 
 impl From<Organisation> for OrganisationContent {
     fn from(org: Organisation) -> Self {
-        let longitude: Option<f64> = match org.longitude {
-            Some(dec_val) => {
-                let str = dec_val.to_string();
-                let value: f64 = f64::from_str(&str).unwrap_or_default();
-                Some(value)
-            }
-            _ => None,
-        };
-        let latitude: Option<f64> = match org.latitude {
-            Some(dec_val) => {
-                let str = dec_val.to_string();
-                let value: f64 = f64::from_str(&str).unwrap_or_default();
-                Some(value)
-            }
-            _ => None,
-        };
+        let open_now = compute_open_now(&org.opening_hours, &org.timezone);
 
         Self {
             id: org.id,
@@ -61,11 +122,40 @@ impl From<Organisation> for OrganisationContent {
             location_country_id: org.location_country_id,
             organisation_type_id: org.organisation_type_id,
             founder_country_id: org.founder_country_id,
-            latitude,
-            longitude,
+            latitude: decimal_to_f64(org.latitude),
+            longitude: decimal_to_f64(org.longitude),
+            created_by: org.created_by,
+            verified: org.verified,
+            status: org.status,
+            added_by: org.added_by,
+            city: org.city,
+            website: org.website,
+            telegram: org.telegram,
+            whatsapp: org.whatsapp,
+            services: flatten_text_array(org.services),
+            languages: flatten_text_array(org.languages),
+            opening_hours: org.opening_hours,
+            timezone: org.timezone,
+            open_now,
+            cost: org.cost,
+            google_place_id: org.google_place_id,
+            google_rating: org.google_rating,
+            visits_count: org.visits_count,
+            rating_avg: org.rating_avg,
+            reviews_count: org.reviews_count,
+            distance_km: None,
             created_at: org.created_at,
             updated_at: org.updated_at,
         }
+    }
+}
+
+impl From<(Organisation, Option<f64>)> for OrganisationContent {
+    fn from((org, distance_km): (Organisation, Option<f64>)) -> Self {
+        let mut content = OrganisationContent::from(org);
+        content.distance_km = distance_km;
+
+        content
     }
 }
 
@@ -86,6 +176,12 @@ impl From<Vec<Organisation>> for MultipleOrganisationsResponse {
             total: count,
         }
     }
+}
+
+#[derive(Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct OrganisationVisitsContent {
+    pub visits_count: i64,
 }
 
 #[derive(Clone)]
@@ -116,12 +212,30 @@ impl OrganisationPresenter for OrganisationPresenterImpl {
 
         HttpResponse::Ok().json(response_content)
     }
+
+    fn to_search_json(&self, items: Vec<(Organisation, Option<f64>)>) -> HttpResponse {
+        let response_items: Vec<OrganisationContent> =
+            items.into_iter().map(OrganisationContent::from).collect();
+        let total = response_items.len() as i64;
+
+        HttpResponse::Ok().json(MultipleOrganisationsResponse {
+            items: response_items,
+            total,
+        })
+    }
+
+    fn to_visits_json(&self, visits: i64) -> HttpResponse {
+        HttpResponse::Ok().json(OrganisationVisitsContent {
+            visits_count: visits,
+        })
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use bigdecimal::BigDecimal;
+    use serde_json::json;
     use std::str::FromStr;
 
     fn create_test_organisation() -> Organisation {
@@ -145,6 +259,25 @@ mod tests {
                 .unwrap()
                 .and_hms_opt(0, 0, 0)
                 .unwrap(),
+            created_by: Some(Uuid::new_v4()),
+            verified: true,
+            status: "live".to_string(),
+            moderation_note: None,
+            added_by: Some("community".to_string()),
+            city: Some("New York".to_string()),
+            website: Some("https://example.com".to_string()),
+            telegram: None,
+            whatsapp: None,
+            services: vec![Some("Notary".to_string())],
+            languages: vec![Some("Russian".to_string()), Some("English".to_string())],
+            opening_hours: None,
+            timezone: None,
+            cost: Some("free".to_string()),
+            google_place_id: None,
+            google_rating: None,
+            visits_count: 7,
+            rating_avg: Some(4.5),
+            reviews_count: 12,
         }
     }
 
@@ -163,6 +296,11 @@ mod tests {
         assert_eq!(content.address, Some("123 Test St".to_string()));
         assert!(content.latitude.is_some());
         assert!(content.longitude.is_some());
+        assert!(content.verified);
+        assert_eq!(content.status, "live");
+        assert_eq!(content.languages, vec!["Russian", "English"]);
+        assert_eq!(content.visits_count, 7);
+        assert_eq!(content.rating_avg, Some(4.5));
     }
 
     #[test]
@@ -175,6 +313,65 @@ mod tests {
 
         assert!(content.latitude.is_none());
         assert!(content.longitude.is_none());
+    }
+
+    #[test]
+    fn test_organisation_content_with_distance() {
+        let org = create_test_organisation();
+        let content = OrganisationContent::from((org, Some(12.5)));
+
+        assert_eq!(content.distance_km, Some(12.5));
+    }
+
+    #[test]
+    fn test_compute_open_now_without_hours() {
+        assert_eq!(
+            compute_open_now(&None, &Some("Europe/Berlin".to_string())),
+            None
+        );
+        assert_eq!(
+            compute_open_now(&Some(json!({"mon": [["09:00", "18:00"]]})), &None),
+            None
+        );
+    }
+
+    #[test]
+    fn test_compute_open_now_open_all_day_every_day() {
+        let hours = json!({
+            "mon": [["00:00", "24:00"]],
+            "tue": [["00:00", "24:00"]],
+            "wed": [["00:00", "24:00"]],
+            "thu": [["00:00", "24:00"]],
+            "fri": [["00:00", "24:00"]],
+            "sat": [["00:00", "24:00"]],
+            "sun": [["00:00", "24:00"]],
+        });
+
+        assert_eq!(
+            compute_open_now(&Some(hours), &Some("Europe/Berlin".to_string())),
+            Some(true)
+        );
+    }
+
+    #[test]
+    fn test_compute_open_now_closed_day_missing() {
+        // No entry for any weekday → closed
+        let hours = json!({});
+
+        assert_eq!(
+            compute_open_now(&Some(hours), &Some("Europe/Berlin".to_string())),
+            Some(false)
+        );
+    }
+
+    #[test]
+    fn test_compute_open_now_invalid_timezone() {
+        let hours = json!({"mon": [["09:00", "18:00"]]});
+
+        assert_eq!(
+            compute_open_now(&Some(hours), &Some("Not/AZone".to_string())),
+            None
+        );
     }
 
     #[test]
@@ -231,6 +428,27 @@ mod tests {
         let orgs = vec![org1, org2];
 
         let response = presenter.to_multi_json(orgs);
+
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[test]
+    fn test_organisation_presenter_to_search_json() {
+        let presenter = OrganisationPresenterImpl::new();
+        let items = vec![
+            (create_test_organisation(), Some(1.2)),
+            (create_test_organisation(), None),
+        ];
+
+        let response = presenter.to_search_json(items);
+
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[test]
+    fn test_organisation_presenter_to_visits_json() {
+        let presenter = OrganisationPresenterImpl::new();
+        let response = presenter.to_visits_json(42);
 
         assert_eq!(response.status(), StatusCode::OK);
     }

@@ -6,11 +6,12 @@ use crate::app::{
 use crate::error::AppError;
 use actix_web::{
     HttpResponse,
-    web::{Data, Json, Query},
+    web::{Data, Json, Path, Query},
 };
 use serde::Deserialize;
 use std::cmp::min;
 use utoipa::{IntoParams, ToSchema};
+use uuid::Uuid;
 
 #[utoipa::path(
     get,
@@ -38,6 +39,30 @@ pub async fn fetch_all_countries(
             offset,
             name,
         })
+}
+
+#[utoipa::path(
+    get,
+    path = "/common/countries/{id}",
+    context_path = "/api",
+    params(
+        ("id" = Uuid, Path, description = "Country ID")
+    ),
+    responses(
+        (status = 200, description = "Country with live-organisation breakdown by type", body = super::presenters::CountryDetailContent),
+        (status = 404, description = "Not found", body = AppError),
+        (status = 500, description = "Internal server error", body = AppError)
+    ),
+    tag = "Common"
+)]
+pub async fn fetch_country_detail(
+    state: Data<AppState>,
+    id: Path<Uuid>,
+) -> Result<HttpResponse, AppError> {
+    state
+        .di_container
+        .common_usecase
+        .fetch_country_detail(id.into_inner())
 }
 
 #[utoipa::path(
@@ -76,6 +101,7 @@ pub async fn create_organisation_type(
             org_type: form.org_type.to_owned(),
             color: form.color.to_owned(),
             title: form.title.to_owned(),
+            slug: form.slug.to_owned(),
         })
 }
 
@@ -84,6 +110,7 @@ pub struct CreateOrganisationTypeRequest {
     pub org_type: String,
     pub color: String,
     pub title: String,
+    pub slug: Option<String>,
 }
 
 #[derive(Deserialize, ToSchema, IntoParams)]

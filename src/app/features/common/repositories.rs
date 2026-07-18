@@ -1,7 +1,9 @@
 use crate::data::models::{Country, CreateOrganisationType, OrganisationType};
 use crate::error::AppError;
+use crate::utils::cache::{CacheKeys, CacheService, TypedCache};
 use crate::utils::db::DbPool;
 use serde_json::json;
+use std::sync::Arc;
 use uuid::Uuid;
 
 pub trait CommonRepository: Send + Sync + 'static {
@@ -11,6 +13,10 @@ pub trait CommonRepository: Send + Sync + 'static {
         &self,
         params: GetAllCountriesRepositoryInput,
     ) -> Result<Vec<Country>, AppError>;
+
+    /// Country + live-organisation counts grouped by org type slug
+    /// (design: country-full.jsx).
+    fn get_country_detail(&self, id: Uuid) -> Result<(Country, Vec<(String, i64)>), AppError>;
 
     fn get_organisation_type(&self, id: &Uuid) -> Result<OrganisationType, AppError>;
 
@@ -25,10 +31,14 @@ pub trait CommonRepository: Send + Sync + 'static {
 #[derive(Clone)]
 pub struct CommonRepositoryImpl {
     pool: DbPool,
+    cache_service: TypedCache<Arc<dyn CacheService>>,
 }
 impl CommonRepositoryImpl {
-    pub fn new(pool: DbPool) -> Self {
-        Self { pool }
+    pub fn new(pool: DbPool, cache_service: TypedCache<Arc<dyn CacheService>>) -> Self {
+        Self {
+            pool,
+            cache_service,
+        }
     }
 }
 
@@ -71,6 +81,32 @@ impl CommonRepository for CommonRepositoryImpl {
         Ok(countries_list)
     }
 
+    fn get_country_detail(&self, id: Uuid) -> Result<(Country, Vec<(String, i64)>), AppError> {
+        use crate::data::schema::{organisation_types, organisations};
+        use diesel::prelude::*;
+
+        let connection = &mut self.pool.get()?;
+        let country = Country::get_by_id(connection, &id)?;
+
+        let rows: Vec<(Option<String>, i64)> = organisations::table
+            .filter(organisations::location_country_id.eq(id))
+            .filter(organisations::status.eq("live"))
+            .left_join(organisation_types::table)
+            .group_by(organisation_types::slug)
+            .select((
+                organisation_types::slug.nullable(),
+                diesel::dsl::count_star(),
+            ))
+            .load(connection)?;
+
+        let by_type = rows
+            .into_iter()
+            .map(|(slug, count)| (slug.unwrap_or_else(|| "other".to_string()), count))
+            .collect();
+
+        Ok((country, by_type))
+    }
+
     fn get_organisation_type(&self, id: &Uuid) -> Result<OrganisationType, AppError> {
         let connection = &mut self.pool.get()?;
         let org_type = OrganisationType::get_by_id(connection, id)?;
@@ -96,8 +132,15 @@ impl CommonRepository for CommonRepositoryImpl {
                 org_type: params.org_type,
                 color: Some(params.color),
                 title: Some(params.title),
+                slug: params.slug,
             },
         )?;
+
+        // The GET /common/org_types response is cached by the request-reply
+        // middleware; drop it so the new type is visible immediately.
+        let _ = self
+            .cache_service
+            .invalidate_pattern(&CacheKeys::common_org_types_pattern());
 
         Ok(new_org_type)
     }
@@ -118,4 +161,5 @@ pub struct CreateOrganisationTypeRepositoryInput {
     pub org_type: String,
     pub color: String,
     pub title: String,
+    pub slug: Option<String>,
 }

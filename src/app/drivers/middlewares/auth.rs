@@ -98,7 +98,6 @@ fn is_skip_auth_route(req: &ServiceRequest) -> bool {
         return true;
     }
 
-    // TODO: improve this logic
     for route in SKIP_AUTH_ROUTES.iter() {
         if req.path().starts_with(route.path) && method == route.method {
             return true;
@@ -111,14 +110,42 @@ fn is_skip_auth_route(req: &ServiceRequest) -> bool {
 fn is_auth_required_route(req: &ServiceRequest) -> bool {
     let method = req.method();
 
-    // TODO: Надо заменять {id} в path
-    for route in AUTH_REQUIRED_ROUTES.iter() {
-        if req.path().starts_with(route.path) && method == route.method {
-            return true;
-        }
+    AUTH_REQUIRED_ROUTES
+        .iter()
+        .any(|route| method == route.method && path_matches(route.path, req.path()))
+}
+
+/// Matches a request path against a route pattern.
+///
+/// - A pattern ending with `/` is a prefix match (e.g. `/api/images/upload/`
+///   matches `/api/images/upload/<uuid>`).
+/// - `{param}` segments match exactly one non-empty path segment
+///   (e.g. `/api/organisation/update/{id}` matches `/api/organisation/update/<uuid>`).
+/// - All other segments must match literally, and segment counts must be equal.
+fn path_matches(pattern: &str, path: &str) -> bool {
+    if pattern.ends_with('/') {
+        return path.starts_with(pattern);
     }
 
-    false
+    let mut pattern_segments = pattern.split('/');
+    let mut path_segments = path.split('/');
+
+    loop {
+        match (pattern_segments.next(), path_segments.next()) {
+            (None, None) => return true,
+            (Some(expected), Some(actual)) => {
+                let is_param = expected.starts_with('{') && expected.ends_with('}');
+                if is_param {
+                    if actual.is_empty() {
+                        return false;
+                    }
+                } else if expected != actual {
+                    return false;
+                }
+            }
+            _ => return false,
+        }
+    }
 }
 
 fn is_authenticated_user(req: &ServiceRequest) -> Result<(bool, Uuid), AppError> {
@@ -156,7 +183,47 @@ struct AuthRequiredRoute {
     method: Method,
 }
 
-const AUTH_REQUIRED_ROUTES: [AuthRequiredRoute; 10] = [
+const AUTH_REQUIRED_ROUTES: [AuthRequiredRoute; 20] = [
+    AuthRequiredRoute {
+        path: "/api/user/languages",
+        method: Method::POST,
+    },
+    AuthRequiredRoute {
+        path: "/api/user/languages",
+        method: Method::DELETE,
+    },
+    AuthRequiredRoute {
+        path: "/api/user/me",
+        method: Method::GET,
+    },
+    AuthRequiredRoute {
+        path: "/api/user/me",
+        method: Method::PUT,
+    },
+    AuthRequiredRoute {
+        path: "/api/user/me/notifications",
+        method: Method::PUT,
+    },
+    AuthRequiredRoute {
+        path: "/api/corridor/create",
+        method: Method::POST,
+    },
+    AuthRequiredRoute {
+        path: "/api/corridor/list",
+        method: Method::GET,
+    },
+    AuthRequiredRoute {
+        path: "/api/corridor/set-default/{id}",
+        method: Method::PUT,
+    },
+    AuthRequiredRoute {
+        path: "/api/corridor/delete/{id}",
+        method: Method::DELETE,
+    },
+    AuthRequiredRoute {
+        path: "/api/corridor/stats/{id}",
+        method: Method::GET,
+    },
     AuthRequiredRoute {
         path: "/api/common/org_types",
         method: Method::POST,
@@ -267,7 +334,119 @@ mod tests {
 
     #[test]
     fn test_auth_required_routes_count() {
-        assert_eq!(AUTH_REQUIRED_ROUTES.len(), 10);
+        assert_eq!(AUTH_REQUIRED_ROUTES.len(), 20);
+    }
+
+    /// `PUT /api/user/me` must not accidentally protect (or be shadowed by)
+    /// `PUT /api/user/me/notifications` — they are separate exact patterns.
+    #[test]
+    fn test_user_me_routes_are_exact() {
+        assert!(path_matches("/api/user/me", "/api/user/me"));
+        assert!(!path_matches("/api/user/me", "/api/user/me/notifications"));
+        assert!(path_matches(
+            "/api/user/me/notifications",
+            "/api/user/me/notifications"
+        ));
+    }
+
+    /// Every entry in AUTH_REQUIRED_ROUTES must match a realistic request path.
+    /// Guards against patterns (e.g. containing a literal `{id}`) that can never
+    /// match real traffic and would silently disable auth for that route.
+    #[test]
+    fn test_every_auth_required_route_matches_a_real_path() {
+        let id = Uuid::new_v4().to_string();
+
+        for route in AUTH_REQUIRED_ROUTES.iter() {
+            let real_path = if route.path.ends_with('/') {
+                format!("{}{}", route.path, id)
+            } else {
+                route.path.replace("{id}", &id)
+            };
+
+            assert!(
+                path_matches(route.path, &real_path),
+                "route pattern `{}` does not match real path `{}`",
+                route.path,
+                real_path
+            );
+        }
+    }
+
+    #[test]
+    fn test_path_matches_organisation_update_with_uuid() {
+        let id = Uuid::new_v4();
+        assert!(path_matches(
+            "/api/organisation/update/{id}",
+            &format!("/api/organisation/update/{}", id)
+        ));
+        assert!(path_matches(
+            "/api/organisation/delete/{id}",
+            &format!("/api/organisation/delete/{}", id)
+        ));
+    }
+
+    #[test]
+    fn test_path_matches_country_connection_with_uuid() {
+        let id = Uuid::new_v4();
+        assert!(path_matches(
+            "/api/country-connection/update/{id}",
+            &format!("/api/country-connection/update/{}", id)
+        ));
+        assert!(path_matches(
+            "/api/country-connection/delete/{id}",
+            &format!("/api/country-connection/delete/{}", id)
+        ));
+    }
+
+    #[test]
+    fn test_path_matches_exact_route() {
+        assert!(path_matches(
+            "/api/organisation/create",
+            "/api/organisation/create"
+        ));
+        assert!(path_matches("/api/user/languages", "/api/user/languages"));
+        assert!(path_matches(
+            "/api/common/org_types",
+            "/api/common/org_types"
+        ));
+    }
+
+    #[test]
+    fn test_path_matches_prefix_route() {
+        let id = Uuid::new_v4();
+        assert!(path_matches(
+            "/api/images/upload/",
+            &format!("/api/images/upload/{}", id)
+        ));
+        assert!(path_matches(
+            "/api/images/delete/",
+            &format!("/api/images/delete/{}", id)
+        ));
+        assert!(path_matches(
+            "/api/images/set-primary/",
+            &format!("/api/images/set-primary/{}", id)
+        ));
+    }
+
+    #[test]
+    fn test_path_matches_rejects_different_paths() {
+        assert!(!path_matches(
+            "/api/organisation/update/{id}",
+            "/api/organisation/update"
+        ));
+        assert!(!path_matches(
+            "/api/organisation/update/{id}",
+            "/api/organisation/update/"
+        ));
+        assert!(!path_matches(
+            "/api/organisation/create",
+            "/api/organisation/create/extra"
+        ));
+        assert!(!path_matches("/api/user/languages", "/api/user/language"));
+        assert!(!path_matches(
+            "/api/organisation/update/{id}",
+            "/api/organisation/fetch/123"
+        ));
     }
 
     #[test]

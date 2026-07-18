@@ -1,5 +1,6 @@
 use super::controllers::{
     create_organisation_type, fetch_all_countries, fetch_all_organisation_types,
+    fetch_country_detail,
 };
 use crate::utils::redis::make_common_get_request_cache;
 use actix_web::{web, web::ServiceConfig};
@@ -16,6 +17,7 @@ pub fn configure_services(cfg: &mut ServiceConfig) {
                 "/countries",
                 web::get().to(fetch_all_countries).wrap(countries_cache),
             )
+            .route("/countries/{id}", web::get().to(fetch_country_detail))
             .route(
                 "/org_types",
                 web::get()

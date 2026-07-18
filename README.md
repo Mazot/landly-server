@@ -79,7 +79,7 @@ REDIS_PASSWORD=redis-pass
 
 # JWT
 JWT_SECRET=your-super-secret-jwt-key
-JWT_EXP_SECS=3600
+JWT_EXPIRATION=3600
 
 # OAuth (Google)
 GOOGLE_CLIENT_ID=your-google-client-id
@@ -163,6 +163,8 @@ Content-Type: application/json
 }
 ```
 
+Signup v2 additionally accepts optional profile fields (`name`, `locale`, `here_as`, `home_country_id`, `avatar_color`) and a default corridor (`corridor_from_country_id`, `corridor_to_country_id`) — the user and the corridor are created in one transaction.
+
 #### OAuth 2.0 (Google)
 
 ```http
@@ -173,23 +175,70 @@ GET /api/user/oauth/google/login
 GET /api/user/oauth/google/callback?code=...&state=...
 ```
 
+### Profile
+
+```http
+# Current user profile with stats (places added, etc.)
+GET /api/user/me
+Authorization: Bearer <jwt_token>
+
+# Update profile (name, bio, city, locale, here_as, ...)
+PUT /api/user/me
+
+# Update notification settings (free-form JSON object)
+PUT /api/user/me/notifications
+```
+
+### Corridors
+
+A corridor is the user's "from country → to country" pair the map opens to.
+
+```http
+POST   /api/corridor/create            # { from_country_id, to_country_id, is_default? }
+GET    /api/corridor/list
+PUT    /api/corridor/set-default/{id}
+DELETE /api/corridor/delete/{id}
+GET    /api/corridor/stats/{id}        # live-place counters by org type + "new this week"
+```
+
+All corridor endpoints require authentication and operate only on the caller's corridors.
+
 ### Organization Management
 
 ```http
-# Get organizations
-GET /api/organisations
+# List organisations (only status=live)
+GET /api/organisation/list
 
-# Create organization
-POST /api/organisations
-Content-Type: application/json
+# Geo search for the map: bbox or origin+radius, filters and sorting
+GET /api/organisation/search?min_lat=52&min_lng=13&max_lat=53&max_lng=14
+GET /api/organisation/search?lat=52.5&lng=13.4&radius_km=25&sort=nearest
+#   filters: types=embassy,community  open_now=true  languages=Russian,English
+#            verified=true  min_rating=4.5  added_by=volunteer  cost=free
+#   sort:    nearest | recent | verified
+
+# Fetch one organisation (openNow computed from opening_hours + timezone)
+GET /api/organisation/fetch/{id}
+
+# Create organisation (requires auth; new submissions get status=pending)
+POST /api/organisation/create
 Authorization: Bearer <jwt_token>
 
-{
-  "name": "Tech Corp",
-  "description": "Technology company",
-  "organization_type_id": "uuid-here",
-  ...
-}
+# Update / delete — only the creator or a moderator/admin
+PUT    /api/organisation/update/{id}
+DELETE /api/organisation/delete/{id}
+
+# Count a visit (public)
+POST /api/organisation/visit/{id}
+```
+
+### Countries
+
+```http
+# All countries
+GET /api/common/countries
+
+# Country page payload: country + live-place breakdown by org type
+GET /api/common/countries/{id}
 ```
 
 ## 🗄️ Database Schema
@@ -197,11 +246,12 @@ Authorization: Bearer <jwt_token>
 ### Core Tables
 
 - **chats** - Some chats links
-- **users** - User accounts and authentication
+- **users** - User accounts, authentication and profile (name, bio, city, home country, locale `en/ru/uk`, `here_as`, RBAC `role`, notification settings)
 - **user_providers** - OAuth provider linkages
-- **organisations** - Organization entities
-- **organisation_types** - Organization classifications
-- **countries** - Country master data
+- **corridors** - User corridors (from country → to country, one default per user)
+- **organisations** - Organization entities (v2: moderation `status`, `created_by` ownership, `verified`, contacts, `services[]`/`languages[]`, `opening_hours` JSONB + `timezone`, `cost`, Google import fields, visit/rating counters)
+- **organisation_types** - Organization classifications with stable `slug` (canonical: `embassy`, `business`, `helper`, `community`, `volunteer`)
+- **countries** - Country master data (+`currency`, `phone_code`, `top_cities`)
 - **languages** - Language master data
 - **countries_connections** - Country relationships
 - **countries_to_languages** - Country-language mappings
