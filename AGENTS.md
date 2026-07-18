@@ -128,6 +128,16 @@ Cache keys follow the `CacheKeys` namespace helper in the same file (`org:*`, `c
 
 All public endpoints and schemas must be registered in the `#[openapi(...)]` macro in `src/main.rs` (both `paths` and `components/schemas`). The Swagger UI is available at `/swagger-ui`.
 
+## Scripts workspace
+
+`scripts/crates` is a **separate Cargo workspace** (`country_parser`, `country_loader`) that depends on the main crate as a library (`landly-server = { path = "../.." }`). It is NOT built by `cargo build`/`cargo test` at the repo root — after changing structs it consumes (notably `Country`/`CreateCountry` in `src/data/models.rs`), verify it still compiles: `cd scripts/crates && cargo build`. The Docker image builds it and `start.sh` runs `country_loader` on first boot when the `countries` table is empty. Seed SQL for manual testing lives in `scripts/data/seed_test_data*.sql`.
+
+## Docker
+
+- The server container healthcheck must target `/api/healthcheck` (there is no `/health` route); `curl` is installed in the runtime image for this.
+- `JWT_EXPIRATION` is required by `utils/token.rs` and is passed through docker-compose (default 3600). The old docs mentioned a nonexistent `JWT_EXP_SECS`.
+- The redis healthcheck uses an authenticated `PING` — plain `redis-cli incr ping` always exits 0 even on NOAUTH and mutates a key.
+
 ## Authorship map
 
 Endpoint handlers carry `// [authorship]` comments (skip: images/S3 feature). Keep them accurate when editing:

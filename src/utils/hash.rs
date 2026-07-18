@@ -1,6 +1,8 @@
 pub use bcrypt::verify;
 use bcrypt::{BcryptResult, DEFAULT_COST, hash};
 
+/// Hashes a plaintext password with bcrypt at the default cost.
+/// Verification goes through the re-exported `verify`.
 pub fn hash_password(naive_password: &str) -> BcryptResult<String> {
     hash(naive_password, DEFAULT_COST)
 }

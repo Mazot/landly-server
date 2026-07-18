@@ -51,6 +51,8 @@ impl OrganisationUsecase {
         ))
     }
 
+    /// Creates a community submission: validated, owned by the caller and
+    /// entered into moderation as `pending` (invisible to list/search).
     pub fn create_organisation(
         &self,
         params: CreateOrganisationUsecaseInput,
@@ -161,6 +163,8 @@ impl OrganisationUsecase {
         Ok(response)
     }
 
+    /// Map geo-search. Sort defaults to `nearest` when an origin point is
+    /// given, otherwise `recent`; `sort=nearest` without an origin is a 422.
     pub fn search_organisations(
         &self,
         params: SearchOrganisationsUsecaseInput,
@@ -239,6 +243,7 @@ impl OrganisationUsecase {
         Ok(response)
     }
 
+    /// Public visit counter: increments and returns the new total.
     pub fn visit_organisation(&self, id: Uuid) -> Result<HttpResponse, AppError> {
         let visits = self.organisation_repo.increment_visits(id)?;
 
@@ -319,4 +324,158 @@ pub struct SearchOrganisationsUsecaseInput {
     pub sort: Option<String>,
     pub limit: i64,
     pub offset: i64,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::app::features::organisation::presenters::OrganisationPresenterImpl;
+    use crate::app::features::organisation::repositories::{
+        FetchOrganisationsRepositoryInput, SearchOrganisationsRepositoryInput,
+    };
+    use crate::app::features::user::entities::UserRole;
+
+    /// Minimal repository stub: serves one organisation and one caller role,
+    /// which is all `ensure_can_manage` touches.
+    struct StubRepo {
+        organisation: Organisation,
+        caller_role: UserRole,
+    }
+
+    impl OrganisationRepository for StubRepo {
+        fn fetch_organisation(&self, _id: Uuid) -> Result<Organisation, AppError> {
+            Ok(self.organisation.clone())
+        }
+
+        fn fetch_user_role(&self, _user_id: Uuid) -> Result<UserRole, AppError> {
+            Ok(self.caller_role)
+        }
+
+        fn fetch_organisations(
+            &self,
+            _params: FetchOrganisationsRepositoryInput,
+        ) -> Result<Vec<Organisation>, AppError> {
+            unimplemented!()
+        }
+
+        fn search_organisations(
+            &self,
+            _params: SearchOrganisationsRepositoryInput,
+        ) -> Result<Vec<(Organisation, Option<f64>)>, AppError> {
+            unimplemented!()
+        }
+
+        fn create_organisation(
+            &self,
+            _params: CreateOrganisationRepositoryInput,
+        ) -> Result<Organisation, AppError> {
+            unimplemented!()
+        }
+
+        fn delete_organisation(&self, _id: Uuid) -> Result<(), AppError> {
+            unimplemented!()
+        }
+
+        fn update_organisation(
+            &self,
+            _id: Uuid,
+            _params: UpdateOrganisationRepositoryInput,
+        ) -> Result<Organisation, AppError> {
+            unimplemented!()
+        }
+
+        fn increment_visits(&self, _id: Uuid) -> Result<i64, AppError> {
+            unimplemented!()
+        }
+    }
+
+    fn test_organisation(created_by: Option<Uuid>) -> Organisation {
+        Organisation {
+            id: Uuid::new_v4(),
+            name: "Org".to_string(),
+            tel: None,
+            email: None,
+            address: None,
+            description: None,
+            location_country_id: None,
+            organisation_type_id: None,
+            created_at: chrono::Utc::now().naive_utc(),
+            updated_at: chrono::Utc::now().naive_utc(),
+            latitude: None,
+            longitude: None,
+            founder_country_id: None,
+            created_by,
+            verified: false,
+            status: "live".to_string(),
+            moderation_note: None,
+            added_by: None,
+            city: None,
+            website: None,
+            telegram: None,
+            whatsapp: None,
+            services: vec![],
+            languages: vec![],
+            opening_hours: None,
+            timezone: None,
+            cost: None,
+            google_place_id: None,
+            google_rating: None,
+            visits_count: 0,
+            rating_avg: None,
+            reviews_count: 0,
+        }
+    }
+
+    fn usecase_with(organisation: Organisation, caller_role: UserRole) -> OrganisationUsecase {
+        OrganisationUsecase::new(
+            Arc::new(StubRepo {
+                organisation,
+                caller_role,
+            }),
+            Arc::new(OrganisationPresenterImpl::new()),
+        )
+    }
+
+    #[test]
+    fn test_ensure_can_manage_allows_creator() {
+        let owner = Uuid::new_v4();
+        let org = test_organisation(Some(owner));
+        let usecase = usecase_with(org.clone(), UserRole::User);
+
+        assert!(usecase.ensure_can_manage(&org, owner).is_ok());
+    }
+
+    #[test]
+    fn test_ensure_can_manage_rejects_stranger() {
+        let org = test_organisation(Some(Uuid::new_v4()));
+        let usecase = usecase_with(org.clone(), UserRole::User);
+
+        match usecase.ensure_can_manage(&org, Uuid::new_v4()) {
+            Err(AppError::Forbidden(_)) => (),
+            other => panic!("expected Forbidden, got {:?}", other.err()),
+        }
+    }
+
+    #[test]
+    fn test_ensure_can_manage_allows_moderator_and_admin() {
+        let org = test_organisation(Some(Uuid::new_v4()));
+
+        for role in [UserRole::Moderator, UserRole::Admin] {
+            let usecase = usecase_with(org.clone(), role);
+            assert!(
+                usecase.ensure_can_manage(&org, Uuid::new_v4()).is_ok(),
+                "{:?} must be able to manage any organisation",
+                role
+            );
+        }
+    }
+
+    #[test]
+    fn test_ensure_can_manage_rejects_stranger_on_orphan_org() {
+        // created_by is NULL for pre-v2 rows: only moderators may touch them.
+        let org = test_organisation(None);
+        let usecase = usecase_with(org.clone(), UserRole::User);
+
+        assert!(usecase.ensure_can_manage(&org, Uuid::new_v4()).is_err());
+    }
 }

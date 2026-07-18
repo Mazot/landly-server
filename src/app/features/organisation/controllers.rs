@@ -336,3 +336,55 @@ pub async fn visit_organisation(
         .organisation_usecase
         .visit_organisation(id.into_inner())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_coordinate_valid() {
+        let result = parse_coordinate(Some(52.52), "latitude").unwrap();
+        assert!(result.is_some());
+    }
+
+    #[test]
+    fn test_parse_coordinate_none() {
+        assert!(parse_coordinate(None, "latitude").unwrap().is_none());
+    }
+
+    #[test]
+    fn test_parse_coordinate_rejects_non_finite() {
+        // Previously these panicked via .expect(); now they must be a 422.
+        for bad in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+            match parse_coordinate(Some(bad), "latitude") {
+                Err(AppError::UnprocessableEntity(_)) => (),
+                other => panic!("expected UnprocessableEntity, got {:?}", other.err()),
+            }
+        }
+    }
+
+    #[test]
+    fn test_parse_csv_basic() {
+        let input = Some("embassy,community".to_string());
+        assert_eq!(
+            parse_csv(&input),
+            Some(vec!["embassy".to_string(), "community".to_string()])
+        );
+    }
+
+    #[test]
+    fn test_parse_csv_trims_and_drops_empty_chunks() {
+        let input = Some(" embassy , ,community, ".to_string());
+        assert_eq!(
+            parse_csv(&input),
+            Some(vec!["embassy".to_string(), "community".to_string()])
+        );
+    }
+
+    #[test]
+    fn test_parse_csv_empty_inputs() {
+        assert_eq!(parse_csv(&None), None);
+        assert_eq!(parse_csv(&Some("".to_string())), None);
+        assert_eq!(parse_csv(&Some(", ,".to_string())), None);
+    }
+}

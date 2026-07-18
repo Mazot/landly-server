@@ -15,6 +15,38 @@
 BEGIN;
 
 -- =============================================
+-- Countries referenced below by fixed IDs. Inserted idempotently so this
+-- file runs on a freshly migrated database (country_loader assigns random
+-- UUIDs, so these fixed test IDs must be created here).
+-- =============================================
+INSERT INTO countries (id, name) VALUES
+  ('8c015571-4f25-4bc6-b939-c37fbd3ed764', 'Germany'),
+  ('f790947b-1621-4e5d-93fb-d7f2a622dc56', 'Italy'),
+  ('5f87d98b-c0de-4be1-a109-13542a5e3c84', 'Japan'),
+  ('7b399d0a-caf9-44b0-8ac5-d054fbacbb4e', 'Poland'),
+  ('567f27e2-8885-46dd-acb2-dd53d11c890e', 'Spain'),
+  ('9ce4f31b-7dd9-4b52-88b7-e3595096444a', 'Turkey'),
+  ('2ba2c562-0fe4-483f-b1b6-f17bd217de0c', 'Ukraine'),
+  ('fd172532-f9d4-43f7-9bb8-55a8a25b4fb9', 'United Kingdom'),
+  ('f6ec0017-b817-45d1-aa2d-910053a14fe5', 'United States')
+ON CONFLICT (id) DO NOTHING;
+
+-- =============================================
+-- Organisation types referenced below by fixed IDs.
+-- Nothing else creates these rows (migrations seed the canonical slugged
+-- types with random UUIDs), so insert them idempotently to keep this file
+-- runnable on a freshly migrated database.
+-- =============================================
+INSERT INTO organisation_types (id, type, color, title) VALUES
+  ('a1000000-0000-0000-0000-000000000001', 'embassy', '#4A6D8C', 'Embassy'),
+  ('a1000000-0000-0000-0000-000000000002', 'consulate', '#4A6D8C', 'Consulate'),
+  ('a1000000-0000-0000-0000-000000000003', 'business', '#B8814A', 'Business'),
+  ('a1000000-0000-0000-0000-000000000004', 'ngo', '#4F7F5C', 'NGO'),
+  ('a1000000-0000-0000-0000-000000000005', 'cultural_center', '#8B5A8C', 'Cultural Center')
+ON CONFLICT (id) DO NOTHING;
+
+
+-- =============================================
 -- Organisations
 -- =============================================
 INSERT INTO organisations (id, name, tel, email, address, description, location_country_id, organisation_type_id, latitude, longitude, founder_country_id) VALUES

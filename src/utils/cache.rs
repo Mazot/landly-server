@@ -568,4 +568,43 @@ mod tests {
         let config = CacheConfig::default();
         assert_eq!(config.default_ttl, Some(Duration::from_secs(3600)));
     }
+
+    #[test]
+    fn test_cache_keys_corridors_by_user() {
+        let user_id = Uuid::new_v4();
+        assert_eq!(
+            CacheKeys::corridors_by_user(&user_id),
+            format!("cor:user:{}", user_id)
+        );
+    }
+
+    #[test]
+    fn test_cache_keys_corridor_stats() {
+        let corridor_id = Uuid::new_v4();
+        assert_eq!(
+            CacheKeys::corridor_stats(&corridor_id),
+            format!("cor:stats:{}", corridor_id)
+        );
+    }
+
+    /// The corridor pattern must cover both per-user and stats keys so a
+    /// single invalidate_pattern call clears everything corridor-related.
+    #[test]
+    fn test_corridor_pattern_covers_corridor_keys() {
+        assert_eq!(CacheKeys::corridor_pattern(), "cor:*");
+        assert!(CacheKeys::corridors_by_user(&Uuid::new_v4()).starts_with("cor:"));
+        assert!(CacheKeys::corridor_stats(&Uuid::new_v4()).starts_with("cor:"));
+    }
+
+    /// The common pattern must cover the request-reply cache prefixes used in
+    /// common/config.rs.
+    #[test]
+    fn test_common_patterns() {
+        assert_eq!(CacheKeys::common_pattern(), "common:*");
+        assert_eq!(
+            CacheKeys::common_org_types_pattern(),
+            "common:organisation_types:*"
+        );
+        assert_eq!(CacheKeys::common_countries_pattern(), "common:countries:*");
+    }
 }

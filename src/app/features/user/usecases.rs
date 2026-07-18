@@ -27,6 +27,7 @@ impl UserUsecase {
         }
     }
 
+    /// Email + password login; returns the user with a fresh JWT.
     pub fn signin(&self, email: String, password: String) -> Result<HttpResponse, AppError> {
         let (user, token) = self.user_repository.signin(email, password)?;
         let response = self.user_presenter.to_single_json(user, token);
@@ -34,6 +35,8 @@ impl UserUsecase {
         Ok(response)
     }
 
+    /// Signup v2: validates enum-like fields, then creates the user and an
+    /// optional default corridor in one transaction.
     pub fn signup(&self, params: SignUpUsecaseInput) -> Result<HttpResponse, AppError> {
         // Validate enum-like fields before touching the database.
         if let Some(locale) = params.locale.as_deref() {
@@ -60,6 +63,7 @@ impl UserUsecase {
         Ok(response)
     }
 
+    /// Account-screen payload: profile fields + computed stats.
     pub fn fetch_profile(&self, user_id: Uuid) -> Result<HttpResponse, AppError> {
         let (user, stats) = self.user_repository.fetch_profile(user_id)?;
         let response = self.user_presenter.to_profile_json(user, stats);
@@ -67,6 +71,8 @@ impl UserUsecase {
         Ok(response)
     }
 
+    /// Partial profile update; locale/here_as are validated against their
+    /// enums before hitting the DB CHECK constraints.
     pub fn update_profile(
         &self,
         user_id: Uuid,
@@ -98,6 +104,7 @@ impl UserUsecase {
         Ok(response)
     }
 
+    /// Replaces the free-form notification settings JSON wholesale.
     pub fn update_notification_settings(
         &self,
         user_id: Uuid,

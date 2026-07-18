@@ -315,6 +315,46 @@ mod tests {
     }
 
     #[test]
+    fn test_user_profile_content_maps_user_and_stats() {
+        let user = create_test_user();
+        let user_id = user.id;
+        let stats = ProfileStats {
+            places_added: 3,
+            people_recommended: 2,
+            people_helped: 247,
+            rating: Some(4.9),
+        };
+
+        let content = UserProfileContent::from((user, stats));
+
+        assert_eq!(content.id, user_id);
+        assert_eq!(content.locale, "en");
+        assert_eq!(content.here_as, Some("newcomer".to_string()));
+        assert_eq!(content.stats.places_added, 3);
+        assert_eq!(content.stats.people_helped, 247);
+        assert_eq!(content.stats.rating, Some(4.9));
+    }
+
+    /// The profile payload must never leak the password hash.
+    #[test]
+    fn test_user_profile_content_hides_password_hash() {
+        let user = create_test_user();
+        let content = UserProfileContent::from((user, ProfileStats::default()));
+        let json = serde_json::to_string(&content).unwrap();
+
+        assert!(!json.contains("password"));
+        assert!(!json.contains("$2b$12$test_hash"));
+    }
+
+    #[test]
+    fn test_user_presenter_to_profile_json() {
+        let presenter = UserPresenterImpl::new();
+        let response = presenter.to_profile_json(create_test_user(), ProfileStats::default());
+
+        assert_eq!(response.status(), actix_web::http::StatusCode::OK);
+    }
+
+    #[test]
     fn test_user_languages_content_serialization() {
         let user_id = Uuid::new_v4();
         let content = UserLanguagesContent {

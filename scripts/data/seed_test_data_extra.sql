@@ -52,12 +52,59 @@
 BEGIN;
 
 -- =============================================
+-- Countries referenced below by fixed IDs. Inserted idempotently so this
+-- file runs on a freshly migrated database (country_loader assigns random
+-- UUIDs, so these fixed test IDs must be created here).
+-- =============================================
+INSERT INTO countries (id, name) VALUES
+  ('8c015571-4f25-4bc6-b939-c37fbd3ed764', 'Germany'),
+  ('f790947b-1621-4e5d-93fb-d7f2a622dc56', 'Italy'),
+  ('5f87d98b-c0de-4be1-a109-13542a5e3c84', 'Japan'),
+  ('7b399d0a-caf9-44b0-8ac5-d054fbacbb4e', 'Poland'),
+  ('567f27e2-8885-46dd-acb2-dd53d11c890e', 'Spain'),
+  ('9ce4f31b-7dd9-4b52-88b7-e3595096444a', 'Turkey'),
+  ('2ba2c562-0fe4-483f-b1b6-f17bd217de0c', 'Ukraine'),
+  ('fd172532-f9d4-43f7-9bb8-55a8a25b4fb9', 'United Kingdom'),
+  ('f6ec0017-b817-45d1-aa2d-910053a14fe5', 'United States'),
+  ('39441314-5282-4502-bad5-0ca17923287a', 'Argentina'),
+  ('ec9f55d7-f2fe-4fdb-a937-1509e3c24e0b', 'Australia'),
+  ('17fca769-c38e-4a5b-92af-a1ec48576957', 'Brazil'),
+  ('955d8e2a-d3d5-48b3-b2c0-0b02d5fe49d0', 'Canada'),
+  ('808ac4a6-6994-4527-8935-0b2557d96837', 'China'),
+  ('7ae8acad-671c-4b31-af7a-2526826af590', 'Egypt'),
+  ('80246ecb-b469-48d0-b33d-64451d81564e', 'Greece'),
+  ('726c7255-42d8-40a5-891f-ea1263d73bc9', 'India'),
+  ('6de9c02b-c30f-4c74-8217-d3ccdf876542', 'Israel'),
+  ('4250abff-f03a-468b-b1d7-3bb69cc9e2dd', 'Kenya'),
+  ('ea693ddc-74a0-4680-bf62-0823dbf42ce9', 'Mexico'),
+  ('a4b1ae14-829d-44b2-9202-aaa11fb956fc', 'Morocco'),
+  ('fbf576bf-a760-47fb-bae7-751470acc607', 'Nigeria'),
+  ('da7b943a-13d3-4365-bb63-0db1c0d0764f', 'Portugal'),
+  ('46486ec6-1126-41a7-9e29-e7bb79cd44d6', 'Romania'),
+  ('9d745ed6-b924-4ad3-a20a-eb2949c9b2a4', 'Saudi Arabia'),
+  ('bdd7fb80-d75e-406e-bd29-7a36a66f7383', 'Singapore'),
+  ('e0d4a87e-a501-4011-a113-33708f87c31e', 'South Africa'),
+  ('07be8c59-3289-4ca4-bbf5-f07c6de276ef', 'South Korea'),
+  ('6d399ecf-127f-4bc3-9c05-7799ac9d5d4f', 'Sweden'),
+  ('37608878-0cb1-4428-84d5-49a0dbabce71', 'Switzerland'),
+  ('6568352c-2f34-450f-9b3f-7a91229a11c4', 'Thailand'),
+  ('3292614f-0e99-42f8-b188-0ece2ea32f5a', 'UAE'),
+  ('9a5979ef-1653-4470-b2c8-dadf0fcb7381', 'Vietnam')
+ON CONFLICT (id) DO NOTHING;
+
+-- =============================================
 -- New Organisation Types
 -- =============================================
 INSERT INTO organisation_types (id, type, color, title) VALUES
+  ('a1000000-0000-0000-0000-000000000001', 'embassy', '#4A6D8C', 'Embassy'),
+  ('a1000000-0000-0000-0000-000000000002', 'consulate', '#4A6D8C', 'Consulate'),
+  ('a1000000-0000-0000-0000-000000000003', 'business', '#B8814A', 'Business'),
+  ('a1000000-0000-0000-0000-000000000004', 'ngo', '#4F7F5C', 'NGO'),
+  ('a1000000-0000-0000-0000-000000000005', 'cultural_center', '#8B5A8C', 'Cultural Center'),
   ('a1000000-0000-0000-0000-000000000006', 'trade_office', '#0891B2', 'Trade Office'),
   ('a1000000-0000-0000-0000-000000000007', 'research_institute', '#6366F1', 'Research Institute'),
-  ('a1000000-0000-0000-0000-000000000008', 'school', '#F59E0B', 'International School');
+  ('a1000000-0000-0000-0000-000000000008', 'school', '#F59E0B', 'International School')
+ON CONFLICT (id) DO NOTHING;
 
 -- =============================================
 -- Organisations (40 new entries)

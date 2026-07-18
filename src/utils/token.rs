@@ -23,6 +23,8 @@ fn get_jwt_expiration_secs() -> usize {
         .unwrap_or(3600)
 }
 
+/// Validates a JWT signature + expiry and returns its claims.
+/// The auth middleware uses `claims.sub` as the authenticated user id.
 pub fn decode_token(token: &str) -> Result<JwtClaims, AppError> {
     let secret = get_jwt_secret();
     let validation = jsonwebtoken::Validation::default();
@@ -36,6 +38,8 @@ pub fn decode_token(token: &str) -> Result<JwtClaims, AppError> {
     Ok(token_data.claims)
 }
 
+/// Issues a signed JWT for the user, expiring after `JWT_EXPIRATION` seconds
+/// (default 3600).
 pub fn generate_token(user_id: Uuid) -> Result<String, AppError> {
     let now = Utc::now();
     let exp_secs = get_jwt_expiration_secs();

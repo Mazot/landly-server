@@ -24,6 +24,8 @@ impl CorridorUsecase {
         }
     }
 
+    /// Creates a corridor for the caller; when `is_default` is set the
+    /// previous default is atomically cleared.
     pub fn create_corridor(
         &self,
         params: CreateCorridorUsecaseInput,
@@ -40,12 +42,15 @@ impl CorridorUsecase {
         Ok(self.corridor_presenter.to_single_json(corridor))
     }
 
+    /// Lists the caller's corridors, default first.
     pub fn list_corridors(&self, user_id: Uuid) -> Result<HttpResponse, AppError> {
         let corridors = self.corridor_repo.list_corridors(user_id)?;
 
         Ok(self.corridor_presenter.to_multi_json(corridors))
     }
 
+    /// Makes the given corridor the caller's default (ownership enforced in
+    /// the repository/entity layer).
     pub fn set_default_corridor(
         &self,
         corridor_id: Uuid,
@@ -58,6 +63,7 @@ impl CorridorUsecase {
         Ok(self.corridor_presenter.to_single_json(corridor))
     }
 
+    /// Deletes the caller's corridor; other users get 403.
     pub fn delete_corridor(
         &self,
         corridor_id: Uuid,
@@ -68,6 +74,8 @@ impl CorridorUsecase {
         Ok(self.corridor_presenter.to_http_res())
     }
 
+    /// Live-place counters for the corridor's destination country (cached
+    /// 5 min under `cor:stats:*`).
     pub fn fetch_corridor_stats(
         &self,
         corridor_id: Uuid,

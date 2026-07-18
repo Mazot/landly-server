@@ -292,3 +292,46 @@ pub struct UpdateOrganisation {
     pub timezone: Option<String>,
     pub cost: Option<String>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_organisation_status_roundtrip() {
+        for status in [
+            OrganisationStatus::Pending,
+            OrganisationStatus::Live,
+            OrganisationStatus::Rejected,
+        ] {
+            assert_eq!(
+                OrganisationStatus::try_from(status.as_str()).unwrap(),
+                status
+            );
+        }
+        assert!(OrganisationStatus::try_from("draft").is_err());
+    }
+
+    #[test]
+    fn test_added_by_roundtrip() {
+        for added_by in [AddedBy::Official, AddedBy::Community, AddedBy::Volunteer] {
+            assert_eq!(AddedBy::try_from(added_by.as_str()).unwrap(), added_by);
+        }
+        assert!(AddedBy::try_from("bot").is_err());
+    }
+
+    #[test]
+    fn test_cost_roundtrip() {
+        assert_eq!(Cost::try_from("free").unwrap(), Cost::Free);
+        assert_eq!(Cost::try_from("paid").unwrap(), Cost::Paid);
+        assert!(Cost::try_from("donation").is_err());
+    }
+
+    #[test]
+    fn test_enum_errors_are_unprocessable_entity() {
+        match OrganisationStatus::try_from("nope") {
+            Err(AppError::UnprocessableEntity(_)) => (),
+            other => panic!("expected UnprocessableEntity, got {:?}", other.err()),
+        }
+    }
+}

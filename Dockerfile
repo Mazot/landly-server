@@ -14,8 +14,10 @@ RUN cargo build --release -j 1
 
 FROM debian:latest
 
+# curl is required by the docker-compose healthcheck (/api/healthcheck)
 RUN apt-get update && apt-get install -y \
     ca-certificates \
+    curl \
     libpq5 \
     postgresql-client \
     && rm -rf /var/lib/apt/lists/*

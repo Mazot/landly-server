@@ -328,13 +328,26 @@ The application includes health checks for:
 - Redis connectivity  
 - Application readiness
 
+## 📜 Scripts
+
+The `scripts/` folder holds tooling used at container start and for seeding:
+
+- **`scripts/start.sh`** — container entrypoint: waits for Postgres (with a configurable `DB_WAIT_TIMEOUT`), runs `diesel migration run`, loads countries on first boot, then execs the server.
+- **`scripts/crates/`** — a separate Cargo workspace that links the main crate as a library:
+  - `country_parser` — merges `countries.json` + `countries.geojson` into `merged_countries.json`
+  - `country_loader` — loads `merged_countries.json` into the `countries` table (usage: `country_loader <path>`; safe to re-run, exits non-zero only on total failure)
+- **`scripts/data/`** — `merged_countries.json` (236 countries) and `seed_test_data*.sql` with sample organisations/connections for manual testing (`psql "$DATABASE_URL" -f scripts/data/seed_test_data.sql`).
+
+> When you change `Country`/`CreateCountry` in `src/data/models.rs`, rebuild `scripts/crates` too — it compiles against the main crate and breaks silently otherwise (it is not covered by `cargo test` at the repo root).
+
 ## 🐳 Docker Configuration
 
 ### Services
 
-- **landly-server**: Main application container
+- **landly-server**: Main application container (healthcheck hits `/api/healthcheck`)
 - **db**: PostgreSQL 17 database
-- **redis**: Redis 7 cache server
+- **redis**: Redis 7 cache server (healthcheck is an authenticated `PING`)
+- **minio** + **minio-init**: local S3-compatible object storage; the init sidecar creates the public `landly-images` bucket (requires `minio.license` in the repo root)
 
 ### Production Deployment
 
