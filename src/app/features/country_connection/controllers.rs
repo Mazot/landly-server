@@ -26,6 +26,7 @@ fn caller_user_id(req: &HttpRequest) -> Result<Uuid, AppError> {
         .ok_or_else(|| AppError::Unauthorized(json!({ "error": "Missing authenticated user" })))
 }
 
+// [authorship] Human-written (original codebase).
 #[utoipa::path(
     get,
     path = "/country-connection/list",
@@ -56,6 +57,7 @@ pub async fn list(
         })
 }
 
+// [authorship] Human-written (original codebase).
 #[utoipa::path(
     get,
     path = "/country-connection/fetch/{id}",
@@ -81,6 +83,8 @@ pub async fn fetch(
         .fetch_country_connection(id.into_inner())
 }
 
+// [authorship] Human-written (original codebase); extended by AI (Claude):
+// admin-only RBAC gate.
 #[utoipa::path(
     post,
     path = "/country-connection/create",
@@ -114,6 +118,8 @@ pub async fn create(
         )
 }
 
+// [authorship] Human-written (original codebase); extended by AI (Claude):
+// admin-only RBAC gate.
 #[utoipa::path(
     put,
     path = "/country-connection/update/{id}",
@@ -152,6 +158,8 @@ pub async fn update(
         )
 }
 
+// [authorship] Human-written (original codebase); extended by AI (Claude):
+// admin-only RBAC gate.
 #[utoipa::path(
     delete,
     path = "/country-connection/delete/{id}",

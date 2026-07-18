@@ -1,5 +1,6 @@
 use actix_web::{HttpResponse, Responder};
 
+// [authorship] Human-written (original codebase).
 #[utoipa::path(
     get,
     path = "/healthcheck",

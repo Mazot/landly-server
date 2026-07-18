@@ -19,6 +19,7 @@ fn caller_user_id(req: &HttpRequest) -> Result<Uuid, AppError> {
         .ok_or_else(|| AppError::Unauthorized(json!({ "error": "Missing authenticated user" })))
 }
 
+// [authorship] Human-written (original codebase).
 #[utoipa::path(
     post,
     path = "/user/signin",
@@ -41,6 +42,8 @@ pub async fn signin(
         .signin(form.email.to_owned(), form.password.to_owned())
 }
 
+// [authorship] Human-written (original codebase); extended by AI (Claude):
+// signup v2 — optional profile fields + default corridor in one transaction.
 #[utoipa::path(
     post,
     path = "/user/signup",
@@ -71,6 +74,7 @@ pub async fn signup(
     })
 }
 
+// [authorship] AI-generated (Claude).
 #[utoipa::path(
     get,
     path = "/user/me",
@@ -88,6 +92,7 @@ pub async fn fetch_me(req: HttpRequest, state: Data<AppState>) -> Result<HttpRes
     state.di_container.user_usecase.fetch_profile(user_id)
 }
 
+// [authorship] AI-generated (Claude).
 #[utoipa::path(
     put,
     path = "/user/me",
@@ -122,6 +127,7 @@ pub async fn update_me(
     )
 }
 
+// [authorship] AI-generated (Claude).
 #[utoipa::path(
     put,
     path = "/user/me/notifications",
@@ -147,6 +153,8 @@ pub async fn update_notification_settings(
         .update_notification_settings(user_id, form.notification_settings.to_owned())
 }
 
+// [authorship] Human-written (original codebase); extended by AI (Claude):
+// user_id now comes from the JWT instead of the request body.
 #[utoipa::path(
     post,
     path = "/user/languages",
@@ -173,6 +181,8 @@ pub async fn add_languages(
         .add_languages(user_id, form.languages_ids.clone())
 }
 
+// [authorship] Human-written (original codebase); extended by AI (Claude):
+// user_id now comes from the JWT instead of the request body.
 #[utoipa::path(
     delete,
     path = "/user/languages",
@@ -199,6 +209,7 @@ pub async fn delete_language(
         .delete_language(user_id, form.language_id)
 }
 
+// [authorship] Human-written (original codebase).
 #[utoipa::path(
     get,
     path = "/user/{user_id}/languages",
@@ -223,6 +234,7 @@ pub async fn fetch_languages(
         .fetch_languages(user_id.into_inner())
 }
 
+// [authorship] Human-written (original codebase).
 #[utoipa::path(
     get,
     path = "/user/oauth/google/login",
@@ -240,6 +252,7 @@ pub async fn oauth_google_login(state: Data<AppState>) -> Result<HttpResponse, A
         .finish())
 }
 
+// [authorship] Human-written (original codebase).
 #[utoipa::path(
     get,
     path = "/user/oauth/google/callback",

@@ -22,6 +22,7 @@ fn caller_user_id(req: &HttpRequest) -> Result<Uuid, AppError> {
         .ok_or_else(|| AppError::Unauthorized(json!({ "error": "Missing authenticated user" })))
 }
 
+// [authorship] Human-written (original codebase).
 #[utoipa::path(
     get,
     path = "/common/countries",
@@ -50,6 +51,7 @@ pub async fn fetch_all_countries(
         })
 }
 
+// [authorship] AI-generated (Claude).
 #[utoipa::path(
     get,
     path = "/common/countries/{id}",
@@ -74,6 +76,7 @@ pub async fn fetch_country_detail(
         .fetch_country_detail(id.into_inner())
 }
 
+// [authorship] Human-written (original codebase).
 #[utoipa::path(
     get,
     path = "/common/org_types",
@@ -87,6 +90,8 @@ pub async fn fetch_all_organisation_types(state: Data<AppState>) -> Result<HttpR
     state.di_container.common_usecase.fetch_organisation_types()
 }
 
+// [authorship] Human-written (original codebase); extended by AI (Claude):
+// admin-only RBAC gate + optional stable slug.
 #[utoipa::path(
     post,
     path = "/common/org_types",

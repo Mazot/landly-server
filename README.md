@@ -346,6 +346,26 @@ For production deployment, consider:
 4. **Backup**: Implement database backup strategies
 5. **SSL/TLS**: Configure HTTPS termination
 
+## ✍️ Authorship
+
+Endpoints in the codebase carry `// [authorship]` comments above their handlers. Summary (images/S3 feature intentionally unmarked):
+
+**Human-written (original codebase):**
+
+- Healthcheck; countries list; org types list; user signin, OAuth Google (login/callback), fetch user languages
+- Organisation CRUD (`list/fetch/create/update/delete`) and country-connection CRUD — original endpoints
+- Core infrastructure: feature layout, `DiContainer`, cache/storage abstractions, error handling, images/S3 feature
+
+**AI-generated (Claude, as part of the design-handoff v2 rework):**
+
+- Corridor feature — entire module (`create/list/set-default/delete/stats`)
+- Profile: `GET/PUT /api/user/me`, `PUT /api/user/me/notifications`
+- Geo search `GET /api/organisation/search`, visit counter `POST /api/organisation/visit/{id}`
+- Country detail `GET /api/common/countries/{id}`
+- Migrations `extend_users`, `extend_organisations`, `extend_countries`, `create_corridors`
+
+**Human-written, extended by AI:** signup (v2: profile + default corridor in one transaction), user languages (`user_id` from JWT), organisation CRUD (ownership/RBAC, v2 fields, moderation statuses, `pending` on create), org types create and country-connection mutations (admin-only), auth middleware (fixed `{id}` route matching).
+
 ## 🤝 Contributing
 
 1. Clone the repository

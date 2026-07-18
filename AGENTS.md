@@ -128,6 +128,14 @@ Cache keys follow the `CacheKeys` namespace helper in the same file (`org:*`, `c
 
 All public endpoints and schemas must be registered in the `#[openapi(...)]` macro in `src/main.rs` (both `paths` and `components/schemas`). The Swagger UI is available at `/swagger-ui`.
 
+## Authorship map
+
+Endpoint handlers carry `// [authorship]` comments (skip: images/S3 feature). Keep them accurate when editing:
+
+- **Human-written (original codebase):** healthcheck; common countries/org_types GET; organisation CRUD; country-connection CRUD; user signin/signup/languages/OAuth; images + S3/storage/cache infrastructure; feature architecture and DI.
+- **AI-generated (Claude):** the whole `corridor` feature; `GET/PUT /api/user/me` + `/me/notifications`; `GET /api/organisation/search` + `POST /api/organisation/visit/{id}`; `GET /api/common/countries/{id}`; `path_matches` route matcher in auth middleware; RBAC helpers (`UserRole::is_admin/is_moderator`, `User::fetch_role`, `ensure_can_manage`/`ensure_admin`); migrations `extend_users` / `extend_organisations` / `extend_countries` / `create_corridors`; `compute_open_now` + `haversine_km`.
+- **Human-written, extended by AI:** signup (v2 transaction with default corridor), user languages (user_id from JWT), organisation create/update/delete (ownership, v2 fields, pending status), org types create + country-connection mutations (admin gate), `AUTH_REQUIRED_ROUTES` contents.
+
 ## Environment Variables
 
 | Variable | Required | Description |

@@ -16,6 +16,7 @@ fn caller_user_id(req: &HttpRequest) -> Result<Uuid, AppError> {
         .ok_or_else(|| AppError::Unauthorized(json!({ "error": "Missing authenticated user" })))
 }
 
+// [authorship] AI-generated (Claude) — the whole corridor feature is new.
 #[utoipa::path(
     post,
     path = "/corridor/create",
@@ -53,6 +54,7 @@ pub async fn create_corridor(
         })
 }
 
+// [authorship] AI-generated (Claude) — the whole corridor feature is new.
 #[utoipa::path(
     get,
     path = "/corridor/list",
@@ -73,6 +75,7 @@ pub async fn list_corridors(
     state.di_container.corridor_usecase.list_corridors(user_id)
 }
 
+// [authorship] AI-generated (Claude) — the whole corridor feature is new.
 #[utoipa::path(
     put,
     path = "/corridor/set-default/{id}",
@@ -102,6 +105,7 @@ pub async fn set_default_corridor(
         .set_default_corridor(id.into_inner(), user_id)
 }
 
+// [authorship] AI-generated (Claude) — the whole corridor feature is new.
 #[utoipa::path(
     delete,
     path = "/corridor/delete/{id}",
@@ -131,6 +135,7 @@ pub async fn delete_corridor(
         .delete_corridor(id.into_inner(), user_id)
 }
 
+// [authorship] AI-generated (Claude) — the whole corridor feature is new.
 #[utoipa::path(
     get,
     path = "/corridor/stats/{id}",

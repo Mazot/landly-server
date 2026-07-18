@@ -53,6 +53,8 @@ fn parse_csv(value: &Option<String>) -> Option<Vec<String>> {
     if items.is_empty() { None } else { Some(items) }
 }
 
+// [authorship] Human-written (original codebase); extended by AI (Claude):
+// results are now filtered to status='live'.
 #[utoipa::path(
     get,
     path = "/organisation/list",
@@ -87,6 +89,8 @@ pub async fn list_organisations(
         })
 }
 
+// [authorship] Human-written (original codebase); extended by AI (Claude):
+// response carries the v2 fields incl. computed openNow.
 #[utoipa::path(
     get,
     path = "/organisation/fetch/{id}",
@@ -112,6 +116,8 @@ pub async fn fetch_organisation(
         .fetch_organisation(id.into_inner())
 }
 
+// [authorship] Human-written (original codebase); extended by AI (Claude):
+// ownership/RBAC check, v2 fields, panic-free coordinate parsing.
 #[utoipa::path(
     put,
     path = "/organisation/update/{id}",
@@ -162,6 +168,8 @@ pub async fn update_organisation(
     )
 }
 
+// [authorship] Human-written (original codebase); extended by AI (Claude):
+// ownership/RBAC check.
 #[utoipa::path(
     delete,
     path = "/organisation/delete/{id}",
@@ -189,6 +197,8 @@ pub async fn delete_organisation(
         .delete_organisation(id.into_inner(), caller)
 }
 
+// [authorship] Human-written (original codebase); extended by AI (Claude):
+// created_by from JWT, v2 fields, submissions start as status='pending'.
 #[utoipa::path(
     post,
     path = "/organisation/create",
@@ -237,6 +247,7 @@ pub async fn create_organisation(
         })
 }
 
+// [authorship] AI-generated (Claude).
 #[utoipa::path(
     get,
     path = "/organisation/search",
@@ -301,6 +312,7 @@ pub async fn search_organisations(
         })
 }
 
+// [authorship] AI-generated (Claude).
 #[utoipa::path(
     post,
     path = "/organisation/visit/{id}",
