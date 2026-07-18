@@ -1,5 +1,6 @@
 use super::entities::{CreateOrganisation, Organisation, OrganisationStatus, UpdateOrganisation};
 use crate::{
+    app::features::user::entities::{User, UserRole},
     error::AppError,
     utils::{
         cache::{CacheKeys, CacheService, TypedCache},
@@ -55,7 +56,7 @@ pub trait OrganisationRepository: Send + Sync + 'static {
     fn increment_visits(&self, id: Uuid) -> Result<i64, AppError>;
 
     /// Role of a user, for ownership/RBAC checks in the usecase layer.
-    fn fetch_user_role(&self, user_id: Uuid) -> Result<String, AppError>;
+    fn fetch_user_role(&self, user_id: Uuid) -> Result<UserRole, AppError>;
 }
 
 #[derive(Clone)]
@@ -438,17 +439,10 @@ impl OrganisationRepository for OrganisationRepositoryImpl {
         Ok(visits)
     }
 
-    fn fetch_user_role(&self, user_id: Uuid) -> Result<String, AppError> {
-        use crate::data::schema::users;
-        use diesel::prelude::*;
-
+    fn fetch_user_role(&self, user_id: Uuid) -> Result<UserRole, AppError> {
         let connection = &mut self.pool.get()?;
-        let role = users::table
-            .find(user_id)
-            .select(users::role)
-            .first::<String>(connection)?;
 
-        Ok(role)
+        User::fetch_role(connection, user_id)
     }
 }
 

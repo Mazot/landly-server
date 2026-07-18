@@ -11,11 +11,20 @@ use super::{
 use crate::app::drivers::middlewares::state::AppState;
 use crate::error::AppError;
 use actix_web::{
-    HttpRequest, HttpResponse,
+    HttpMessage, HttpRequest, HttpResponse,
     web::{Data, Json, Path, Query},
 };
+use serde_json::json;
 use std::cmp::min;
 use uuid::Uuid;
+
+/// Extracts the authenticated user id inserted by the auth middleware.
+fn caller_user_id(req: &HttpRequest) -> Result<Uuid, AppError> {
+    req.extensions()
+        .get::<Uuid>()
+        .copied()
+        .ok_or_else(|| AppError::Unauthorized(json!({ "error": "Missing authenticated user" })))
+}
 
 #[utoipa::path(
     get,
@@ -86,18 +95,23 @@ pub async fn fetch(
 )]
 pub async fn create(
     state: Data<AppState>,
-    _req: HttpRequest,
+    req: HttpRequest,
     form: Json<CreateCountryConnectionRequest>,
 ) -> Result<HttpResponse, AppError> {
+    let caller = caller_user_id(&req)?;
+
     state
         .di_container
         .country_connection_usecase
-        .create_country_connection(CreateCountryConnectionUsecaseInput {
-            embassy_org_id: form.embassy_org_id,
-            consulate_org_id: form.consulate_org_id,
-            common_info: form.common_info.clone(),
-            location_country_id: form.location_country_id,
-        })
+        .create_country_connection(
+            caller,
+            CreateCountryConnectionUsecaseInput {
+                embassy_org_id: form.embassy_org_id,
+                consulate_org_id: form.consulate_org_id,
+                common_info: form.common_info.clone(),
+                location_country_id: form.location_country_id,
+            },
+        )
 }
 
 #[utoipa::path(
@@ -117,15 +131,18 @@ pub async fn create(
 )]
 pub async fn update(
     state: Data<AppState>,
-    _req: HttpRequest,
+    req: HttpRequest,
     id: Path<Uuid>,
     form: Json<UpdateCountryConnectionRequest>,
 ) -> Result<HttpResponse, AppError> {
+    let caller = caller_user_id(&req)?;
+
     state
         .di_container
         .country_connection_usecase
         .update_country_connection(
             id.into_inner(),
+            caller,
             UpdateCountryConnectionUsecaseInput {
                 embassy_org_id: form.embassy_org_id,
                 consulate_org_id: form.consulate_org_id,
@@ -151,11 +168,13 @@ pub async fn update(
 )]
 pub async fn delete(
     state: Data<AppState>,
-    _req: HttpRequest,
+    req: HttpRequest,
     id: Path<Uuid>,
 ) -> Result<HttpResponse, AppError> {
+    let caller = caller_user_id(&req)?;
+
     state
         .di_container
         .country_connection_usecase
-        .delete_country_connection(id.into_inner())
+        .delete_country_connection(id.into_inner(), caller)
 }

@@ -241,6 +241,20 @@ GET /api/common/countries
 GET /api/common/countries/{id}
 ```
 
+### Roles & Permissions
+
+Every user has a role (`users.role`): `user` (default), `moderator`, or `admin`.
+
+| Action | anonymous | user | moderator | admin |
+|---|---|---|---|---|
+| Browse (list/search/fetch), signup/signin, visit counter | ✓ | ✓ | ✓ | ✓ |
+| Own profile, languages, corridors | — | ✓ | ✓ | ✓ |
+| Add organisation (goes to moderation as `pending`) | — | ✓ | ✓ | ✓ |
+| Edit/delete organisation | — | own only | any | any |
+| Manage system tables (organisation types, country connections) | — | — | — | ✓ |
+
+Violations return `401 Unauthorized` (no/invalid token) or `403 Forbidden` (insufficient role/ownership).
+
 ## 🗄️ Database Schema
 
 ### Core Tables

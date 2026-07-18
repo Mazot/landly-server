@@ -6,7 +6,9 @@ use crate::{
     app::features::common::repositories::CreateOrganisationTypeRepositoryInput, error::AppError,
 };
 use actix_web::HttpResponse;
+use serde_json::json;
 use std::sync::Arc;
+use uuid::Uuid;
 
 #[derive(Clone)]
 pub struct CommonUsecase {
@@ -61,8 +63,17 @@ impl CommonUsecase {
 
     pub fn create_organisation_type(
         &self,
+        caller_user_id: Uuid,
         params: CreateOrganisationTypeUsecaseInput,
     ) -> Result<HttpResponse, AppError> {
+        // Organisation types are a system reference table — admin only.
+        let role = self.common_repo.fetch_user_role(caller_user_id)?;
+        if !role.is_admin() {
+            return Err(AppError::Forbidden(
+                json!({ "error": "Only an admin can manage organisation types" }),
+            ));
+        }
+
         let org_type =
             self.common_repo
                 .create_organisation_type(CreateOrganisationTypeRepositoryInput {

@@ -24,8 +24,16 @@ impl UserRole {
         }
     }
 
+    /// Moderator-level access: content moderation + overriding ownership
+    /// checks. Admins are always at least moderators.
     pub fn is_moderator(&self) -> bool {
         matches!(self, UserRole::Moderator | UserRole::Admin)
+    }
+
+    /// Admin-level access: managing system reference tables
+    /// (organisation types, country connections).
+    pub fn is_admin(&self) -> bool {
+        matches!(self, UserRole::Admin)
     }
 }
 
@@ -212,6 +220,17 @@ impl User {
         let user = users::table.find(id).first::<User>(conn)?;
 
         Ok(user)
+    }
+
+    /// Role lookup for RBAC checks. Unknown values fall back to the least
+    /// privileged role.
+    pub fn fetch_role(conn: &mut PgConnection, user_id: Uuid) -> Result<UserRole, AppError> {
+        let role = users::table
+            .find(user_id)
+            .select(users::role)
+            .first::<String>(conn)?;
+
+        Ok(UserRole::try_from(role.as_str()).unwrap_or(UserRole::User))
     }
 
     pub fn update_profile(
@@ -469,4 +488,49 @@ pub struct UserProvider {
     pub provider_user_id: String,
     pub email: Option<String>,
     pub created_at: Option<NaiveDateTime>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_user_role_try_from() {
+        assert_eq!(UserRole::try_from("user").unwrap(), UserRole::User);
+        assert_eq!(
+            UserRole::try_from("moderator").unwrap(),
+            UserRole::Moderator
+        );
+        assert_eq!(UserRole::try_from("admin").unwrap(), UserRole::Admin);
+        assert!(UserRole::try_from("superuser").is_err());
+    }
+
+    #[test]
+    fn test_user_role_is_moderator() {
+        assert!(!UserRole::User.is_moderator());
+        assert!(UserRole::Moderator.is_moderator());
+        assert!(UserRole::Admin.is_moderator());
+    }
+
+    #[test]
+    fn test_user_role_is_admin() {
+        assert!(!UserRole::User.is_admin());
+        assert!(!UserRole::Moderator.is_admin());
+        assert!(UserRole::Admin.is_admin());
+    }
+
+    #[test]
+    fn test_user_role_as_str_roundtrip() {
+        for role in [UserRole::User, UserRole::Moderator, UserRole::Admin] {
+            assert_eq!(UserRole::try_from(role.as_str()).unwrap(), role);
+        }
+    }
+
+    #[test]
+    fn test_here_as_and_locale_try_from() {
+        assert!(HereAs::try_from("newcomer").is_ok());
+        assert!(HereAs::try_from("tourist").is_err());
+        assert!(Locale::try_from("ru").is_ok());
+        assert!(Locale::try_from("de").is_err());
+    }
 }

@@ -1,3 +1,4 @@
+use crate::app::features::user::entities::{User, UserRole};
 use crate::data::models::{Country, CreateOrganisationType, OrganisationType};
 use crate::error::AppError;
 use crate::utils::cache::{CacheKeys, CacheService, TypedCache};
@@ -26,6 +27,9 @@ pub trait CommonRepository: Send + Sync + 'static {
         &self,
         params: CreateOrganisationTypeRepositoryInput,
     ) -> Result<OrganisationType, AppError>;
+
+    /// Role of a user, for RBAC checks in the usecase layer.
+    fn fetch_user_role(&self, user_id: Uuid) -> Result<UserRole, AppError>;
 }
 
 #[derive(Clone)]
@@ -143,6 +147,12 @@ impl CommonRepository for CommonRepositoryImpl {
             .invalidate_pattern(&CacheKeys::common_org_types_pattern());
 
         Ok(new_org_type)
+    }
+
+    fn fetch_user_role(&self, user_id: Uuid) -> Result<UserRole, AppError> {
+        let connection = &mut self.pool.get()?;
+
+        User::fetch_role(connection, user_id)
     }
 }
 

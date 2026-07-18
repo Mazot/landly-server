@@ -67,6 +67,20 @@ Every new feature touches the same shared files: `src/app/features/mod.rs`, `src
 
 No SQL enums. Enum-like columns are `TEXT` with a `CHECK (col IN (...))` constraint in the migration, plus a Rust enum in the feature's `entities.rs` with `as_str()` and `TryFrom<&str>` (see `UserRole`, `OrganisationStatus`, `AddedBy`, `Cost`, `HereAs`, `Locale`). Usecases validate incoming strings through `TryFrom` before writing.
 
+### RBAC
+
+Roles live in `users.role` (`user` < `moderator` < `admin`), Rust side is `UserRole` with `is_moderator()` / `is_admin()`. The central lookup is `User::fetch_role` (`user/entities.rs`); feature repositories expose it as `fetch_user_role`, and **all role checks happen in usecases** — the auth middleware only authenticates and injects the `Uuid`.
+
+| Action | anonymous | user | moderator | admin |
+|---|---|---|---|---|
+| Read endpoints (list/search/fetch), signup/signin, visit counter | ✓ | ✓ | ✓ | ✓ |
+| Own profile, languages, corridors | — | ✓ | ✓ | ✓ |
+| Create organisation (goes to `pending`) | — | ✓ | ✓ | ✓ |
+| Update/delete organisation | — | only own (`created_by`) | any | any |
+| System reference tables (`POST /common/org_types`, country-connection create/update/delete) | — | — | — | ✓ |
+
+When adding a mutating endpoint: put it in `AUTH_REQUIRED_ROUTES`, then decide in the usecase whether it needs ownership (`ensure_can_manage` pattern) or a role gate (`ensure_admin` pattern in `country_connection/usecases.rs`).
+
 ### Domain rules to preserve
 
 - New organisations are created with `status='pending'`; `list`/`search` only ever return `status='live'` rows. Approval flips the flag (moderation feature lands in phase 2).

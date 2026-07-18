@@ -7,7 +7,6 @@ use super::{
         UpdateOrganisationRepositoryInput,
     },
 };
-use crate::app::features::user::entities::UserRole;
 use crate::error::AppError;
 use actix_web::HttpResponse;
 use bigdecimal::BigDecimal;
@@ -43,8 +42,6 @@ impl OrganisationUsecase {
         }
 
         let role = self.organisation_repo.fetch_user_role(caller_user_id)?;
-        let role = UserRole::try_from(role.as_str()).unwrap_or(UserRole::User);
-
         if role.is_moderator() {
             return Ok(());
         }
