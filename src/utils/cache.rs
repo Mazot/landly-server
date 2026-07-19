@@ -90,10 +90,15 @@ impl<T: CacheService> TypedCache<T> {
     where
         U: Serialize,
     {
+        // A serialization failure must not panic the worker thread.
         let key_ser_val_vec: Vec<(String, String)> = items
             .iter()
-            .map(|(k, v)| (k.clone(), serde_json::to_string(v).unwrap()))
-            .collect();
+            .map(|(k, v)| {
+                serde_json::to_string(v)
+                    .map(|s| (k.clone(), s))
+                    .map_err(|_| AppError::InternalServerError)
+            })
+            .collect::<Result<_, _>>()?;
 
         self.cache_service.mset_string(&key_ser_val_vec, ttl)
     }

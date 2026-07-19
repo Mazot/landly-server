@@ -10,7 +10,6 @@ use actix_web::{
 };
 use serde::Deserialize;
 use serde_json::json;
-use std::cmp::min;
 use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
@@ -37,8 +36,10 @@ pub async fn fetch_all_countries(
     state: Data<AppState>,
     params: Query<CountriesListQueryParams>,
 ) -> Result<HttpResponse, AppError> {
-    let offset = min(params.offset.unwrap_or(0), 150);
-    let limit = params.limit.unwrap_or(20);
+    // Clamp to sane bounds: negative values reach Postgres as
+    // `OFFSET -n` / `LIMIT -n` and blow up with a 500.
+    let offset = params.offset.unwrap_or(0).clamp(0, 150);
+    let limit = params.limit.unwrap_or(20).clamp(0, 250);
     let name = params.name.clone();
 
     state

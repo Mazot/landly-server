@@ -36,7 +36,8 @@ pub struct DiContainer {
     pub image_usecase: ImageUsecase,
     pub redis_cache_service: TypedCache<Arc<dyn CacheService>>,
     pub storage_service: Arc<dyn StorageService>,
-    pub oauth_google: OAuthGoogle,
+    /// None when GOOGLE_* env vars are absent — OAuth endpoints answer 503.
+    pub oauth_google: Option<OAuthGoogle>,
 }
 
 impl DiContainer {
@@ -117,7 +118,16 @@ impl DiContainer {
                 Arc::new(image_presenter),
                 storage_service,
             ),
-            oauth_google: OAuthGoogle::new(typed_cache_service.clone()),
+            oauth_google: {
+                let oauth = OAuthGoogle::try_new(typed_cache_service.clone());
+                if oauth.is_none() {
+                    log::warn!(
+                        "Google OAuth is not configured (missing GOOGLE_* env vars). \
+                         /api/user/oauth/google/* endpoints will return 503."
+                    );
+                }
+                oauth
+            },
         }
     }
 }

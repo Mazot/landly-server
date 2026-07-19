@@ -31,6 +31,10 @@ pub enum AppError {
     // 500
     #[error("Internal Server Error")]
     InternalServerError,
+
+    // 503 — a required backing service/integration is not configured
+    #[error("Service Unavailable: {}", _0)]
+    ServiceUnavailable(JsonValue),
 }
 
 impl ResponseError for AppError {
@@ -41,6 +45,7 @@ impl ResponseError for AppError {
             AppError::NotFound(_) => StatusCode::NOT_FOUND,
             AppError::UnprocessableEntity(_) => StatusCode::UNPROCESSABLE_ENTITY,
             AppError::InternalServerError => StatusCode::INTERNAL_SERVER_ERROR,
+            AppError::ServiceUnavailable(_) => StatusCode::SERVICE_UNAVAILABLE,
         }
     }
 
@@ -53,6 +58,7 @@ impl ResponseError for AppError {
             AppError::InternalServerError => {
                 HttpResponse::InternalServerError().json("Internal Server Error")
             }
+            AppError::ServiceUnavailable(msg) => HttpResponse::ServiceUnavailable().json(msg),
         }
     }
 }
@@ -60,14 +66,20 @@ impl ResponseError for AppError {
 impl From<DieselError> for AppError {
     fn from(error: DieselError) -> Self {
         match error {
-            DieselError::DatabaseError(kind, info) => {
-                if let DatabaseErrorKind::UniqueViolation = kind {
-                    let message = info.details().unwrap_or_else(|| info.message()).to_string();
-                    AppError::UnprocessableEntity(json!({ "error": message }))
-                } else {
-                    AppError::InternalServerError
-                }
+            // Constraint violations are caused by invalid client input
+            // (bad FK reference, CHECK-constrained enum value, missing
+            // required field), so they must surface as 422 — not 500.
+            DieselError::DatabaseError(
+                DatabaseErrorKind::UniqueViolation
+                | DatabaseErrorKind::ForeignKeyViolation
+                | DatabaseErrorKind::CheckViolation
+                | DatabaseErrorKind::NotNullViolation,
+                info,
+            ) => {
+                let message = info.details().unwrap_or_else(|| info.message()).to_string();
+                AppError::UnprocessableEntity(json!({ "error": message }))
             }
+            DieselError::DatabaseError(..) => AppError::InternalServerError,
             DieselError::NotFound => {
                 AppError::NotFound(json!({ "error": "requested record was not found" }))
             }
@@ -175,6 +187,16 @@ mod tests {
     fn test_app_error_internal_server_error_status() {
         let error = AppError::InternalServerError;
         assert_eq!(error.status_code(), StatusCode::INTERNAL_SERVER_ERROR);
+    }
+
+    #[test]
+    fn test_app_error_service_unavailable_status() {
+        let error = AppError::ServiceUnavailable(json!({ "error": "not configured" }));
+        assert_eq!(error.status_code(), StatusCode::SERVICE_UNAVAILABLE);
+        assert_eq!(
+            error.error_response().status(),
+            StatusCode::SERVICE_UNAVAILABLE
+        );
     }
 
     #[test]

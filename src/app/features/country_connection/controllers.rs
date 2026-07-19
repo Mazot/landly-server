@@ -15,7 +15,6 @@ use actix_web::{
     web::{Data, Json, Path, Query},
 };
 use serde_json::json;
-use std::cmp::min;
 use uuid::Uuid;
 
 /// Extracts the authenticated user id inserted by the auth middleware.
@@ -42,8 +41,10 @@ pub async fn list(
     state: Data<AppState>,
     query: Query<CountryConnectionsListQueryParams>,
 ) -> Result<HttpResponse, AppError> {
-    let offset = min(query.offset.unwrap_or(0), 150);
-    let limit = query.limit.unwrap_or(20);
+    // Clamp to sane bounds: negative values reach Postgres as
+    // `OFFSET -n` / `LIMIT -n` and blow up with a 500.
+    let offset = query.offset.unwrap_or(0).clamp(0, 150);
+    let limit = query.limit.unwrap_or(20).clamp(0, 100);
 
     state
         .di_container

@@ -2,7 +2,6 @@ use super::entities::Organisation;
 use actix_web::{HttpResponse, http::StatusCode};
 use chrono::{Datelike, NaiveDateTime};
 use serde::{Deserialize, Serialize};
-use std::str::FromStr;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -59,7 +58,9 @@ pub fn compute_open_now(
 }
 
 fn decimal_to_f64(value: Option<bigdecimal::BigDecimal>) -> Option<f64> {
-    value.map(|dec_val| f64::from_str(&dec_val.to_string()).unwrap_or_default())
+    // ToPrimitive instead of a string round-trip: no silent 0.0 fallback
+    // that would place an unparseable coordinate in the Gulf of Guinea.
+    value.and_then(|dec_val| bigdecimal::ToPrimitive::to_f64(&dec_val))
 }
 
 fn flatten_text_array(values: Vec<Option<String>>) -> Vec<String> {

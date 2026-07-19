@@ -46,6 +46,27 @@ impl UserUsecase {
             HereAs::try_from(here_as)?;
         }
 
+        // Corridor is all-or-nothing: a one-sided pair would silently create
+        // the user without the corridor, losing the intent.
+        match (
+            params.corridor_from_country_id,
+            params.corridor_to_country_id,
+        ) {
+            (None, None) => {}
+            (Some(from), Some(to)) => {
+                if from == to {
+                    return Err(AppError::UnprocessableEntity(serde_json::json!({
+                        "error": "Corridor countries must be different"
+                    })));
+                }
+            }
+            _ => {
+                return Err(AppError::UnprocessableEntity(serde_json::json!({
+                    "error": "Corridor requires both corridor_from_country_id and corridor_to_country_id"
+                })));
+            }
+        }
+
         let (user, token) = self.user_repository.signup(SignUpV2Input {
             username: params.username,
             email: params.email,
@@ -208,4 +229,115 @@ pub struct UpdateProfileUsecaseInput {
     pub avatar_color: Option<String>,
     pub locale: Option<String>,
     pub here_as: Option<String>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::app::features::user::entities::UserToLanguage;
+    use crate::app::features::user::presenters::UserPresenterImpl;
+    use crate::app::features::user::repositories::{ProfileStats, UserRepository};
+
+    /// Validation-only stub: signup must reject bad input BEFORE any repo
+    /// call, so every method here is unreachable.
+    struct UnreachableRepo;
+
+    impl UserRepository for UnreachableRepo {
+        fn signin(&self, _e: String, _p: String) -> Result<(User, String), AppError> {
+            unreachable!()
+        }
+        fn signup(&self, _i: SignUpV2Input) -> Result<(User, String), AppError> {
+            unreachable!("validation must fail before the repository is called")
+        }
+        fn fetch_profile(&self, _u: Uuid) -> Result<(User, ProfileStats), AppError> {
+            unreachable!()
+        }
+        fn update_profile(
+            &self,
+            _u: Uuid,
+            _c: UpdateUserProfile,
+        ) -> Result<(User, ProfileStats), AppError> {
+            unreachable!()
+        }
+        fn add_languages(&self, _u: Uuid, _l: Vec<Uuid>) -> Result<Vec<UserToLanguage>, AppError> {
+            unreachable!()
+        }
+        fn delete_language(&self, _u: Uuid, _l: Uuid) -> Result<(), AppError> {
+            unreachable!()
+        }
+        fn fetch_languages(&self, _u: Uuid) -> Result<Vec<UserToLanguage>, AppError> {
+            unreachable!()
+        }
+        fn upsert_oauth_user(
+            &self,
+            _p: String,
+            _pid: String,
+            _e: String,
+        ) -> Result<(User, String), AppError> {
+            unreachable!()
+        }
+    }
+
+    fn usecase() -> UserUsecase {
+        UserUsecase::new(
+            Arc::new(UnreachableRepo),
+            Arc::new(UserPresenterImpl::new()),
+        )
+    }
+
+    fn signup_input() -> SignUpUsecaseInput {
+        SignUpUsecaseInput {
+            username: "u".to_string(),
+            email: "u@example.com".to_string(),
+            password: "secret123".to_string(),
+            name: None,
+            locale: None,
+            here_as: None,
+            home_country_id: None,
+            avatar_color: None,
+            corridor_from_country_id: None,
+            corridor_to_country_id: None,
+        }
+    }
+
+    fn expect_422(result: Result<actix_web::HttpResponse, AppError>) {
+        match result {
+            Err(AppError::UnprocessableEntity(_)) => (),
+            other => panic!("expected UnprocessableEntity, got {:?}", other.err()),
+        }
+    }
+
+    #[test]
+    fn test_signup_rejects_one_sided_corridor() {
+        let mut params = signup_input();
+        params.corridor_from_country_id = Some(Uuid::new_v4());
+
+        expect_422(usecase().signup(params));
+
+        let mut params = signup_input();
+        params.corridor_to_country_id = Some(Uuid::new_v4());
+
+        expect_422(usecase().signup(params));
+    }
+
+    #[test]
+    fn test_signup_rejects_same_country_corridor() {
+        let country = Uuid::new_v4();
+        let mut params = signup_input();
+        params.corridor_from_country_id = Some(country);
+        params.corridor_to_country_id = Some(country);
+
+        expect_422(usecase().signup(params));
+    }
+
+    #[test]
+    fn test_signup_rejects_bad_locale_and_here_as() {
+        let mut params = signup_input();
+        params.locale = Some("de".to_string());
+        expect_422(usecase().signup(params));
+
+        let mut params = signup_input();
+        params.here_as = Some("tourist".to_string());
+        expect_422(usecase().signup(params));
+    }
 }

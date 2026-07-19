@@ -256,7 +256,10 @@ impl OrganisationRepository for OrganisationRepositoryImpl {
             query = query.filter(organisations::cost.eq(cost));
         }
 
+        // Deterministic scan order: without it the 500-row cap could return a
+        // different subset between requests, making pagination inconsistent.
         let mut organisations = query
+            .order((organisations::created_at.desc(), organisations::id.asc()))
             .limit(SEARCH_SCAN_CAP)
             .load::<Organisation>(connection)?;
 

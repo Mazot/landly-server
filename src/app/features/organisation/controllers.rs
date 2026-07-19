@@ -16,7 +16,6 @@ use actix_web::{
 };
 use bigdecimal::BigDecimal;
 use serde_json::json;
-use std::cmp::min;
 use uuid::Uuid;
 
 /// Extracts the authenticated user id inserted by the auth middleware.
@@ -27,11 +26,30 @@ fn caller_user_id(req: &HttpRequest) -> Result<Uuid, AppError> {
         .ok_or_else(|| AppError::Unauthorized(json!({ "error": "Missing authenticated user" })))
 }
 
+const LATITUDE_RANGE: std::ops::RangeInclusive<f64> = -90.0..=90.0;
+const LONGITUDE_RANGE: std::ops::RangeInclusive<f64> = -180.0..=180.0;
+
 /// Converts an optional f64 coordinate into a BigDecimal, rejecting
-/// non-finite values with a 422 instead of panicking.
-fn parse_coordinate(value: Option<f64>, field: &str) -> Result<Option<BigDecimal>, AppError> {
+/// non-finite and out-of-range values with a 422 instead of panicking
+/// (or silently storing garbage like lat=999).
+fn parse_coordinate(
+    value: Option<f64>,
+    field: &str,
+    range: std::ops::RangeInclusive<f64>,
+) -> Result<Option<BigDecimal>, AppError> {
     value
         .map(|v| {
+            if !v.is_finite() || !range.contains(&v) {
+                return Err(AppError::UnprocessableEntity(json!({
+                    "error": format!(
+                        "Invalid {} value: must be within [{}, {}]",
+                        field,
+                        range.start(),
+                        range.end()
+                    )
+                })));
+            }
+
             BigDecimal::try_from(v).map_err(|_| {
                 AppError::UnprocessableEntity(json!({
                     "error": format!("Invalid {} value", field)
@@ -39,6 +57,38 @@ fn parse_coordinate(value: Option<f64>, field: &str) -> Result<Option<BigDecimal
             })
         })
         .transpose()
+}
+
+fn parse_latitude(value: Option<f64>) -> Result<Option<BigDecimal>, AppError> {
+    parse_coordinate(value, "latitude", LATITUDE_RANGE)
+}
+
+fn parse_longitude(value: Option<f64>) -> Result<Option<BigDecimal>, AppError> {
+    parse_coordinate(value, "longitude", LONGITUDE_RANGE)
+}
+
+/// Validates a search origin/bbox coordinate pair without converting it.
+fn ensure_coordinate_ranges(pairs: &[(&str, f64)]) -> Result<(), AppError> {
+    for (field, value) in pairs {
+        let range = if field.contains("lat") {
+            LATITUDE_RANGE
+        } else {
+            LONGITUDE_RANGE
+        };
+
+        if !value.is_finite() || !range.contains(value) {
+            return Err(AppError::UnprocessableEntity(json!({
+                "error": format!(
+                    "Invalid {} value: must be within [{}, {}]",
+                    field,
+                    range.start(),
+                    range.end()
+                )
+            })));
+        }
+    }
+
+    Ok(())
 }
 
 /// Splits a comma-separated query value into a list, dropping empty chunks.
@@ -70,8 +120,10 @@ pub async fn list_organisations(
     state: Data<AppState>,
     query: Query<OrganisationsListQueryRequest>,
 ) -> Result<HttpResponse, AppError> {
-    let offset = min(query.offset.unwrap_or(0), 150);
-    let limit = query.limit.unwrap_or(20);
+    // Clamp to sane bounds: negative values reach Postgres as
+    // `OFFSET -n` / `LIMIT -n` and blow up with a 500.
+    let offset = query.offset.unwrap_or(0).clamp(0, 150);
+    let limit = query.limit.unwrap_or(20).clamp(0, 100);
 
     state
         .di_container
@@ -153,8 +205,8 @@ pub async fn update_organisation(
             location_country_id: form.location_country_id,
             organisation_type_id: form.organisation_type_id,
             founder_country_id: form.founder_country_id,
-            latitude: parse_coordinate(form.latitude, "latitude")?,
-            longitude: parse_coordinate(form.longitude, "longitude")?,
+            latitude: parse_latitude(form.latitude)?,
+            longitude: parse_longitude(form.longitude)?,
             city: form.city.clone(),
             website: form.website.clone(),
             telegram: form.telegram.clone(),
@@ -230,8 +282,8 @@ pub async fn create_organisation(
             location_country_id: form.location_country_id,
             organisation_type_id: form.organisation_type_id,
             founder_country_id: form.founder_country_id,
-            latitude: parse_coordinate(form.latitude, "latitude")?,
-            longitude: parse_coordinate(form.longitude, "longitude")?,
+            latitude: parse_latitude(form.latitude)?,
+            longitude: parse_longitude(form.longitude)?,
             created_by: caller,
             added_by: form.added_by.clone(),
             city: form.city.clone(),
@@ -292,6 +344,18 @@ pub async fn search_organisations(
         })));
     }
 
+    if let Some((min_lat, min_lng, max_lat, max_lng)) = bbox {
+        ensure_coordinate_ranges(&[
+            ("min_lat", min_lat),
+            ("min_lng", min_lng),
+            ("max_lat", max_lat),
+            ("max_lng", max_lng),
+        ])?;
+    }
+    if let Some((lat, lng)) = origin {
+        ensure_coordinate_ranges(&[("lat", lat), ("lng", lng)])?;
+    }
+
     state
         .di_container
         .organisation_usecase
@@ -307,8 +371,8 @@ pub async fn search_organisations(
             added_by: query.added_by.clone(),
             cost: query.cost.clone(),
             sort: query.sort.clone(),
-            limit: min(query.limit.unwrap_or(50), 200),
-            offset: query.offset.unwrap_or(0),
+            limit: query.limit.unwrap_or(50).clamp(0, 200),
+            offset: query.offset.unwrap_or(0).max(0),
         })
 }
 
@@ -343,24 +407,42 @@ mod tests {
 
     #[test]
     fn test_parse_coordinate_valid() {
-        let result = parse_coordinate(Some(52.52), "latitude").unwrap();
-        assert!(result.is_some());
+        assert!(parse_latitude(Some(52.52)).unwrap().is_some());
+        assert!(parse_longitude(Some(-179.9)).unwrap().is_some());
+        assert!(parse_latitude(Some(-90.0)).unwrap().is_some());
+        assert!(parse_longitude(Some(180.0)).unwrap().is_some());
     }
 
     #[test]
     fn test_parse_coordinate_none() {
-        assert!(parse_coordinate(None, "latitude").unwrap().is_none());
+        assert!(parse_latitude(None).unwrap().is_none());
+        assert!(parse_longitude(None).unwrap().is_none());
     }
 
     #[test]
     fn test_parse_coordinate_rejects_non_finite() {
         // Previously these panicked via .expect(); now they must be a 422.
         for bad in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
-            match parse_coordinate(Some(bad), "latitude") {
+            match parse_latitude(Some(bad)) {
                 Err(AppError::UnprocessableEntity(_)) => (),
                 other => panic!("expected UnprocessableEntity, got {:?}", other.err()),
             }
         }
+    }
+
+    #[test]
+    fn test_parse_coordinate_rejects_out_of_range() {
+        assert!(parse_latitude(Some(90.01)).is_err());
+        assert!(parse_latitude(Some(-999.0)).is_err());
+        assert!(parse_longitude(Some(180.5)).is_err());
+        assert!(parse_longitude(Some(-181.0)).is_err());
+    }
+
+    #[test]
+    fn test_ensure_coordinate_ranges() {
+        assert!(ensure_coordinate_ranges(&[("lat", 52.5), ("lng", 13.4)]).is_ok());
+        assert!(ensure_coordinate_ranges(&[("min_lat", 999.0)]).is_err());
+        assert!(ensure_coordinate_ranges(&[("max_lng", -200.0)]).is_err());
     }
 
     #[test]

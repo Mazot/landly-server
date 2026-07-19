@@ -245,7 +245,10 @@ pub async fn fetch_languages(
     tag = "User"
 )]
 pub async fn oauth_google_login(state: Data<AppState>) -> Result<HttpResponse, AppError> {
-    let (url, _state) = state.di_container.oauth_google.auth_url()?;
+    let oauth = state.di_container.oauth_google.as_ref().ok_or_else(|| {
+        AppError::ServiceUnavailable(json!({ "error": "Google OAuth is not configured" }))
+    })?;
+    let (url, _state) = oauth.auth_url()?;
 
     Ok(HttpResponse::Found()
         .append_header(("Location", url.to_string()))
@@ -269,9 +272,10 @@ pub async fn oauth_google_callback(
     state: Data<AppState>,
     query: Query<OAuthCallbackParams>,
 ) -> Result<HttpResponse, AppError> {
-    let user_info = state
-        .di_container
-        .oauth_google
+    let oauth = state.di_container.oauth_google.as_ref().ok_or_else(|| {
+        AppError::ServiceUnavailable(json!({ "error": "Google OAuth is not configured" }))
+    })?;
+    let user_info = oauth
         .exchange_and_userinfo(query.code.to_owned(), query.state.to_owned())
         .await?;
     let email = user_info
