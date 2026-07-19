@@ -140,6 +140,8 @@ This interactive documentation provides:
 - **Authentication setup** for protected routes
 - **Model definitions** for all data structures
 
+All API endpoints are documented with `utoipa` and served via Scalar at `/scalar`. The spec is split per feature — each `<feature>/mod.rs` declares its own `#[derive(OpenApi)] pub struct ApiDoc`, and they're merged into a single doc in `build_openapi()` in `src/main.rs`.
+
 ### Authentication Endpoints
 
 #### Traditional Auth

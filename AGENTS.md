@@ -133,6 +133,8 @@ Cache keys follow the `CacheKeys` namespace helper in the same file (`org:*`, `c
 
 The OpenAPI doc is split per feature: each new feature declares its own `#[derive(OpenApi)] pub struct ApiDoc` in `<feature>/mod.rs` (paths + schemas + tag) and is merged into the root doc in `build_openapi()` in `src/main.rs` — do NOT grow the legacy root `#[openapi(...)]` macro (it still holds pre-phase-2 features). The API docs UI is **Scalar** (`utoipa-scalar`) at `/scalar`; the raw spec is served at `/api-docs/openapi.json`, and the legacy `/swagger-ui` path 307-redirects to `/scalar`. New public doc routes must also be added to `SKIP_AUTH_ROUTES` in the auth middleware.
 
+> **RULE:** When adding, removing, or updating routes (controllers), you MUST also update the corresponding per-feature `ApiDoc` in `<feature>/mod.rs` — add/remove paths and schemas so Scalar stays accurate. Do NOT grow the legacy root `#[openapi(...)]` macro in `main.rs`.
+
 ## Sub-agents
 
 Repo-specific sub-agents live in `.claude/agents/` and can be invoked via the Agent tool (or `@agent-<name>`):
