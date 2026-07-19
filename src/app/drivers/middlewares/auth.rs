@@ -271,7 +271,11 @@ struct AuthSkipRoute {
     method: Method,
 }
 
-const SKIP_AUTH_ROUTES: [AuthSkipRoute; 3] = [
+const SKIP_AUTH_ROUTES: [AuthSkipRoute; 4] = [
+    AuthSkipRoute {
+        path: "/scalar",
+        method: Method::GET,
+    },
     AuthSkipRoute {
         path: "/swagger-ui",
         method: Method::GET,
@@ -289,8 +293,10 @@ const SKIP_AUTH_ROUTES: [AuthSkipRoute; 3] = [
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serial_test::serial;
 
     #[test]
+    #[serial(jwt_env)]
     fn test_get_user_id_from_token_without_token() {
         let result = get_user_id_from_token(None);
         assert!(result.is_err());
@@ -302,6 +308,7 @@ mod tests {
     }
 
     #[test]
+    #[serial(jwt_env)]
     fn test_get_user_id_from_token_with_invalid_token() {
         unsafe {
             std::env::set_var("JWT_SECRET", "test_secret");
@@ -312,6 +319,7 @@ mod tests {
     }
 
     #[test]
+    #[serial(jwt_env)]
     fn test_get_user_id_from_token_with_valid_token() {
         unsafe {
             std::env::set_var("JWT_SECRET", "test_secret");
@@ -451,7 +459,15 @@ mod tests {
 
     #[test]
     fn test_skip_auth_routes_count() {
-        assert_eq!(SKIP_AUTH_ROUTES.len(), 3);
+        assert_eq!(SKIP_AUTH_ROUTES.len(), 4);
+    }
+
+    #[test]
+    fn test_skip_auth_routes_contains_scalar() {
+        let has_route = SKIP_AUTH_ROUTES
+            .iter()
+            .any(|r| r.path == "/scalar" && r.method == Method::GET);
+        assert!(has_route);
     }
 
     #[test]

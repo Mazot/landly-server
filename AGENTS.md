@@ -126,7 +126,25 @@ Cache keys follow the `CacheKeys` namespace helper in the same file (`org:*`, `c
 
 ### OpenAPI
 
-All public endpoints and schemas must be registered in the `#[openapi(...)]` macro in `src/main.rs` (both `paths` and `components/schemas`). The Swagger UI is available at `/swagger-ui`.
+All public endpoints and schemas must be registered in the `#[openapi(...)]` macro in `src/main.rs` (both `paths` and `components/schemas`). The API docs UI is **Scalar** (`utoipa-scalar`) at `/scalar`; the raw spec is served at `/api-docs/openapi.json`, and the legacy `/swagger-ui` path 307-redirects to `/scalar`. New public doc routes must also be added to `SKIP_AUTH_ROUTES` in the auth middleware.
+
+## Sub-agents
+
+Repo-specific sub-agents live in `.claude/agents/` and can be invoked via the Agent tool (or `@agent-<name>`):
+
+- **`feature-scaffolder`** — scaffolds a new `src/app/features/<name>/` module and wires all five shared files (features/mod.rs, di.rs, main.rs OpenAPI, AUTH_REQUIRED_ROUTES, migrations). Use for "add a new entity/API area".
+- **`db-migrator`** — creates Diesel migrations, verifies `run`/`redo` reversibility on the docker Postgres, checks the regenerated `schema.rs` against Rust struct field order, and rebuilds `scripts/crates`. Use for any schema change.
+- **`api-smoke-tester`** — read-only agent that boots the real stack (docker + `cargo run`) and exercises endpoints with curl: auth gates, moderation visibility, ownership/RBAC, image upload to MinIO, `/scalar` docs. Use after a feature lands or to reproduce API bugs.
+
+Keep these definitions in sync when conventions change (routes, env vars, RBAC rules).
+
+## CI (.github/workflows)
+
+- `rust.yml` — fmt check, build, tests, **plus a separate `scripts-workspace` job** (the scripts crates are not covered by the root build); coverage via tarpaulin → Codecov. All jobs use `Swatinem/rust-cache`.
+- `clippy.yml` — `cargo clippy --all-targets --all-features -- -D warnings`.
+- `audit.yml` — `cargo audit` for both lockfiles (root + scripts/crates), on dependency changes and weekly.
+- `dependencies.yml` — weekly `cargo update` PR for both workspaces.
+- `release.yml` — builds and attaches the linux binary on `v*` tags.
 
 ## Scripts workspace
 

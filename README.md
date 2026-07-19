@@ -124,17 +124,19 @@ cargo run
 
 ### Interactive API Documentation
 
-The API comes with comprehensive OpenAPI 3.0 documentation accessible via Swagger UI:
+The API comes with comprehensive OpenAPI 3.1 documentation rendered by [Scalar](https://github.com/scalar/scalar) (via `utoipa-scalar`):
 
 ```url
-http://localhost:8080/swagger-ui
+http://localhost:8080/scalar
 ```
+
+The raw spec is available at `http://localhost:8080/api-docs/openapi.json`, and the legacy `/swagger-ui` path redirects to `/scalar`.
 
 This interactive documentation provides:
 
 - **Complete API reference** with all endpoints
 - **Request/response schemas** with examples
-- **Try it out functionality** to test endpoints directly
+- **Built-in API client** to test endpoints directly
 - **Authentication setup** for protected routes
 - **Model definitions** for all data structures
 

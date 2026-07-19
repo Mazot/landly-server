@@ -7,10 +7,10 @@ pub mod utils;
 
 use crate::app::drivers::middlewares::{auth::Authentication, cors::cors};
 use actix_web::middleware::Logger;
-use actix_web::{App, HttpServer, web};
+use actix_web::{App, HttpResponse, HttpServer, web};
 use dotenv::dotenv;
 use utoipa::OpenApi;
-use utoipa_swagger_ui::SwaggerUi;
+use utoipa_scalar::{Scalar, Servable};
 
 #[derive(OpenApi)]
 #[openapi(
@@ -144,11 +144,17 @@ async fn main() -> std::io::Result<()> {
             .wrap(Logger::default())
             .wrap(cors())
             .wrap(Authentication)
-            .service(
-                SwaggerUi::new("/swagger-ui/{_:.*}")
-                    .url("/api-docs/openapi.json", ApiDoc::openapi()),
+            // API docs: Scalar UI (replaces the heavier Swagger UI, which
+            // embedded the whole swagger dist via rust-embed at build time).
+            .service(Scalar::with_url("/scalar", ApiDoc::openapi()))
+            // Raw spec for codegen/tooling, same path as before.
+            .route(
+                "/api-docs/openapi.json",
+                web::get().to(|| async { HttpResponse::Ok().json(ApiDoc::openapi()) }),
             )
-            .service(web::redirect("/swagger-ui", "/swagger-ui/"))
+            // Old bookmark compatibility.
+            .service(web::redirect("/swagger-ui", "/scalar"))
+            .service(web::redirect("/swagger-ui/", "/scalar"))
             .service(
                 web::scope("/api")
                     .service(web::scope("/healthcheck").route(

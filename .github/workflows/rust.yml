@@ -14,6 +14,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
+    - uses: dtolnay/rust-toolchain@stable
+      with:
+        components: rustfmt
+    - uses: Swatinem/rust-cache@v2
     - name: Check formatting
       run: cargo fmt -- --check
     - name: Build
@@ -21,14 +25,32 @@ jobs:
     - name: Run tests
       run: cargo test --verbose
 
+  # scripts/crates is a separate workspace that links the main crate as a
+  # library; it is NOT covered by the root build and silently breaks when
+  # structs in src/data/models.rs change.
+  scripts-workspace:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: dtolnay/rust-toolchain@stable
+    - uses: Swatinem/rust-cache@v2
+      with:
+        workspaces: scripts/crates
+    - name: Build scripts workspace
+      run: cargo build --verbose
+      working-directory: scripts/crates
+
   coverage:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
     - name: Install Rust toolchain
       uses: dtolnay/rust-toolchain@stable
+    - uses: Swatinem/rust-cache@v2
     - name: Install tarpaulin
-      run: cargo install cargo-tarpaulin
+      uses: taiki-e/install-action@v2
+      with:
+        tool: cargo-tarpaulin
     - name: Generate coverage
       run: cargo tarpaulin --verbose --all-features --workspace --timeout 120 --out xml
     - name: Upload coverage to Codecov

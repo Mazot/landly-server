@@ -62,6 +62,7 @@ pub fn generate_token(user_id: Uuid) -> Result<String, AppError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serial_test::serial;
 
     fn setup_test_env() {
         unsafe {
@@ -71,6 +72,7 @@ mod tests {
     }
 
     #[test]
+    #[serial(jwt_env)]
     fn test_generate_token_success() {
         setup_test_env();
         let user_id = Uuid::new_v4();
@@ -82,6 +84,7 @@ mod tests {
     }
 
     #[test]
+    #[serial(jwt_env)]
     fn test_decode_token_success() {
         setup_test_env();
         let user_id = Uuid::new_v4();
@@ -95,6 +98,7 @@ mod tests {
     }
 
     #[test]
+    #[serial(jwt_env)]
     fn test_decode_invalid_token() {
         setup_test_env();
         let invalid_token = "invalid.token.here";
@@ -104,6 +108,7 @@ mod tests {
     }
 
     #[test]
+    #[serial(jwt_env)]
     fn test_token_claims_structure() {
         setup_test_env();
         let user_id = Uuid::new_v4();
@@ -116,6 +121,7 @@ mod tests {
     }
 
     #[test]
+    #[serial(jwt_env)]
     fn test_get_jwt_expiration_default() {
         unsafe {
             std::env::set_var("JWT_SECRET", "test_secret");
@@ -127,6 +133,7 @@ mod tests {
     }
 
     #[test]
+    #[serial(jwt_env)]
     fn test_get_jwt_expiration_custom() {
         unsafe {
             std::env::set_var("JWT_SECRET", "test_secret");
@@ -138,6 +145,7 @@ mod tests {
     }
 
     #[test]
+    #[serial(jwt_env)]
     fn test_different_tokens_for_different_users() {
         setup_test_env();
         let user1 = Uuid::new_v4();
@@ -156,6 +164,7 @@ mod tests {
     }
 
     #[test]
+    #[serial(jwt_env)]
     fn test_token_with_wrong_secret() {
         setup_test_env();
         let user_id = Uuid::new_v4();

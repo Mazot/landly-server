@@ -37,7 +37,7 @@ utoipa = { version = "5.4", features = [
     "debug",
     "chrono",
 ]}
-utoipa-swagger-ui = { version = "9", features = ["actix-web"] }
+utoipa-scalar = { version = "0.3", features = ["actix-web"] }
 bigdecimal = { version = "0.4.8", features = ["serde", "serde_json"] }
 actix-request-reply-cache = "0.1.7"
 redis = { version = "0.32", features = ["r2d2"] }
