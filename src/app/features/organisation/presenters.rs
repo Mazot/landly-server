@@ -1,4 +1,4 @@
-use super::entities::Organisation;
+use super::entities::{CommunitySignals, Organisation};
 use actix_web::{HttpResponse, http::StatusCode};
 use chrono::{Datelike, NaiveDateTime};
 use serde::{Deserialize, Serialize};
@@ -10,6 +10,11 @@ pub trait OrganisationPresenter: Send + Sync + 'static {
     // TODO: Tmp solution
     fn to_single_typed_json(&self, item: Organisation) -> HttpResponse<Organisation>;
     fn to_single_json(&self, item: Organisation) -> HttpResponse;
+    fn to_single_with_community_json(
+        &self,
+        item: Organisation,
+        signals: CommunitySignals,
+    ) -> HttpResponse;
     fn to_multi_json(&self, items: Vec<Organisation>) -> HttpResponse;
     fn to_search_json(&self, items: Vec<(Organisation, Option<f64>)>) -> HttpResponse;
     fn to_visits_json(&self, visits: i64) -> HttpResponse;
@@ -105,8 +110,33 @@ pub struct OrganisationContent {
     /// responses when an origin point was given.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub distance_km: Option<f64>,
+    /// Community check-in signals; present only on the detail (fetch) payload.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub community: Option<CommunitySignalsContent>,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
+}
+
+/// "Community check-ins" block (design: org-full.jsx).
+#[derive(Deserialize, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CommunitySignalsContent {
+    pub people_came: i64,
+    /// Percentage of check-ins confirming "still active"; None with no data
+    pub still_active_pct: Option<f64>,
+    pub last_checkin_at: Option<NaiveDateTime>,
+    pub tips: Vec<String>,
+}
+
+impl From<CommunitySignals> for CommunitySignalsContent {
+    fn from(s: CommunitySignals) -> Self {
+        Self {
+            people_came: s.people_came,
+            still_active_pct: s.still_active_pct,
+            last_checkin_at: s.last_checkin_at,
+            tips: s.tips,
+        }
+    }
 }
 
 impl From<Organisation> for OrganisationContent {
@@ -145,6 +175,7 @@ impl From<Organisation> for OrganisationContent {
             rating_avg: org.rating_avg,
             reviews_count: org.reviews_count,
             distance_km: None,
+            community: None,
             created_at: org.created_at,
             updated_at: org.updated_at,
         }
@@ -204,6 +235,17 @@ impl OrganisationPresenter for OrganisationPresenterImpl {
 
     fn to_single_json(&self, item: Organisation) -> HttpResponse {
         let response_content = OrganisationContent::from(item);
+
+        HttpResponse::Ok().json(response_content)
+    }
+
+    fn to_single_with_community_json(
+        &self,
+        item: Organisation,
+        signals: CommunitySignals,
+    ) -> HttpResponse {
+        let mut response_content = OrganisationContent::from(item);
+        response_content.community = Some(CommunitySignalsContent::from(signals));
 
         HttpResponse::Ok().json(response_content)
     }

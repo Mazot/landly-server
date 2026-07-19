@@ -7,6 +7,9 @@ use super::{
         UpdateOrganisationRepositoryInput,
     },
 };
+use crate::app::features::moderation::repositories::{
+    ModerationRepository, SubmittedEventInput, TargetKind,
+};
 use crate::error::AppError;
 use actix_web::HttpResponse;
 use bigdecimal::BigDecimal;
@@ -18,17 +21,29 @@ use uuid::Uuid;
 pub struct OrganisationUsecase {
     organisation_repo: Arc<dyn OrganisationRepository>,
     organisation_presenter: Arc<dyn OrganisationPresenter>,
+    moderation_repo: Arc<dyn ModerationRepository>,
 }
 
 impl OrganisationUsecase {
     pub fn new(
         organisation_repo: Arc<dyn OrganisationRepository>,
         organisation_presenter: Arc<dyn OrganisationPresenter>,
+        moderation_repo: Arc<dyn ModerationRepository>,
     ) -> Self {
         Self {
             organisation_repo,
             organisation_presenter,
+            moderation_repo,
         }
+    }
+
+    /// Loose phone sanity check for the moderation auto-flags: "+" followed
+    /// by 8..=15 digits (spaces/dashes tolerated). Not a validator — just a
+    /// signal for the moderator.
+    fn phone_looks_valid(tel: &str) -> bool {
+        let digits: String = tel.chars().filter(|c| c.is_ascii_digit()).collect();
+
+        tel.trim_start().starts_with('+') && (8..=15).contains(&digits.len())
     }
 
     /// Update/delete are allowed for the creator or a moderator/admin.
@@ -92,6 +107,32 @@ impl OrganisationUsecase {
                     cost: params.cost,
                     google_place_id: params.google_place_id,
                 })?;
+
+        // Submit-time auto-checks for the moderation queue (best-effort:
+        // a failed flag write must not fail the submission).
+        let duplicate_nearby = self
+            .organisation_repo
+            .has_duplicate_nearby(
+                &new_organisation.name,
+                new_organisation.latitude.as_ref(),
+                new_organisation.longitude.as_ref(),
+            )
+            .unwrap_or(false);
+        let live_orgs_by_creator = self
+            .organisation_repo
+            .count_live_orgs_created_by(params.created_by)
+            .unwrap_or(0);
+        let _ = self.moderation_repo.record_submitted(SubmittedEventInput {
+            target_kind: TargetKind::Org,
+            target_id: new_organisation.id,
+            flags: json!({
+                "duplicateNearby": duplicate_nearby,
+                "phoneLooksValid": new_organisation.tel.as_deref().map(Self::phone_looks_valid),
+                "creatorLiveOrgs": live_orgs_by_creator,
+                "trustedVolunteer": live_orgs_by_creator >= 3,
+            }),
+        });
+
         let response = self.organisation_presenter.to_single_json(new_organisation);
 
         Ok(response)
@@ -236,11 +277,37 @@ impl OrganisationUsecase {
         Ok(response)
     }
 
+    /// Detail payload: the organisation plus its community check-in signals.
     pub fn fetch_organisation(&self, id: Uuid) -> Result<HttpResponse, AppError> {
         let organisation = self.organisation_repo.fetch_organisation(id)?;
-        let response = self.organisation_presenter.to_single_json(organisation);
+        let signals = self.organisation_repo.fetch_community_signals(id)?;
+        let response = self
+            .organisation_presenter
+            .to_single_with_community_json(organisation, signals);
 
         Ok(response)
+    }
+
+    /// Community check-in: "I was here"; optionally still-active + a tip.
+    pub fn checkin_organisation(
+        &self,
+        id: Uuid,
+        user_id: Uuid,
+        still_active: bool,
+        tip: Option<String>,
+    ) -> Result<HttpResponse, AppError> {
+        // Only live orgs accept check-ins.
+        let organisation = self.organisation_repo.fetch_organisation(id)?;
+        if organisation.status != OrganisationStatus::Live.as_str() {
+            return Err(AppError::UnprocessableEntity(
+                json!({ "error": "Only live organisations accept check-ins" }),
+            ));
+        }
+
+        self.organisation_repo
+            .checkin(id, user_id, still_active, tip)?;
+
+        self.fetch_organisation(id)
     }
 
     /// Public visit counter: increments and returns the new total.
@@ -387,6 +454,37 @@ mod tests {
         fn increment_visits(&self, _id: Uuid) -> Result<i64, AppError> {
             unimplemented!()
         }
+
+        fn checkin(
+            &self,
+            _id: Uuid,
+            _user_id: Uuid,
+            _still_active: bool,
+            _tip: Option<String>,
+        ) -> Result<(), AppError> {
+            unimplemented!()
+        }
+
+        fn fetch_community_signals(
+            &self,
+            _id: Uuid,
+        ) -> Result<crate::app::features::organisation::entities::CommunitySignals, AppError>
+        {
+            unimplemented!()
+        }
+
+        fn has_duplicate_nearby(
+            &self,
+            _name: &str,
+            _latitude: Option<&BigDecimal>,
+            _longitude: Option<&BigDecimal>,
+        ) -> Result<bool, AppError> {
+            unimplemented!()
+        }
+
+        fn count_live_orgs_created_by(&self, _user_id: Uuid) -> Result<i64, AppError> {
+            unimplemented!()
+        }
     }
 
     fn test_organisation(created_by: Option<Uuid>) -> Organisation {
@@ -426,6 +524,39 @@ mod tests {
         }
     }
 
+    struct UnreachableModerationRepo;
+
+    impl crate::app::features::moderation::repositories::ModerationRepository
+        for UnreachableModerationRepo
+    {
+        fn record_submitted(
+            &self,
+            _input: crate::app::features::moderation::repositories::SubmittedEventInput,
+        ) -> Result<(), AppError> {
+            unreachable!()
+        }
+        fn fetch_queue(
+            &self,
+            _kind: Option<crate::app::features::moderation::repositories::TargetKind>,
+        ) -> Result<Vec<crate::app::features::moderation::repositories::QueueItem>, AppError>
+        {
+            unreachable!()
+        }
+        fn moderate(
+            &self,
+            _kind: crate::app::features::moderation::repositories::TargetKind,
+            _target_id: Uuid,
+            _action: crate::app::features::moderation::repositories::ModerationAction,
+            _note: Option<String>,
+            _moderator_id: Uuid,
+        ) -> Result<(), AppError> {
+            unreachable!()
+        }
+        fn fetch_user_role(&self, _user_id: Uuid) -> Result<UserRole, AppError> {
+            unreachable!()
+        }
+    }
+
     fn usecase_with(organisation: Organisation, caller_role: UserRole) -> OrganisationUsecase {
         OrganisationUsecase::new(
             Arc::new(StubRepo {
@@ -433,6 +564,7 @@ mod tests {
                 caller_role,
             }),
             Arc::new(OrganisationPresenterImpl::new()),
+            Arc::new(UnreachableModerationRepo),
         )
     }
 

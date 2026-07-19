@@ -35,6 +35,7 @@ use utoipa_scalar::{Scalar, Servable};
         app::features::organisation::controllers::delete_organisation,
         app::features::organisation::controllers::update_organisation,
         app::features::organisation::controllers::visit_organisation,
+        app::features::organisation::controllers::checkin_organisation,
         app::features::country_connection::controllers::list,
         app::features::country_connection::controllers::fetch,
         app::features::country_connection::controllers::create,
@@ -74,6 +75,8 @@ use utoipa_scalar::{Scalar, Servable};
             app::features::organisation::presenters::OrganisationContent,
             app::features::organisation::presenters::MultipleOrganisationsResponse,
             app::features::organisation::presenters::OrganisationVisitsContent,
+            app::features::organisation::presenters::CommunitySignalsContent,
+            app::features::organisation::requests::CheckinRequest,
             app::features::country_connection::requests::CreateCountryConnectionRequest,
             app::features::country_connection::requests::UpdateCountryConnectionRequest,
             app::features::country_connection::requests::CountryConnectionsListQueryParams,
@@ -111,6 +114,21 @@ use utoipa_scalar::{Scalar, Servable};
 )]
 pub struct ApiDoc;
 
+/// Root doc (legacy features registered above) merged with the per-feature
+/// `ApiDoc`s of the phase-2 modules. New features must declare their own doc
+/// in `<feature>/mod.rs` and be merged here instead of growing the root macro.
+pub fn build_openapi() -> utoipa::openapi::OpenApi {
+    let mut openapi = ApiDoc::openapi();
+
+    openapi.merge(app::features::person::ApiDoc::openapi());
+    openapi.merge(app::features::review::ApiDoc::openapi());
+    openapi.merge(app::features::saved::ApiDoc::openapi());
+    openapi.merge(app::features::report::ApiDoc::openapi());
+    openapi.merge(app::features::moderation::ApiDoc::openapi());
+
+    openapi
+}
+
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     dotenv().ok();
@@ -146,11 +164,11 @@ async fn main() -> std::io::Result<()> {
             .wrap(Authentication)
             // API docs: Scalar UI (replaces the heavier Swagger UI, which
             // embedded the whole swagger dist via rust-embed at build time).
-            .service(Scalar::with_url("/scalar", ApiDoc::openapi()))
+            .service(Scalar::with_url("/scalar", build_openapi()))
             // Raw spec for codegen/tooling, same path as before.
             .route(
                 "/api-docs/openapi.json",
-                web::get().to(|| async { HttpResponse::Ok().json(ApiDoc::openapi()) }),
+                web::get().to(|| async { HttpResponse::Ok().json(build_openapi()) }),
             )
             // Old bookmark compatibility.
             .service(web::redirect("/swagger-ui", "/scalar"))
@@ -164,6 +182,11 @@ async fn main() -> std::io::Result<()> {
                     .configure(app::features::common::config::configure_services)
                     .configure(app::features::user::config::configure_services)
                     .configure(app::features::corridor::config::configure_services)
+                    .configure(app::features::person::config::configure_services)
+                    .configure(app::features::review::config::configure_services)
+                    .configure(app::features::saved::config::configure_services)
+                    .configure(app::features::report::config::configure_services)
+                    .configure(app::features::moderation::config::configure_services)
                     .configure(organisation_configure_services)
                     .configure(country_connection_configure_services)
                     .configure(images_configure_services),

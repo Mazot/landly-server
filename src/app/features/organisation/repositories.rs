@@ -1,4 +1,6 @@
-use super::entities::{CreateOrganisation, Organisation, OrganisationStatus, UpdateOrganisation};
+use super::entities::{
+    CommunitySignals, CreateOrganisation, Organisation, OrganisationStatus, UpdateOrganisation,
+};
 use crate::{
     app::features::user::entities::{User, UserRole},
     error::AppError,
@@ -54,6 +56,25 @@ pub trait OrganisationRepository: Send + Sync + 'static {
     ) -> Result<Organisation, AppError>;
 
     fn increment_visits(&self, id: Uuid) -> Result<i64, AppError>;
+
+    fn checkin(
+        &self,
+        id: Uuid,
+        user_id: Uuid,
+        still_active: bool,
+        tip: Option<String>,
+    ) -> Result<(), AppError>;
+
+    fn fetch_community_signals(&self, id: Uuid) -> Result<CommunitySignals, AppError>;
+
+    /// Submit-time auto-check inputs.
+    fn has_duplicate_nearby(
+        &self,
+        name: &str,
+        latitude: Option<&BigDecimal>,
+        longitude: Option<&BigDecimal>,
+    ) -> Result<bool, AppError>;
+    fn count_live_orgs_created_by(&self, user_id: Uuid) -> Result<i64, AppError>;
 
     /// Role of a user, for ownership/RBAC checks in the usecase layer.
     fn fetch_user_role(&self, user_id: Uuid) -> Result<UserRole, AppError>;
@@ -440,6 +461,55 @@ impl OrganisationRepository for OrganisationRepositoryImpl {
             .delete(&CacheKeys::organisation_by_id(&id));
 
         Ok(visits)
+    }
+
+    fn checkin(
+        &self,
+        id: Uuid,
+        user_id: Uuid,
+        still_active: bool,
+        tip: Option<String>,
+    ) -> Result<(), AppError> {
+        let connection = &mut self.pool.get()?;
+        Organisation::checkin(connection, id, user_id, still_active, tip)?;
+
+        // The detail payload embeds community signals; drop its cache entry.
+        let _ = self
+            .cache_service
+            .delete(&CacheKeys::organisation_by_id(&id));
+
+        Ok(())
+    }
+
+    fn fetch_community_signals(&self, id: Uuid) -> Result<CommunitySignals, AppError> {
+        let connection = &mut self.pool.get()?;
+
+        Organisation::community_signals(connection, id)
+    }
+
+    fn has_duplicate_nearby(
+        &self,
+        name: &str,
+        latitude: Option<&BigDecimal>,
+        longitude: Option<&BigDecimal>,
+    ) -> Result<bool, AppError> {
+        let connection = &mut self.pool.get()?;
+
+        Organisation::has_duplicate_nearby(connection, name, latitude, longitude)
+    }
+
+    fn count_live_orgs_created_by(&self, user_id: Uuid) -> Result<i64, AppError> {
+        use crate::data::schema::organisations;
+        use diesel::prelude::*;
+
+        let connection = &mut self.pool.get()?;
+        let count = organisations::table
+            .filter(organisations::created_by.eq(user_id))
+            .filter(organisations::status.eq(OrganisationStatus::Live.as_str()))
+            .count()
+            .get_result::<i64>(connection)?;
+
+        Ok(count)
     }
 
     fn fetch_user_role(&self, user_id: Uuid) -> Result<UserRole, AppError> {

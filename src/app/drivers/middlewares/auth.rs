@@ -183,7 +183,65 @@ struct AuthRequiredRoute {
     method: Method,
 }
 
-const AUTH_REQUIRED_ROUTES: [AuthRequiredRoute; 20] = [
+const AUTH_REQUIRED_ROUTES: [AuthRequiredRoute; 34] = [
+    // person: create/vouch need auth; the /person/claim/* flow is public
+    // because the claim token itself is the credential.
+    AuthRequiredRoute {
+        path: "/api/person/create",
+        method: Method::POST,
+    },
+    AuthRequiredRoute {
+        path: "/api/person/vouch/{id}",
+        method: Method::POST,
+    },
+    AuthRequiredRoute {
+        path: "/api/review/create",
+        method: Method::POST,
+    },
+    AuthRequiredRoute {
+        path: "/api/review/delete/{id}",
+        method: Method::DELETE,
+    },
+    AuthRequiredRoute {
+        path: "/api/saved/create",
+        method: Method::POST,
+    },
+    AuthRequiredRoute {
+        path: "/api/saved/delete/{id}",
+        method: Method::DELETE,
+    },
+    AuthRequiredRoute {
+        path: "/api/saved/list",
+        method: Method::GET,
+    },
+    AuthRequiredRoute {
+        path: "/api/saved/counts",
+        method: Method::GET,
+    },
+    AuthRequiredRoute {
+        path: "/api/report/create",
+        method: Method::POST,
+    },
+    AuthRequiredRoute {
+        path: "/api/moderation/queue",
+        method: Method::GET,
+    },
+    AuthRequiredRoute {
+        path: "/api/moderation/approve",
+        method: Method::POST,
+    },
+    AuthRequiredRoute {
+        path: "/api/moderation/request-changes",
+        method: Method::POST,
+    },
+    AuthRequiredRoute {
+        path: "/api/moderation/reject",
+        method: Method::POST,
+    },
+    AuthRequiredRoute {
+        path: "/api/organisation/checkin/{id}",
+        method: Method::POST,
+    },
     AuthRequiredRoute {
         path: "/api/user/languages",
         method: Method::POST,
@@ -342,7 +400,20 @@ mod tests {
 
     #[test]
     fn test_auth_required_routes_count() {
-        assert_eq!(AUTH_REQUIRED_ROUTES.len(), 20);
+        assert_eq!(AUTH_REQUIRED_ROUTES.len(), 34);
+    }
+
+    /// The claim flow must stay public: the token IS the credential, and
+    /// protecting it would lock out the account-less person being claimed.
+    #[test]
+    fn test_person_claim_routes_are_not_auth_required() {
+        for route in AUTH_REQUIRED_ROUTES.iter() {
+            assert!(
+                !route.path.starts_with("/api/person/claim"),
+                "claim route {} must not require auth",
+                route.path
+            );
+        }
     }
 
     /// `PUT /api/user/me` must not accidentally protect (or be shadowed by)

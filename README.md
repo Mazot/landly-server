@@ -243,6 +243,59 @@ GET /api/common/countries
 GET /api/common/countries/{id}
 ```
 
+### People / Helpers
+
+A person is a recommended human helper with a claim-and-verify flow: `pending` (moderation) → `awaiting` (approved, claim link sent) → `confirmed` / `claimed` (linked an account) or `declined`. Hidden contacts (email/whatsapp) are **never** serialized until the person confirms — and then only per their privacy toggles.
+
+```http
+POST /api/person/create          # auth; requires consent_given + a contact; returns claimUrl for manual sending (send_via)
+GET  /api/person/list            # public; confirmed/claimed only; filters: skills, city, language_ids
+GET  /api/person/fetch/{id}      # public; contacts gated by status + privacy toggles
+POST /api/person/vouch/{id}      # auth; one vouch per user
+
+# Claim flow — PUBLIC, the token from the invite link is the credential:
+GET  /api/person/claim/{token}           # preview for the recommended person
+POST /api/person/claim/{token}/confirm   # -> confirmed (or claimed with a Bearer token); optional privacy toggles
+POST /api/person/claim/{token}/decline   # -> declined
+```
+
+### Reviews
+
+```http
+POST   /api/review/create        # auth; exactly one of organisation_id/person_id; rating 1-5; one per author per target
+GET    /api/review/list?organisation_id=|person_id=
+DELETE /api/review/delete/{id}   # author or moderator
+```
+
+Creating/deleting a review atomically refreshes the target's `ratingAvg`/`reviewsCount`. People can disable reviews (`allow_reviews`).
+
+### Saved / Bookmarks (all auth)
+
+```http
+POST   /api/saved/create         # { kind: org|person|country|corridor, target_id, note?, list_name? }
+DELETE /api/saved/delete/{id}
+GET    /api/saved/list?kind=
+GET    /api/saved/counts         # per-kind counters for the Saved tab
+```
+
+### Community check-ins & Reports
+
+```http
+POST /api/organisation/checkin/{id}   # auth; { still_active?, tip? }; detail payload gains a `community` block
+POST /api/report/create               # auth; { target_kind: org|person|conversation, target_id, reason }
+```
+
+### Moderation (moderator/admin role only)
+
+```http
+GET  /api/moderation/queue?kind=      # pending orgs + people, with submit-time auto-check flags and open report counts
+POST /api/moderation/approve          # org -> live; person -> awaiting
+POST /api/moderation/request-changes  # note REQUIRED; item stays pending
+POST /api/moderation/reject           # org -> rejected; person -> declined
+```
+
+Submissions record automatic checks into the queue: duplicate-nearby (same name within ~1 km), phone format sanity, and creator trust (≥3 live orgs / approved people).
+
 ### Roles & Permissions
 
 Every user has a role (`users.role`): `user` (default), `moderator`, or `admin`.
@@ -272,6 +325,12 @@ Violations return `401 Unauthorized` (no/invalid token) or `403 Forbidden` (insu
 - **countries_connections** - Country relationships
 - **countries_to_languages** - Country-language mappings
 - **users_to_languages** - User language preferences
+- **people** (+`people_to_languages`, `person_claim_tokens`, `person_vouches`) - Recommended helpers with hidden contacts, privacy toggles and the claim flow
+- **reviews** - Polymorphic reviews (exactly one of org/person via CHECK), unique per author-target
+- **saved_items** - Bookmarks (`kind` + `target_id` without FK), private notes and lists
+- **org_checkins** - "Still active" community check-ins with tips
+- **reports** - User reports on orgs/people/conversations
+- **moderation_events** - Moderation audit trail incl. submit-time auto-check `flags`
 
 ## 🔧 Development
 
@@ -375,9 +434,10 @@ Endpoints in the codebase carry `// [authorship]` comments above their handlers.
 
 - Corridor feature — entire module (`create/list/set-default/delete/stats`)
 - Profile: `GET/PUT /api/user/me`, `PUT /api/user/me/notifications`
-- Geo search `GET /api/organisation/search`, visit counter `POST /api/organisation/visit/{id}`
+- Geo search `GET /api/organisation/search`, visit counter `POST /api/organisation/visit/{id}`, check-ins `POST /api/organisation/checkin/{id}`
 - Country detail `GET /api/common/countries/{id}`
-- Migrations `extend_users`, `extend_organisations`, `extend_countries`, `create_corridors`
+- Phase 2 — entire modules: `person` (recommend + claim flow), `review`, `saved`, `report`, `moderation`
+- Migrations `extend_users`, `extend_organisations`, `extend_countries`, `create_corridors`, `create_people`, `create_reviews`, `create_saved_items`, `create_org_checkins`, `create_reports`, `create_moderation_events`
 
 **Human-written, extended by AI:** signup (v2: profile + default corridor in one transaction), user languages (`user_id` from JWT), organisation CRUD (ownership/RBAC, v2 fields, moderation statuses, `pending` on create), org types create and country-connection mutations (admin-only), auth middleware (fixed `{id}` route matching).
 

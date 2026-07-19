@@ -52,6 +52,14 @@ pub struct UpdateOrganisationRequest {
     pub cost: Option<String>,
 }
 
+#[derive(Debug, Deserialize, Serialize, ToSchema)]
+pub struct CheckinRequest {
+    /// "The place is still active" confirmation; defaults to true
+    pub still_active: Option<bool>,
+    /// Optional community tip shown on the detail page
+    pub tip: Option<String>,
+}
+
 /// Map search (design: map.jsx + map-filters.jsx). Either a bbox
 /// (min_lat/min_lng/max_lat/max_lng) or an origin point with radius_km.
 #[derive(Deserialize, Serialize, Debug, ToSchema, IntoParams)]

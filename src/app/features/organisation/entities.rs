@@ -180,6 +180,101 @@ impl Organisation {
         Ok(result)
     }
 
+    /// Records a community check-in ("I was here, still active" + tip).
+    pub fn checkin(
+        conn: &mut PgConnection,
+        organisation_id: Uuid,
+        user_id: Uuid,
+        still_active: bool,
+        tip: Option<String>,
+    ) -> Result<(), AppError> {
+        use crate::data::schema::org_checkins;
+
+        diesel::insert_into(org_checkins::table)
+            .values((
+                org_checkins::organisation_id.eq(organisation_id),
+                org_checkins::user_id.eq(user_id),
+                org_checkins::still_active.eq(still_active),
+                org_checkins::tip.eq(tip),
+            ))
+            .execute(conn)?;
+
+        Ok(())
+    }
+
+    /// Community-signals block for the detail page: how many people came,
+    /// what share confirmed "still active", when the last check-in was, and
+    /// the most recent tips.
+    pub fn community_signals(
+        conn: &mut PgConnection,
+        organisation_id: Uuid,
+    ) -> Result<CommunitySignals, AppError> {
+        use crate::data::schema::org_checkins;
+
+        let total = org_checkins::table
+            .filter(org_checkins::organisation_id.eq(organisation_id))
+            .count()
+            .get_result::<i64>(conn)?;
+
+        let active = org_checkins::table
+            .filter(org_checkins::organisation_id.eq(organisation_id))
+            .filter(org_checkins::still_active.eq(true))
+            .count()
+            .get_result::<i64>(conn)?;
+
+        let last_checkin_at = org_checkins::table
+            .filter(org_checkins::organisation_id.eq(organisation_id))
+            .select(diesel::dsl::max(org_checkins::created_at))
+            .first::<Option<NaiveDateTime>>(conn)?;
+
+        let tips = org_checkins::table
+            .filter(org_checkins::organisation_id.eq(organisation_id))
+            .filter(org_checkins::tip.is_not_null())
+            .order(org_checkins::created_at.desc())
+            .select(org_checkins::tip)
+            .limit(5)
+            .load::<Option<String>>(conn)?
+            .into_iter()
+            .flatten()
+            .collect();
+
+        Ok(CommunitySignals {
+            people_came: total,
+            still_active_pct: if total > 0 {
+                Some((active as f64 / total as f64 * 100.0).round())
+            } else {
+                None
+            },
+            last_checkin_at,
+            tips,
+        })
+    }
+
+    /// Submit-time auto-check: does a live org with a very similar name exist
+    /// within ~1 km of these coordinates?
+    pub fn has_duplicate_nearby(
+        conn: &mut PgConnection,
+        name: &str,
+        latitude: Option<&BigDecimal>,
+        longitude: Option<&BigDecimal>,
+    ) -> Result<bool, AppError> {
+        let (Some(lat), Some(lng)) = (latitude, longitude) else {
+            return Ok(false);
+        };
+
+        // ~1 km box around the point (1 degree latitude ≈ 111 km).
+        let delta = BigDecimal::try_from(0.01).map_err(|_| AppError::InternalServerError)?;
+
+        let count = organisations::table
+            .filter(organisations::name.ilike(name))
+            .filter(organisations::latitude.between(lat - &delta, lat + &delta))
+            .filter(organisations::longitude.between(lng - &delta, lng + &delta))
+            .count()
+            .get_result::<i64>(conn)?;
+
+        Ok(count > 0)
+    }
+
     pub fn increment_visits(
         conn: &mut PgConnection,
         organisation_id: Uuid,
@@ -238,6 +333,15 @@ impl Organisation {
 
         Ok(result)
     }
+}
+
+/// Aggregated community check-in signals (never stored, always computed).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CommunitySignals {
+    pub people_came: i64,
+    pub still_active_pct: Option<f64>,
+    pub last_checkin_at: Option<NaiveDateTime>,
+    pub tips: Vec<String>,
 }
 
 #[derive(Insertable, Clone)]

@@ -1,7 +1,7 @@
 use super::{
     requests::{
-        CreateOrganisationRequest, OrganisationsListQueryRequest, SearchOrganisationsQueryRequest,
-        UpdateOrganisationRequest,
+        CheckinRequest, CreateOrganisationRequest, OrganisationsListQueryRequest,
+        SearchOrganisationsQueryRequest, UpdateOrganisationRequest,
     },
     usecases::{
         CreateOrganisationUsecaseInput, FetchOrganisationsUsecaseInput,
@@ -399,6 +399,43 @@ pub async fn visit_organisation(
         .di_container
         .organisation_usecase
         .visit_organisation(id.into_inner())
+}
+
+// [authorship] AI-generated (Claude).
+#[utoipa::path(
+    post,
+    path = "/organisation/checkin/{id}",
+    context_path = "/api",
+    request_body = CheckinRequest,
+    params(
+        ("id" = Uuid, Path, description = "Organisation ID being checked into")
+    ),
+    responses(
+        (status = 200, description = "Check-in recorded; detail payload with fresh community signals", body = super::presenters::OrganisationContent),
+        (status = 401, description = "Unauthorized", body = AppError),
+        (status = 404, description = "Not found", body = AppError),
+        (status = 422, description = "Organisation is not live", body = AppError),
+        (status = 500, description = "Internal server error", body = AppError)
+    ),
+    tag = "Organisation"
+)]
+pub async fn checkin_organisation(
+    req: HttpRequest,
+    state: Data<AppState>,
+    id: Path<Uuid>,
+    form: Json<CheckinRequest>,
+) -> Result<HttpResponse, AppError> {
+    let caller = caller_user_id(&req)?;
+
+    state
+        .di_container
+        .organisation_usecase
+        .checkin_organisation(
+            id.into_inner(),
+            caller,
+            form.still_active.unwrap_or(true),
+            form.tip.clone(),
+        )
 }
 
 #[cfg(test)]

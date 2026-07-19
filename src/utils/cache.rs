@@ -409,6 +409,10 @@ impl CacheKeys {
         "cor:*".to_string()
     }
 
+    pub fn person_pattern() -> String {
+        "per:*".to_string()
+    }
+
     pub fn common_org_types_pattern() -> String {
         "common:organisation_types:*".to_string()
     }

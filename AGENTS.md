@@ -57,7 +57,7 @@ Each domain feature lives under `src/app/features/<feature>/` with a consistent 
 - `presenters.rs` — converts DB models to HTTP responses (`HttpResponse`)
 - `entities.rs` — domain structs (distinct from Diesel models in `src/data/models.rs`)
 
-Current features: `common`, `corridor`, `country_connection`, `healthcheck`, `images`, `organisation`, `user`
+Current features: `common`, `corridor`, `country_connection`, `healthcheck`, `images`, `moderation`, `organisation`, `person`, `report`, `review`, `saved`, `user`
 
 ### Adding a new feature — files to touch
 
@@ -89,6 +89,11 @@ When adding a mutating endpoint: put it in `AUTH_REQUIRED_ROUTES`, then decide i
 - Geo search (`GET /api/organisation/search`) is PostGIS-free: bbox filtering on the `(latitude, longitude)` index in SQL, Haversine distance + `nearest` sorting in Rust (`haversine_km` in `organisation/repositories.rs`, scan capped at 500 rows).
 - Signup v2 creates the user and an optional default corridor in one transaction (`User::signup_v2`). A user has at most one default corridor (partial unique index).
 - Controllers must take the authenticated user id from `req.extensions()` (helper `caller_user_id`), never from the request body.
+- Person status flow: `pending` (moderation) → `awaiting` (approved) → `confirmed`/`claimed` or `declined`. Hidden contacts are gated in ONE place — `PersonContent::from_gated` — and never serialized before confirmed/claimed + the matching privacy toggle. The `/api/person/claim/{token}` endpoints are deliberately public (the token is the credential) and must never be added to `AUTH_REQUIRED_ROUTES` (guard test exists).
+- Reviews: exactly one target (DB CHECK `num_nonnulls=1`), unique per author-target (partial unique indexes); create/delete refresh the target's `rating_avg`/`reviews_count` from AVG/COUNT in the same transaction — never patch counters incrementally.
+- Moderation: role check in `ModerationUsecase::ensure_moderator`; approve flips org→live / person→awaiting; request-changes requires a note and keeps the item pending. Submit-time auto-checks (duplicate nearby, phone format, creator trust) are written as a `submitted` event into `moderation_events.flags` by the org/person create usecases.
+- `saved_items`/`reports` are polymorphic (`kind` + `target_id`, no FK) — clean up in the owning delete usecases when that becomes relevant.
+- Community check-in signals (`community` block) are computed on fetch and only attached to the detail payload, never to list/search.
 
 ### Dependency injection
 
@@ -126,7 +131,7 @@ Cache keys follow the `CacheKeys` namespace helper in the same file (`org:*`, `c
 
 ### OpenAPI
 
-All public endpoints and schemas must be registered in the `#[openapi(...)]` macro in `src/main.rs` (both `paths` and `components/schemas`). The API docs UI is **Scalar** (`utoipa-scalar`) at `/scalar`; the raw spec is served at `/api-docs/openapi.json`, and the legacy `/swagger-ui` path 307-redirects to `/scalar`. New public doc routes must also be added to `SKIP_AUTH_ROUTES` in the auth middleware.
+The OpenAPI doc is split per feature: each new feature declares its own `#[derive(OpenApi)] pub struct ApiDoc` in `<feature>/mod.rs` (paths + schemas + tag) and is merged into the root doc in `build_openapi()` in `src/main.rs` — do NOT grow the legacy root `#[openapi(...)]` macro (it still holds pre-phase-2 features). The API docs UI is **Scalar** (`utoipa-scalar`) at `/scalar`; the raw spec is served at `/api-docs/openapi.json`, and the legacy `/swagger-ui` path 307-redirects to `/scalar`. New public doc routes must also be added to `SKIP_AUTH_ROUTES` in the auth middleware.
 
 ## Sub-agents
 
@@ -161,7 +166,7 @@ Keep these definitions in sync when conventions change (routes, env vars, RBAC r
 Endpoint handlers carry `// [authorship]` comments (skip: images/S3 feature). Keep them accurate when editing:
 
 - **Human-written (original codebase):** healthcheck; common countries/org_types GET; organisation CRUD; country-connection CRUD; user signin/signup/languages/OAuth; images + S3/storage/cache infrastructure; feature architecture and DI.
-- **AI-generated (Claude):** the whole `corridor` feature; `GET/PUT /api/user/me` + `/me/notifications`; `GET /api/organisation/search` + `POST /api/organisation/visit/{id}`; `GET /api/common/countries/{id}`; `path_matches` route matcher in auth middleware; RBAC helpers (`UserRole::is_admin/is_moderator`, `User::fetch_role`, `ensure_can_manage`/`ensure_admin`); migrations `extend_users` / `extend_organisations` / `extend_countries` / `create_corridors`; `compute_open_now` + `haversine_km`.
+- **AI-generated (Claude):** the whole `corridor`, `person`, `review`, `saved`, `report` and `moderation` features; `GET/PUT /api/user/me` + `/me/notifications`; `GET /api/organisation/search`, `POST /api/organisation/visit/{id}`, `POST /api/organisation/checkin/{id}` + community signals; `GET /api/common/countries/{id}`; `path_matches` route matcher in auth middleware; RBAC helpers (`UserRole::is_admin/is_moderator`, `User::fetch_role`, `ensure_can_manage`/`ensure_admin`/`ensure_moderator`); all phase-1/2 migrations (`extend_*`, `create_corridors`, `create_people`, `create_reviews`, `create_saved_items`, `create_org_checkins`, `create_reports`, `create_moderation_events`); `compute_open_now` + `haversine_km`; per-feature OpenAPI split (`build_openapi`).
 - **Human-written, extended by AI:** signup (v2 transaction with default corridor), user languages (user_id from JWT), organisation create/update/delete (ownership, v2 fields, pending status), org types create + country-connection mutations (admin gate), `AUTH_REQUIRED_ROUTES` contents.
 
 ## Environment Variables
