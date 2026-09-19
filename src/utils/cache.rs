@@ -605,6 +605,35 @@ mod tests {
         assert!(CacheKeys::corridor_stats(&Uuid::new_v4()).starts_with("cor:"));
     }
 
+    /// Every feature namespace must stay distinct — two features sharing a
+    /// prefix would invalidate each other's keys on every write.
+    #[test]
+    fn test_feature_patterns_are_distinct() {
+        let patterns = [
+            CacheKeys::organisation_pattern(),
+            CacheKeys::country_connection_pattern(),
+            CacheKeys::images_pattern(),
+            CacheKeys::corridor_pattern(),
+            CacheKeys::person_pattern(),
+            CacheKeys::common_pattern(),
+        ];
+
+        for (i, a) in patterns.iter().enumerate() {
+            assert!(a.ends_with(":*"), "{} is not a namespace pattern", a);
+
+            for b in patterns.iter().skip(i + 1) {
+                assert_ne!(a, b);
+                let (a_ns, b_ns) = (a.trim_end_matches('*'), b.trim_end_matches('*'));
+                assert!(
+                    !a_ns.starts_with(b_ns) && !b_ns.starts_with(a_ns),
+                    "{} and {} overlap",
+                    a,
+                    b
+                );
+            }
+        }
+    }
+
     /// The common pattern must cover the request-reply cache prefixes used in
     /// common/config.rs.
     #[test]

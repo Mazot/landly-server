@@ -137,3 +137,44 @@ impl SavedItem {
         Ok(rows)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_saved_kind_round_trip() {
+        for kind in SavedKind::ALL {
+            assert_eq!(SavedKind::try_from(kind.as_str()).unwrap(), kind);
+        }
+    }
+
+    /// Pinned by the CHECK constraint on saved_items.kind.
+    #[test]
+    fn test_saved_kind_as_str() {
+        assert_eq!(SavedKind::Org.as_str(), "org");
+        assert_eq!(SavedKind::Person.as_str(), "person");
+        assert_eq!(SavedKind::Country.as_str(), "country");
+        assert_eq!(SavedKind::Corridor.as_str(), "corridor");
+    }
+
+    /// `ALL` drives the counts payload — a kind missing from it would silently
+    /// stop being counted in the Saved tab badges.
+    #[test]
+    fn test_saved_kind_all_covers_every_variant() {
+        assert_eq!(SavedKind::ALL.len(), 4);
+
+        for kind in SavedKind::ALL {
+            assert!(SavedKind::try_from(kind.as_str()).is_ok());
+        }
+    }
+
+    #[test]
+    fn test_saved_kind_rejects_unknown() {
+        match SavedKind::try_from("conversation") {
+            Err(AppError::UnprocessableEntity(_)) => (),
+            other => panic!("expected UnprocessableEntity, got {:?}", other),
+        }
+        assert!(SavedKind::try_from("").is_err());
+    }
+}

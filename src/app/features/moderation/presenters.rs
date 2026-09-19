@@ -1,4 +1,4 @@
-use super::repositories::{ModerationEvent, QueueItem};
+use super::entities::{ModerationEvent, QueueItem};
 use actix_web::HttpResponse;
 use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};

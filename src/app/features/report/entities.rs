@@ -72,3 +72,36 @@ impl Report {
         Ok(report)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_report_target_kind_round_trip() {
+        for kind in [
+            ReportTargetKind::Org,
+            ReportTargetKind::Person,
+            ReportTargetKind::Conversation,
+        ] {
+            assert_eq!(ReportTargetKind::try_from(kind.as_str()).unwrap(), kind);
+        }
+    }
+
+    /// Pinned by the CHECK constraint on reports.target_kind.
+    #[test]
+    fn test_report_target_kind_as_str() {
+        assert_eq!(ReportTargetKind::Org.as_str(), "org");
+        assert_eq!(ReportTargetKind::Person.as_str(), "person");
+        assert_eq!(ReportTargetKind::Conversation.as_str(), "conversation");
+    }
+
+    #[test]
+    fn test_report_target_kind_rejects_unknown() {
+        match ReportTargetKind::try_from("corridor") {
+            Err(AppError::UnprocessableEntity(_)) => (),
+            other => panic!("expected UnprocessableEntity, got {:?}", other),
+        }
+        assert!(ReportTargetKind::try_from("").is_err());
+    }
+}

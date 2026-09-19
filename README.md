@@ -86,11 +86,24 @@ GOOGLE_CLIENT_ID=your-google-client-id
 GOOGLE_CLIENT_SECRET=your-google-client-secret
 OAUTH_GOOGLE_REDIRECT_URL=http://localhost:8080/api/user/oauth/google/callback
 
+# Object storage (S3 / Cloudflare R2 / MinIO) - optional, uploads are disabled without it
+S3_ENDPOINT_URL=http://localhost:9000
+S3_ACCESS_KEY_ID=minioadmin
+S3_SECRET_ACCESS_KEY=minioadmin
+S3_BUCKET=landly-images
+S3_REGION=auto
+S3_PUBLIC_URL=http://localhost:9000/landly-images
+
 # Server
 FRONTEND_ORIGIN=http://localhost:8080
 HOST=0.0.0.0
 PORT=8080
 ```
+
+`DATABASE_URL`, `JWT_SECRET`, `JWT_EXPIRATION`, `HOST` and `PORT` are required. Everything
+else degrades gracefully: without `REDIS_URL` the cache is a no-op, without the `S3_*` block
+image upload/delete fail at runtime, and without the `GOOGLE_*` block the OAuth endpoints
+answer `503 Service Unavailable`.
 
 ### 3. Run with Docker (Recommended)
 
@@ -179,6 +192,8 @@ GET /api/user/oauth/google/login
 GET /api/user/oauth/google/callback?code=...&state=...
 ```
 
+Both endpoints answer `503 Service Unavailable` when the `GOOGLE_*` environment variables are not configured.
+
 ### Profile
 
 ```http
@@ -191,6 +206,11 @@ PUT /api/user/me
 
 # Update notification settings (free-form JSON object)
 PUT /api/user/me/notifications
+
+# Spoken languages
+GET    /api/user/{user_id}/languages   # public
+POST   /api/user/languages             # auth; language_ids are added for the caller
+DELETE /api/user/languages             # auth; removes one of the caller's languages
 ```
 
 ### Corridors
@@ -234,6 +254,20 @@ DELETE /api/organisation/delete/{id}
 # Count a visit (public)
 POST /api/organisation/visit/{id}
 ```
+
+### Images
+
+Organisation photos live in S3/R2 (MinIO locally); the API stores only the metadata.
+
+```http
+POST   /api/images/upload/{organisation_id}   # auth; multipart/form-data
+GET    /api/images/list/{organisation_id}
+GET    /api/images/fetch/{id}
+PUT    /api/images/set-primary/{id}           # auth
+DELETE /api/images/delete/{id}                # auth
+```
+
+Upload and delete return `500` while object storage is unconfigured (`S3_*` unset).
 
 ### Countries
 
@@ -324,6 +358,7 @@ Violations return `401 Unauthorized` (no/invalid token) or `403 Forbidden` (insu
 - **organisation_types** - Organization classifications with stable `slug` (canonical: `embassy`, `business`, `helper`, `community`, `volunteer`)
 - **countries** - Country master data (+`currency`, `phone_code`, `top_cities`)
 - **languages** - Language master data
+- **images** - Organisation photo metadata (the objects themselves live in S3/R2)
 - **countries_connections** - Country relationships
 - **countries_to_languages** - Country-language mappings
 - **users_to_languages** - User language preferences
@@ -348,6 +383,10 @@ cargo test -- --nocapture
 # Run specific test
 cargo test test_name
 ```
+
+Tests are inline `#[cfg(test)] mod tests` modules next to the code and run without Postgres
+or Redis: usecases are exercised against hand-written stub repositories, presenters and
+domain enums directly. Anything that needs the real stack belongs in a smoke test, not here.
 
 ### Database Migrations
 

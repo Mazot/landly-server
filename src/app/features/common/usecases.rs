@@ -102,3 +102,113 @@ pub struct CreateOrganisationTypeUsecaseInput {
     pub title: String,
     pub slug: Option<String>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::app::features::common::presenters::CommonPresenterImpl;
+    use crate::app::features::common::repositories::GetCountryRepositoryInput;
+    use crate::app::features::user::entities::UserRole;
+    use crate::data::models::{Country, OrganisationType};
+    use std::sync::Mutex;
+
+    struct StubRepo {
+        caller_role: UserRole,
+        created: Mutex<Vec<String>>,
+    }
+
+    impl CommonRepository for StubRepo {
+        fn get_all_countries(
+            &self,
+            _params: GetAllCountriesRepositoryInput,
+        ) -> Result<Vec<Country>, AppError> {
+            unimplemented!()
+        }
+
+        fn get_country(&self, _params: GetCountryRepositoryInput) -> Result<Country, AppError> {
+            unimplemented!()
+        }
+
+        fn get_country_detail(&self, _id: Uuid) -> Result<(Country, Vec<(String, i64)>), AppError> {
+            unimplemented!()
+        }
+
+        fn get_organisation_type(&self, _id: &Uuid) -> Result<OrganisationType, AppError> {
+            unimplemented!()
+        }
+
+        fn get_all_organisation_types(&self) -> Result<Vec<OrganisationType>, AppError> {
+            unimplemented!()
+        }
+
+        fn create_organisation_type(
+            &self,
+            params: CreateOrganisationTypeRepositoryInput,
+        ) -> Result<OrganisationType, AppError> {
+            self.created.lock().unwrap().push(params.org_type.clone());
+
+            Ok(OrganisationType {
+                id: Uuid::new_v4(),
+                org_type: params.org_type,
+                color: Some(params.color),
+                title: Some(params.title),
+                slug: params.slug,
+            })
+        }
+
+        fn fetch_user_role(&self, _user_id: Uuid) -> Result<UserRole, AppError> {
+            Ok(self.caller_role)
+        }
+    }
+
+    fn usecase_with(caller_role: UserRole) -> (CommonUsecase, Arc<StubRepo>) {
+        let repo = Arc::new(StubRepo {
+            caller_role,
+            created: Mutex::new(vec![]),
+        });
+        let usecase = CommonUsecase::new(repo.clone(), Arc::new(CommonPresenterImpl::new()));
+
+        (usecase, repo)
+    }
+
+    fn create_input() -> CreateOrganisationTypeUsecaseInput {
+        CreateOrganisationTypeUsecaseInput {
+            org_type: "embassy".to_string(),
+            color: "#123456".to_string(),
+            title: "Embassy".to_string(),
+            slug: Some("embassy".to_string()),
+        }
+    }
+
+    /// Organisation types are a system reference table: only an admin may
+    /// extend it.
+    #[test]
+    fn test_only_admin_can_create_an_organisation_type() {
+        let (usecase, repo) = usecase_with(UserRole::Admin);
+
+        assert!(
+            usecase
+                .create_organisation_type(Uuid::new_v4(), create_input())
+                .is_ok()
+        );
+        assert_eq!(repo.created.lock().unwrap().len(), 1);
+    }
+
+    /// A moderator outranks a user but is still not an admin here.
+    #[test]
+    fn test_user_and_moderator_cannot_create_an_organisation_type() {
+        for role in [UserRole::User, UserRole::Moderator] {
+            let (usecase, repo) = usecase_with(role);
+
+            match usecase.create_organisation_type(Uuid::new_v4(), create_input()) {
+                Err(AppError::Forbidden(_)) => (),
+                other => panic!("expected Forbidden for {:?}, got {:?}", role, other.err()),
+            }
+            assert!(
+                repo.created.lock().unwrap().is_empty(),
+                "{:?} must not reach the repository",
+                role
+            );
+        }
+    }
+}

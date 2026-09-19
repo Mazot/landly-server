@@ -415,3 +415,115 @@ pub struct ListPeopleFilters {
     pub limit: i64,
     pub offset: i64,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_person_status_round_trip() {
+        for status in [
+            PersonStatus::Pending,
+            PersonStatus::Awaiting,
+            PersonStatus::Confirmed,
+            PersonStatus::Claimed,
+            PersonStatus::Declined,
+        ] {
+            assert_eq!(PersonStatus::try_from(status.as_str()).unwrap(), status);
+        }
+    }
+
+    /// The exact strings are pinned by the CHECK constraint on people.status.
+    #[test]
+    fn test_person_status_as_str() {
+        assert_eq!(PersonStatus::Pending.as_str(), "pending");
+        assert_eq!(PersonStatus::Awaiting.as_str(), "awaiting");
+        assert_eq!(PersonStatus::Confirmed.as_str(), "confirmed");
+        assert_eq!(PersonStatus::Claimed.as_str(), "claimed");
+        assert_eq!(PersonStatus::Declined.as_str(), "declined");
+    }
+
+    #[test]
+    fn test_person_status_rejects_unknown() {
+        match PersonStatus::try_from("live") {
+            Err(AppError::UnprocessableEntity(_)) => (),
+            other => panic!("expected UnprocessableEntity, got {:?}", other),
+        }
+        assert!(PersonStatus::try_from("").is_err());
+    }
+
+    /// `is_public` gates both the public list and the contact unlock in
+    /// `PersonContent::from_gated` — only confirmed/claimed may pass.
+    #[test]
+    fn test_only_confirmed_and_claimed_are_public() {
+        assert!(PersonStatus::Confirmed.is_public());
+        assert!(PersonStatus::Claimed.is_public());
+
+        for status in [
+            PersonStatus::Pending,
+            PersonStatus::Awaiting,
+            PersonStatus::Declined,
+        ] {
+            assert!(!status.is_public(), "{:?} must not be public", status);
+        }
+    }
+
+    #[test]
+    fn test_send_via_round_trip() {
+        for send_via in [SendVia::Email, SendVia::Whatsapp] {
+            assert_eq!(SendVia::try_from(send_via.as_str()).unwrap(), send_via);
+        }
+        assert_eq!(SendVia::Email.as_str(), "email");
+        assert_eq!(SendVia::Whatsapp.as_str(), "whatsapp");
+    }
+
+    #[test]
+    fn test_send_via_rejects_unknown() {
+        match SendVia::try_from("telegram") {
+            Err(AppError::UnprocessableEntity(_)) => (),
+            other => panic!("expected UnprocessableEntity, got {:?}", other),
+        }
+    }
+
+    fn test_person(status: &str) -> Person {
+        Person {
+            id: Uuid::new_v4(),
+            name: "Daria K.".to_string(),
+            bio: None,
+            city: None,
+            location_country_id: None,
+            skills: vec![],
+            email: None,
+            whatsapp: None,
+            send_via: None,
+            consent_given: true,
+            status: status.to_string(),
+            show_whatsapp: false,
+            show_email: false,
+            show_city: false,
+            allow_reviews: true,
+            recommended_by: None,
+            claimed_by: None,
+            moderation_note: None,
+            rating_avg: None,
+            reviews_count: 0,
+            created_at: chrono::Utc::now().naive_utc(),
+            updated_at: chrono::Utc::now().naive_utc(),
+        }
+    }
+
+    #[test]
+    fn test_status_enum_reads_the_stored_string() {
+        assert_eq!(test_person("claimed").status_enum(), PersonStatus::Claimed);
+    }
+
+    /// An unreadable status must degrade to the most restrictive state, never
+    /// to a public one — otherwise a bad row would leak contacts.
+    #[test]
+    fn test_status_enum_falls_back_to_pending() {
+        let person = test_person("something-unexpected");
+
+        assert_eq!(person.status_enum(), PersonStatus::Pending);
+        assert!(!person.status_enum().is_public());
+    }
+}

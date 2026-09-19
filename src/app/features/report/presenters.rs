@@ -47,3 +47,50 @@ impl ReportPresenter for ReportPresenterImpl {
         HttpResponse::Ok().json(ReportContent::from(report))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test_report() -> Report {
+        Report {
+            id: Uuid::new_v4(),
+            reporter_id: Some(Uuid::new_v4()),
+            target_kind: "org".to_string(),
+            target_id: Uuid::new_v4(),
+            reason: "closed down".to_string(),
+            status: "open".to_string(),
+            created_at: chrono::Utc::now().naive_utc(),
+        }
+    }
+
+    /// The reporter stays anonymous towards the reported party: the id is
+    /// never part of the response payload.
+    #[test]
+    fn test_report_content_does_not_expose_the_reporter() {
+        let content = ReportContent::from(test_report());
+        let json = serde_json::to_string(&content).unwrap();
+
+        assert!(!json.contains("reporterId"));
+        assert!(!json.contains("reporter_id"));
+    }
+
+    #[test]
+    fn test_report_content_keeps_kind_and_status() {
+        let content = ReportContent::from(test_report());
+
+        assert_eq!(content.target_kind, "org");
+        assert_eq!(content.status, "open");
+        assert_eq!(content.reason, "closed down");
+    }
+
+    #[test]
+    fn test_presenter_response_is_ok() {
+        assert!(
+            ReportPresenterImpl::new()
+                .to_single_json(test_report())
+                .status()
+                .is_success()
+        );
+    }
+}

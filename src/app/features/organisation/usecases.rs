@@ -7,9 +7,8 @@ use super::{
         UpdateOrganisationRepositoryInput,
     },
 };
-use crate::app::features::moderation::repositories::{
-    ModerationRepository, SubmittedEventInput, TargetKind,
-};
+use crate::app::features::moderation::entities::TargetKind;
+use crate::app::features::moderation::repositories::{ModerationRepository, SubmittedEventInput};
 use crate::error::AppError;
 use actix_web::HttpResponse;
 use bigdecimal::BigDecimal;
@@ -537,16 +536,15 @@ mod tests {
         }
         fn fetch_queue(
             &self,
-            _kind: Option<crate::app::features::moderation::repositories::TargetKind>,
-        ) -> Result<Vec<crate::app::features::moderation::repositories::QueueItem>, AppError>
-        {
+            _kind: Option<crate::app::features::moderation::entities::TargetKind>,
+        ) -> Result<Vec<crate::app::features::moderation::entities::QueueItem>, AppError> {
             unreachable!()
         }
         fn moderate(
             &self,
-            _kind: crate::app::features::moderation::repositories::TargetKind,
+            _kind: crate::app::features::moderation::entities::TargetKind,
             _target_id: Uuid,
-            _action: crate::app::features::moderation::repositories::ModerationAction,
+            _action: crate::app::features::moderation::entities::ModerationAction,
             _note: Option<String>,
             _moderator_id: Uuid,
         ) -> Result<(), AppError> {
