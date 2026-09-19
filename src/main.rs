@@ -61,6 +61,11 @@ async fn main() -> std::io::Result<()> {
         AppState::new(db_pool)
     };
 
+    // Built once at startup and shared (cheap clone) with every worker —
+    // merging all the per-feature specs on every request to
+    // /api-docs/openapi.json would be wasted work since the doc is static.
+    let openapi = build_openapi();
+
     HttpServer::new(move || {
         let country_connection_configure_services =
             app::features::country_connection::config::create_configure_services_closure(
@@ -77,16 +82,20 @@ async fn main() -> std::io::Result<()> {
 
         App::new()
             .app_data(web::Data::new(app_state.clone()))
+            .app_data(web::Data::new(openapi.clone()))
             .wrap(Logger::default())
             .wrap(cors())
             .wrap(Authentication)
             // API docs: Scalar UI (replaces the heavier Swagger UI, which
             // embedded the whole swagger dist via rust-embed at build time).
-            .service(Scalar::with_url("/scalar", build_openapi()))
-            // Raw spec for codegen/tooling, same path as before.
+            .service(Scalar::with_url("/scalar", openapi.clone()))
+            // Raw spec for codegen/tooling, same path as before. Reuses the
+            // doc built once at startup instead of rebuilding it per request.
             .route(
                 "/api-docs/openapi.json",
-                web::get().to(|| async { HttpResponse::Ok().json(build_openapi()) }),
+                web::get().to(|doc: web::Data<utoipa::openapi::OpenApi>| async move {
+                    HttpResponse::Ok().json(doc.get_ref())
+                }),
             )
             // Old bookmark compatibility.
             .service(web::redirect("/swagger-ui", "/scalar"))

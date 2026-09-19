@@ -20,7 +20,7 @@ pub fn configure_services(cfg: &mut ServiceConfig) {
                 "/me/notifications",
                 web::put().to(update_notification_settings),
             )
-.route("/{user_id}/languages", web::get().to(fetch_languages))
+            .route("/{user_id}/languages", web::get().to(fetch_languages))
             .route("/languages", web::post().to(add_languages))
             .route("/languages", web::delete().to(delete_language)),
     );
