@@ -10,7 +10,7 @@ use actix_web::middleware::Logger;
 use actix_web::{App, HttpResponse, HttpServer, web};
 use dotenv::dotenv;
 use utoipa::OpenApi;
-use utoipa_scalar::Scalar;
+use utoipa_scalar::{Scalar, Servable};
 
 #[derive(OpenApi)]
 #[openapi(
