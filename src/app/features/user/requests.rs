@@ -13,17 +13,41 @@ pub struct SignUpRequest {
     pub username: String,
     pub email: String,
     pub password: String,
+    // Signup v2 (design: signup-fast.jsx + signup-corridor.jsx) — all optional
+    // so the legacy one-step signup keeps working.
+    pub name: Option<String>,
+    pub locale: Option<String>,
+    pub here_as: Option<String>,
+    pub home_country_id: Option<Uuid>,
+    pub avatar_color: Option<String>,
+    pub corridor_from_country_id: Option<Uuid>,
+    pub corridor_to_country_id: Option<Uuid>,
+}
+
+#[derive(Deserialize, Serialize, Debug, ToSchema)]
+pub struct UpdateProfileRequest {
+    pub name: Option<String>,
+    pub bio: Option<String>,
+    pub city: Option<String>,
+    pub home_country_id: Option<Uuid>,
+    pub avatar_color: Option<String>,
+    pub locale: Option<String>,
+    pub here_as: Option<String>,
+}
+
+#[derive(Deserialize, Serialize, Debug, ToSchema)]
+pub struct UpdateNotificationSettingsRequest {
+    /// Free-form settings object, stored as-is (design: account.jsx settings).
+    pub notification_settings: serde_json::Value,
 }
 
 #[derive(Deserialize, Serialize, Debug, ToSchema)]
 pub struct AddLanguagesRequest {
-    pub user_id: Uuid,
     pub languages_ids: Vec<Uuid>,
 }
 
 #[derive(Deserialize, Serialize, Debug, ToSchema, IntoParams)]
 pub struct DeleteLanguageRequest {
-    pub user_id: Uuid,
     pub language_id: Uuid,
 }
 
@@ -65,6 +89,13 @@ mod tests {
             username: "newuser".to_string(),
             email: "new@example.com".to_string(),
             password: "newpass123".to_string(),
+            name: None,
+            locale: None,
+            here_as: None,
+            home_country_id: None,
+            avatar_color: None,
+            corridor_from_country_id: None,
+            corridor_to_country_id: None,
         };
 
         let json = serde_json::to_string(&request).unwrap();
@@ -84,28 +115,23 @@ mod tests {
 
     #[test]
     fn test_add_languages_request_single_language() {
-        let user_id = Uuid::new_v4();
         let lang_id = Uuid::new_v4();
 
         let request = AddLanguagesRequest {
-            user_id,
             languages_ids: vec![lang_id],
         };
 
-        assert_eq!(request.user_id, user_id);
         assert_eq!(request.languages_ids.len(), 1);
         assert_eq!(request.languages_ids[0], lang_id);
     }
 
     #[test]
     fn test_add_languages_request_multiple_languages() {
-        let user_id = Uuid::new_v4();
         let lang1 = Uuid::new_v4();
         let lang2 = Uuid::new_v4();
         let lang3 = Uuid::new_v4();
 
         let request = AddLanguagesRequest {
-            user_id,
             languages_ids: vec![lang1, lang2, lang3],
         };
 
@@ -117,10 +143,7 @@ mod tests {
 
     #[test]
     fn test_add_languages_request_empty_list() {
-        let user_id = Uuid::new_v4();
-
         let request = AddLanguagesRequest {
-            user_id,
             languages_ids: vec![],
         };
 
@@ -129,30 +152,20 @@ mod tests {
 
     #[test]
     fn test_delete_language_request() {
-        let user_id = Uuid::new_v4();
         let language_id = Uuid::new_v4();
 
-        let request = DeleteLanguageRequest {
-            user_id,
-            language_id,
-        };
+        let request = DeleteLanguageRequest { language_id };
 
-        assert_eq!(request.user_id, user_id);
         assert_eq!(request.language_id, language_id);
     }
 
     #[test]
     fn test_delete_language_request_serialization() {
-        let user_id = Uuid::new_v4();
         let language_id = Uuid::new_v4();
 
-        let request = DeleteLanguageRequest {
-            user_id,
-            language_id,
-        };
+        let request = DeleteLanguageRequest { language_id };
 
         let json = serde_json::to_string(&request).unwrap();
-        assert!(json.contains(&user_id.to_string()));
         assert!(json.contains(&language_id.to_string()));
     }
 
@@ -182,6 +195,13 @@ mod tests {
             username: "user-name_123".to_string(),
             email: "test+tag@example.co.uk".to_string(),
             password: "P@ssw0rd!#$".to_string(),
+            name: None,
+            locale: None,
+            here_as: None,
+            home_country_id: None,
+            avatar_color: None,
+            corridor_from_country_id: None,
+            corridor_to_country_id: None,
         };
 
         let json = serde_json::to_string(&request).unwrap();

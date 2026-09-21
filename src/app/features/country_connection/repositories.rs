@@ -1,5 +1,6 @@
 use super::entities::{CountryConnection, CreateCountryConnection, UpdateCountryConnection};
 use crate::{
+    app::features::user::entities::{User, UserRole},
     error::AppError,
     utils::{
         cache::{CacheKeys, CacheService, TypedCache},
@@ -34,6 +35,9 @@ pub trait CountryConnectionRepository: Send + Sync + 'static {
     ) -> Result<CountryConnection, AppError>;
 
     fn delete_country_connection(&self, id: Uuid) -> Result<(), AppError>;
+
+    /// Role of a user, for RBAC checks in the usecase layer.
+    fn fetch_user_role(&self, user_id: Uuid) -> Result<UserRole, AppError>;
 }
 
 #[derive(Clone)]
@@ -174,6 +178,12 @@ impl CountryConnectionRepository for CountryConnectionRepositoryImpl {
             .set::<CountryConnection>(&cache_key, &result, None)?;
 
         Ok(result)
+    }
+
+    fn fetch_user_role(&self, user_id: Uuid) -> Result<UserRole, AppError> {
+        let connection = &mut self.pool.get()?;
+
+        User::fetch_role(connection, user_id)
     }
 }
 

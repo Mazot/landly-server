@@ -48,7 +48,10 @@ services:
     networks:
       - landly_network
     healthcheck:
-      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      # Authenticated PING: the unauthenticated `incr ping` variant always
+      # exits 0 (redis-cli does not propagate NOAUTH as a failure) and also
+      # mutates a "ping" key.
+      test: ["CMD-SHELL", "redis-cli -a $${REDIS_PASSWORD:-redis-pass} ping | grep -q PONG"]
       interval: 10s
       timeout: 3s
       retries: 5
@@ -120,6 +123,7 @@ services:
       REDIS_URL: redis://${REDIS_USER:-redis}:${REDIS_PASSWORD:-redis-pass}@redis:6379
       RUST_LOG: ${RUST_LOG:-info}
       JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRATION: ${JWT_EXPIRATION:-3600}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
       OAUTH_GOOGLE_REDIRECT_URL: ${OAUTH_GOOGLE_REDIRECT_URL}
@@ -145,7 +149,8 @@ services:
       - ./data:/app/data
       - ./logs:/app/logs
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:${PORT:-8080}/health"]
+      # The server exposes /api/healthcheck (there is no /health route).
+      test: ["CMD", "curl", "-f", "http://localhost:${PORT:-8080}/api/healthcheck"]
       interval: 30s
       timeout: 10s
       retries: 3

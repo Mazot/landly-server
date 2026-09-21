@@ -31,6 +31,10 @@ pub enum AppError {
     // 500
     #[error("Internal Server Error")]
     InternalServerError,
+
+    // 503 — a required backing service/integration is not configured
+    #[error("Service Unavailable: {}", _0)]
+    ServiceUnavailable(JsonValue),
 }
 
 impl ResponseError for AppError {
@@ -41,6 +45,7 @@ impl ResponseError for AppError {
             AppError::NotFound(_) => StatusCode::NOT_FOUND,
             AppError::UnprocessableEntity(_) => StatusCode::UNPROCESSABLE_ENTITY,
             AppError::InternalServerError => StatusCode::INTERNAL_SERVER_ERROR,
+            AppError::ServiceUnavailable(_) => StatusCode::SERVICE_UNAVAILABLE,
         }
     }
 
@@ -53,6 +58,7 @@ impl ResponseError for AppError {
             AppError::InternalServerError => {
                 HttpResponse::InternalServerError().json("Internal Server Error")
             }
+            AppError::ServiceUnavailable(msg) => HttpResponse::ServiceUnavailable().json(msg),
         }
     }
 }
@@ -60,14 +66,20 @@ impl ResponseError for AppError {
 impl From<DieselError> for AppError {
     fn from(error: DieselError) -> Self {
         match error {
-            DieselError::DatabaseError(kind, info) => {
-                if let DatabaseErrorKind::UniqueViolation = kind {
-                    let message = info.details().unwrap_or_else(|| info.message()).to_string();
-                    AppError::UnprocessableEntity(json!({ "error": message }))
-                } else {
-                    AppError::InternalServerError
-                }
+            // Constraint violations are caused by invalid client input
+            // (bad FK reference, CHECK-constrained enum value, missing
+            // required field), so they must surface as 422 — not 500.
+            DieselError::DatabaseError(
+                DatabaseErrorKind::UniqueViolation
+                | DatabaseErrorKind::ForeignKeyViolation
+                | DatabaseErrorKind::CheckViolation
+                | DatabaseErrorKind::NotNullViolation,
+                info,
+            ) => {
+                let message = info.details().unwrap_or_else(|| info.message()).to_string();
+                AppError::UnprocessableEntity(json!({ "error": message }))
             }
+            DieselError::DatabaseError(..) => AppError::InternalServerError,
             DieselError::NotFound => {
                 AppError::NotFound(json!({ "error": "requested record was not found" }))
             }
@@ -175,6 +187,136 @@ mod tests {
     fn test_app_error_internal_server_error_status() {
         let error = AppError::InternalServerError;
         assert_eq!(error.status_code(), StatusCode::INTERNAL_SERVER_ERROR);
+    }
+
+    #[test]
+    fn test_app_error_service_unavailable_status() {
+        let error = AppError::ServiceUnavailable(json!({ "error": "not configured" }));
+        assert_eq!(error.status_code(), StatusCode::SERVICE_UNAVAILABLE);
+        assert_eq!(
+            error.error_response().status(),
+            StatusCode::SERVICE_UNAVAILABLE
+        );
+    }
+
+    /// Minimal `DatabaseErrorInformation` so the Diesel conversion can be
+    /// exercised without a live Postgres connection.
+    struct TestDbErrorInfo {
+        message: String,
+        details: Option<String>,
+    }
+
+    impl diesel::result::DatabaseErrorInformation for TestDbErrorInfo {
+        fn message(&self) -> &str {
+            &self.message
+        }
+        fn details(&self) -> Option<&str> {
+            self.details.as_deref()
+        }
+        fn hint(&self) -> Option<&str> {
+            None
+        }
+        fn table_name(&self) -> Option<&str> {
+            None
+        }
+        fn column_name(&self) -> Option<&str> {
+            None
+        }
+        fn constraint_name(&self) -> Option<&str> {
+            None
+        }
+        fn statement_position(&self) -> Option<i32> {
+            None
+        }
+    }
+
+    fn db_error(kind: DatabaseErrorKind, message: &str, details: Option<&str>) -> DieselError {
+        DieselError::DatabaseError(
+            kind,
+            Box::new(TestDbErrorInfo {
+                message: message.to_string(),
+                details: details.map(|d| d.to_string()),
+            }),
+        )
+    }
+
+    /// Constraint violations are caused by client input (bad FK, CHECK-ed
+    /// enum value, missing required field) — they must be 422, never 500.
+    #[test]
+    fn test_constraint_violations_become_unprocessable_entity() {
+        for kind in [
+            DatabaseErrorKind::UniqueViolation,
+            DatabaseErrorKind::ForeignKeyViolation,
+            DatabaseErrorKind::CheckViolation,
+            DatabaseErrorKind::NotNullViolation,
+        ] {
+            let app_error: AppError = db_error(kind, "constraint failed", None).into();
+
+            match app_error {
+                AppError::UnprocessableEntity(_) => (),
+                other => panic!(
+                    "expected UnprocessableEntity for {:?}, got {:?}",
+                    kind, other
+                ),
+            }
+        }
+    }
+
+    #[test]
+    fn test_constraint_violation_prefers_details_over_message() {
+        let app_error: AppError = db_error(
+            DatabaseErrorKind::UniqueViolation,
+            "duplicate key value violates unique constraint",
+            Some("Key (email)=(a@b.c) already exists."),
+        )
+        .into();
+
+        match app_error {
+            AppError::UnprocessableEntity(json) => {
+                assert_eq!(
+                    json.get("error").and_then(|v| v.as_str()),
+                    Some("Key (email)=(a@b.c) already exists.")
+                );
+            }
+            other => panic!("expected UnprocessableEntity, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_constraint_violation_falls_back_to_message() {
+        let app_error: AppError =
+            db_error(DatabaseErrorKind::CheckViolation, "check failed", None).into();
+
+        match app_error {
+            AppError::UnprocessableEntity(json) => {
+                assert_eq!(
+                    json.get("error").and_then(|v| v.as_str()),
+                    Some("check failed")
+                );
+            }
+            other => panic!("expected UnprocessableEntity, got {:?}", other),
+        }
+    }
+
+    /// Anything the client cannot have caused stays a 500 and leaks no
+    /// database detail to the response.
+    #[test]
+    fn test_other_database_errors_stay_internal() {
+        for kind in [
+            DatabaseErrorKind::SerializationFailure,
+            DatabaseErrorKind::ReadOnlyTransaction,
+            DatabaseErrorKind::ClosedConnection,
+        ] {
+            let app_error: AppError = db_error(kind, "internal db failure", None).into();
+
+            match app_error {
+                AppError::InternalServerError => (),
+                other => panic!(
+                    "expected InternalServerError for {:?}, got {:?}",
+                    kind, other
+                ),
+            }
+        }
     }
 
     #[test]

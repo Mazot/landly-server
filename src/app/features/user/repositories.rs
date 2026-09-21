@@ -1,16 +1,30 @@
-use super::entities::{User, UserToLanguage};
+use super::entities::{SignUpV2Input, UpdateUserProfile, User, UserToLanguage};
 use crate::{error::AppError, utils::db::DbPool};
 use uuid::Uuid;
+
+/// Computed profile stats for the account screen (design: account.jsx).
+/// `people_recommended` / `people_helped` / `rating` come alive in phase 2
+/// together with the person and review features.
+#[derive(Debug, Clone, Default)]
+pub struct ProfileStats {
+    pub places_added: i64,
+    pub people_recommended: i64,
+    pub people_helped: i64,
+    pub rating: Option<f64>,
+}
 
 pub trait UserRepository: Send + Sync + 'static {
     fn signin(&self, email: String, password: String) -> Result<(User, String), AppError>;
 
-    fn signup(
+    fn signup(&self, input: SignUpV2Input) -> Result<(User, String), AppError>;
+
+    fn fetch_profile(&self, user_id: Uuid) -> Result<(User, ProfileStats), AppError>;
+
+    fn update_profile(
         &self,
-        username: String,
-        email: String,
-        password: String,
-    ) -> Result<(User, String), AppError>;
+        user_id: Uuid,
+        changes: UpdateUserProfile,
+    ) -> Result<(User, ProfileStats), AppError>;
 
     fn add_languages(
         &self,
@@ -47,15 +61,36 @@ impl UserRepository for UserRepositoryImpl {
         User::signin(conn, email, password)
     }
 
-    fn signup(
-        &self,
-        username: String,
-        email: String,
-        password: String,
-    ) -> Result<(User, String), AppError> {
+    fn signup(&self, input: SignUpV2Input) -> Result<(User, String), AppError> {
         let conn = &mut self.pool.get()?;
 
-        User::signup(conn, username, email, password)
+        User::signup_v2(conn, input)
+    }
+
+    fn fetch_profile(&self, user_id: Uuid) -> Result<(User, ProfileStats), AppError> {
+        let conn = &mut self.pool.get()?;
+        let user = User::find_by_id(conn, user_id)?;
+        let stats = ProfileStats {
+            places_added: User::count_created_organisations(conn, user_id)?,
+            ..ProfileStats::default()
+        };
+
+        Ok((user, stats))
+    }
+
+    fn update_profile(
+        &self,
+        user_id: Uuid,
+        changes: UpdateUserProfile,
+    ) -> Result<(User, ProfileStats), AppError> {
+        let conn = &mut self.pool.get()?;
+        let user = User::update_profile(conn, user_id, &changes)?;
+        let stats = ProfileStats {
+            places_added: User::count_created_organisations(conn, user_id)?,
+            ..ProfileStats::default()
+        };
+
+        Ok((user, stats))
     }
 
     fn add_languages(

@@ -23,6 +23,8 @@ fn get_jwt_expiration_secs() -> usize {
         .unwrap_or(3600)
 }
 
+/// Validates a JWT signature + expiry and returns its claims.
+/// The auth middleware uses `claims.sub` as the authenticated user id.
 pub fn decode_token(token: &str) -> Result<JwtClaims, AppError> {
     let secret = get_jwt_secret();
     let validation = jsonwebtoken::Validation::default();
@@ -36,6 +38,8 @@ pub fn decode_token(token: &str) -> Result<JwtClaims, AppError> {
     Ok(token_data.claims)
 }
 
+/// Issues a signed JWT for the user, expiring after `JWT_EXPIRATION` seconds
+/// (default 3600).
 pub fn generate_token(user_id: Uuid) -> Result<String, AppError> {
     let now = Utc::now();
     let exp_secs = get_jwt_expiration_secs();
@@ -58,6 +62,7 @@ pub fn generate_token(user_id: Uuid) -> Result<String, AppError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serial_test::serial;
 
     fn setup_test_env() {
         unsafe {
@@ -67,6 +72,7 @@ mod tests {
     }
 
     #[test]
+    #[serial(jwt_env)]
     fn test_generate_token_success() {
         setup_test_env();
         let user_id = Uuid::new_v4();
@@ -78,6 +84,7 @@ mod tests {
     }
 
     #[test]
+    #[serial(jwt_env)]
     fn test_decode_token_success() {
         setup_test_env();
         let user_id = Uuid::new_v4();
@@ -91,6 +98,7 @@ mod tests {
     }
 
     #[test]
+    #[serial(jwt_env)]
     fn test_decode_invalid_token() {
         setup_test_env();
         let invalid_token = "invalid.token.here";
@@ -100,6 +108,7 @@ mod tests {
     }
 
     #[test]
+    #[serial(jwt_env)]
     fn test_token_claims_structure() {
         setup_test_env();
         let user_id = Uuid::new_v4();
@@ -112,6 +121,7 @@ mod tests {
     }
 
     #[test]
+    #[serial(jwt_env)]
     fn test_get_jwt_expiration_default() {
         unsafe {
             std::env::set_var("JWT_SECRET", "test_secret");
@@ -123,6 +133,7 @@ mod tests {
     }
 
     #[test]
+    #[serial(jwt_env)]
     fn test_get_jwt_expiration_custom() {
         unsafe {
             std::env::set_var("JWT_SECRET", "test_secret");
@@ -134,6 +145,7 @@ mod tests {
     }
 
     #[test]
+    #[serial(jwt_env)]
     fn test_different_tokens_for_different_users() {
         setup_test_env();
         let user1 = Uuid::new_v4();
@@ -152,6 +164,7 @@ mod tests {
     }
 
     #[test]
+    #[serial(jwt_env)]
     fn test_token_with_wrong_secret() {
         setup_test_env();
         let user_id = Uuid::new_v4();

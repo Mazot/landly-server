@@ -4,7 +4,119 @@ use crate::utils::{hash, token};
 use chrono::NaiveDateTime;
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use uuid::Uuid;
+
+/// RBAC role stored in `users.role` (TEXT + CHECK constraint).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UserRole {
+    User,
+    Moderator,
+    Admin,
+}
+
+impl UserRole {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            UserRole::User => "user",
+            UserRole::Moderator => "moderator",
+            UserRole::Admin => "admin",
+        }
+    }
+
+    /// Moderator-level access: content moderation + overriding ownership
+    /// checks. Admins are always at least moderators.
+    pub fn is_moderator(&self) -> bool {
+        matches!(self, UserRole::Moderator | UserRole::Admin)
+    }
+
+    /// Admin-level access: managing system reference tables
+    /// (organisation types, country connections).
+    pub fn is_admin(&self) -> bool {
+        matches!(self, UserRole::Admin)
+    }
+}
+
+impl TryFrom<&str> for UserRole {
+    type Error = AppError;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        match value {
+            "user" => Ok(UserRole::User),
+            "moderator" => Ok(UserRole::Moderator),
+            "admin" => Ok(UserRole::Admin),
+            other => Err(AppError::UnprocessableEntity(
+                json!({ "error": format!("Unknown role: {}", other) }),
+            )),
+        }
+    }
+}
+
+/// Why the user is on Landly (`users.here_as`, TEXT + CHECK constraint).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HereAs {
+    Newcomer,
+    Helping,
+    Exploring,
+}
+
+impl HereAs {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            HereAs::Newcomer => "newcomer",
+            HereAs::Helping => "helping",
+            HereAs::Exploring => "exploring",
+        }
+    }
+}
+
+impl TryFrom<&str> for HereAs {
+    type Error = AppError;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        match value {
+            "newcomer" => Ok(HereAs::Newcomer),
+            "helping" => Ok(HereAs::Helping),
+            "exploring" => Ok(HereAs::Exploring),
+            other => Err(AppError::UnprocessableEntity(
+                json!({ "error": format!("Unknown here_as value: {}", other) }),
+            )),
+        }
+    }
+}
+
+/// UI locale (`users.locale`, TEXT + CHECK constraint).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Locale {
+    En,
+    Ru,
+    Uk,
+}
+
+impl Locale {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Locale::En => "en",
+            Locale::Ru => "ru",
+            Locale::Uk => "uk",
+        }
+    }
+}
+
+impl TryFrom<&str> for Locale {
+    type Error = AppError;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        match value {
+            "en" => Ok(Locale::En),
+            "ru" => Ok(Locale::Ru),
+            "uk" => Ok(Locale::Uk),
+            other => Err(AppError::UnprocessableEntity(
+                json!({ "error": format!("Unsupported locale: {}", other) }),
+            )),
+        }
+    }
+}
 
 #[derive(Debug, Serialize, Deserialize, Queryable, Insertable, Selectable, Clone)]
 #[diesel(table_name = users)]
@@ -15,6 +127,21 @@ pub struct User {
     pub password_hash: String,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
+    pub name: Option<String>,
+    pub bio: Option<String>,
+    pub city: Option<String>,
+    pub home_country_id: Option<Uuid>,
+    pub avatar_color: Option<String>,
+    pub locale: String,
+    pub here_as: Option<String>,
+    pub role: String,
+    pub notification_settings: Option<serde_json::Value>,
+}
+
+impl User {
+    pub fn role_enum(&self) -> UserRole {
+        UserRole::try_from(self.role.as_str()).unwrap_or(UserRole::User)
+    }
 }
 
 impl User {
@@ -30,12 +157,108 @@ impl User {
             username,
             email,
             password_hash,
+            name: None,
+            locale: None,
+            here_as: None,
+            home_country_id: None,
+            avatar_color: None,
         };
 
         let user = Self::create(conn, &new_user)?;
         let token = user.generate_token()?;
 
         Ok((user, token))
+    }
+
+    /// Signup v2 (design: signup-fast.jsx + signup-corridor.jsx): creates the
+    /// user together with an optional default corridor in one transaction.
+    pub fn signup_v2(
+        conn: &mut PgConnection,
+        input: SignUpV2Input,
+    ) -> Result<(Self, String), AppError> {
+        let password_hash = hash::hash_password(&input.password)?;
+
+        let user = conn.transaction::<User, AppError, _>(|conn| {
+            let user = Self::create(
+                conn,
+                &CreateUser {
+                    username: input.username,
+                    email: input.email,
+                    password_hash,
+                    name: input.name,
+                    locale: input.locale,
+                    here_as: input.here_as,
+                    home_country_id: input.home_country_id,
+                    avatar_color: input.avatar_color,
+                },
+            )?;
+
+            if let (Some(from), Some(to)) =
+                (input.corridor_from_country_id, input.corridor_to_country_id)
+            {
+                use crate::data::schema::corridors;
+
+                diesel::insert_into(corridors::table)
+                    .values((
+                        corridors::user_id.eq(user.id),
+                        corridors::from_country_id.eq(from),
+                        corridors::to_country_id.eq(to),
+                        corridors::is_default.eq(true),
+                    ))
+                    .execute(conn)?;
+            }
+
+            Ok(user)
+        })?;
+
+        let token = user.generate_token()?;
+
+        Ok((user, token))
+    }
+
+    pub fn find_by_id(conn: &mut PgConnection, id: Uuid) -> Result<Self, AppError> {
+        let user = users::table.find(id).first::<User>(conn)?;
+
+        Ok(user)
+    }
+
+    /// Role lookup for RBAC checks. Unknown values fall back to the least
+    /// privileged role.
+    pub fn fetch_role(conn: &mut PgConnection, user_id: Uuid) -> Result<UserRole, AppError> {
+        let role = users::table
+            .find(user_id)
+            .select(users::role)
+            .first::<String>(conn)?;
+
+        Ok(UserRole::try_from(role.as_str()).unwrap_or(UserRole::User))
+    }
+
+    pub fn update_profile(
+        conn: &mut PgConnection,
+        id: Uuid,
+        record: &UpdateUserProfile,
+    ) -> Result<Self, AppError> {
+        let target = users::table.find(id);
+        let user = diesel::update(target)
+            .set(record)
+            .get_result::<User>(conn)?;
+
+        Ok(user)
+    }
+
+    /// Profile stat for the account screen: how many places this user added.
+    pub fn count_created_organisations(
+        conn: &mut PgConnection,
+        user_id: Uuid,
+    ) -> Result<i64, AppError> {
+        use crate::data::schema::organisations;
+
+        let count = organisations::table
+            .filter(organisations::created_by.eq(user_id))
+            .count()
+            .get_result::<i64>(conn)?;
+
+        Ok(count)
     }
 
     pub fn signin(
@@ -197,6 +420,25 @@ pub struct CreateUser {
     pub username: String,
     pub email: String,
     pub password_hash: String,
+    pub name: Option<String>,
+    pub locale: Option<String>,
+    pub here_as: Option<String>,
+    pub home_country_id: Option<Uuid>,
+    pub avatar_color: Option<String>,
+}
+
+/// Everything the account/corridor screens need to create a user in one go.
+pub struct SignUpV2Input {
+    pub username: String,
+    pub email: String,
+    pub password: String,
+    pub name: Option<String>,
+    pub locale: Option<String>,
+    pub here_as: Option<String>,
+    pub home_country_id: Option<Uuid>,
+    pub avatar_color: Option<String>,
+    pub corridor_from_country_id: Option<Uuid>,
+    pub corridor_to_country_id: Option<Uuid>,
 }
 
 #[derive(AsChangeset, Clone)]
@@ -206,6 +448,20 @@ pub struct UpdateUser {
     pub username: Option<String>,
     pub email: Option<String>,
     pub password_hash: Option<String>,
+    pub updated_at: Option<NaiveDateTime>,
+}
+
+#[derive(AsChangeset, Clone, Default)]
+#[diesel(table_name = users)]
+pub struct UpdateUserProfile {
+    pub name: Option<String>,
+    pub bio: Option<String>,
+    pub city: Option<String>,
+    pub home_country_id: Option<Uuid>,
+    pub avatar_color: Option<String>,
+    pub locale: Option<String>,
+    pub here_as: Option<String>,
+    pub notification_settings: Option<serde_json::Value>,
     pub updated_at: Option<NaiveDateTime>,
 }
 
@@ -232,4 +488,49 @@ pub struct UserProvider {
     pub provider_user_id: String,
     pub email: Option<String>,
     pub created_at: Option<NaiveDateTime>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_user_role_try_from() {
+        assert_eq!(UserRole::try_from("user").unwrap(), UserRole::User);
+        assert_eq!(
+            UserRole::try_from("moderator").unwrap(),
+            UserRole::Moderator
+        );
+        assert_eq!(UserRole::try_from("admin").unwrap(), UserRole::Admin);
+        assert!(UserRole::try_from("superuser").is_err());
+    }
+
+    #[test]
+    fn test_user_role_is_moderator() {
+        assert!(!UserRole::User.is_moderator());
+        assert!(UserRole::Moderator.is_moderator());
+        assert!(UserRole::Admin.is_moderator());
+    }
+
+    #[test]
+    fn test_user_role_is_admin() {
+        assert!(!UserRole::User.is_admin());
+        assert!(!UserRole::Moderator.is_admin());
+        assert!(UserRole::Admin.is_admin());
+    }
+
+    #[test]
+    fn test_user_role_as_str_roundtrip() {
+        for role in [UserRole::User, UserRole::Moderator, UserRole::Admin] {
+            assert_eq!(UserRole::try_from(role.as_str()).unwrap(), role);
+        }
+    }
+
+    #[test]
+    fn test_here_as_and_locale_try_from() {
+        assert!(HereAs::try_from("newcomer").is_ok());
+        assert!(HereAs::try_from("tourist").is_err());
+        assert!(Locale::try_from("ru").is_ok());
+        assert!(Locale::try_from("de").is_err());
+    }
 }

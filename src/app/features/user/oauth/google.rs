@@ -29,20 +29,29 @@ pub struct GoogleUserInfo {
 }
 
 impl OAuthGoogle {
-    pub fn new(cache: TypedCache<Arc<dyn CacheService>>) -> Self {
-        let client_id = std::env::var(env_key::GOOGLE_CLIENT_ID).expect("GOOGLE_CLIENT_ID missing");
-        let client_secret =
-            std::env::var(env_key::GOOGLE_CLIENT_SECRET).expect("GOOGLE_CLIENT_SECRET missing");
-        let redirect = std::env::var(env_key::OAUTH_GOOGLE_REDIRECT_URL)
-            .expect("OAUTH_GOOGLE_REDIRECT_URL missing");
+    /// Builds the Google OAuth client when all GOOGLE_*/OAUTH_* env vars are
+    /// present; returns None otherwise so the server can start without OAuth
+    /// configured (mirrors the S3/Redis optional-backend pattern).
+    pub fn try_new(cache: TypedCache<Arc<dyn CacheService>>) -> Option<Self> {
+        let client_id = std::env::var(env_key::GOOGLE_CLIENT_ID).ok()?;
+        let client_secret = std::env::var(env_key::GOOGLE_CLIENT_SECRET).ok()?;
+        let redirect = std::env::var(env_key::OAUTH_GOOGLE_REDIRECT_URL).ok()?;
 
         let auth_url =
             AuthUrl::new("https://accounts.google.com/o/oauth2/v2/auth".to_string()).unwrap();
         let token_url = TokenUrl::new("https://oauth2.googleapis.com/token".to_string()).unwrap();
 
+        let redirect_url = match RedirectUrl::new(redirect) {
+            Ok(url) => url,
+            Err(e) => {
+                log::error!("OAUTH_GOOGLE_REDIRECT_URL is not a valid URL: {e}");
+                return None;
+            }
+        };
+
         let client = BasicClient::new(ClientId::new(client_id))
             .set_client_secret(ClientSecret::new(client_secret))
-            .set_redirect_uri(RedirectUrl::new(redirect).expect("Invalid redirect URL"))
+            .set_redirect_uri(redirect_url)
             .set_token_uri(token_url)
             .set_auth_uri(auth_url)
             .set_revocation_url(
@@ -50,7 +59,7 @@ impl OAuthGoogle {
                     .expect("Invalid revocation endpoint URL"),
             );
 
-        Self { client, cache }
+        Some(Self { client, cache })
     }
 
     pub fn auth_url(&self) -> Result<(Url, CsrfToken), AppError> {

@@ -15,6 +15,9 @@ pub struct Country {
     pub flag: Option<String>,
     pub capital_city: Option<String>,
     pub description: Option<String>,
+    pub currency: Option<String>,
+    pub phone_code: Option<String>,
+    pub top_cities: Option<serde_json::Value>,
 }
 
 #[derive(Insertable, Clone)]
@@ -25,6 +28,9 @@ pub struct CreateCountry {
     pub flag: Option<String>,
     pub capital_city: Option<String>,
     pub description: Option<String>,
+    pub currency: Option<String>,
+    pub phone_code: Option<String>,
+    pub top_cities: Option<serde_json::Value>,
 }
 
 #[derive(AsChangeset)]
@@ -35,6 +41,9 @@ pub struct UpdateCountry {
     pub flag: Option<String>,
     pub capital_city: Option<String>,
     pub description: Option<String>,
+    pub currency: Option<String>,
+    pub phone_code: Option<String>,
+    pub top_cities: Option<serde_json::Value>,
 }
 
 impl Country {
@@ -144,6 +153,7 @@ pub struct OrganisationType {
     pub org_type: String,
     pub color: Option<String>,
     pub title: Option<String>,
+    pub slug: Option<String>,
 }
 
 impl OrganisationType {
@@ -180,4 +190,5 @@ pub struct CreateOrganisationType {
     pub org_type: String,
     pub color: Option<String>,
     pub title: Option<String>,
+    pub slug: Option<String>,
 }

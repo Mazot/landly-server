@@ -4,7 +4,104 @@ use bigdecimal::BigDecimal;
 use chrono::NaiveDateTime;
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use uuid::Uuid;
+
+/// Moderation status stored in `organisations.status` (TEXT + CHECK constraint).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OrganisationStatus {
+    Pending,
+    Live,
+    Rejected,
+}
+
+impl OrganisationStatus {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            OrganisationStatus::Pending => "pending",
+            OrganisationStatus::Live => "live",
+            OrganisationStatus::Rejected => "rejected",
+        }
+    }
+}
+
+impl TryFrom<&str> for OrganisationStatus {
+    type Error = AppError;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        match value {
+            "pending" => Ok(OrganisationStatus::Pending),
+            "live" => Ok(OrganisationStatus::Live),
+            "rejected" => Ok(OrganisationStatus::Rejected),
+            other => Err(AppError::UnprocessableEntity(
+                json!({ "error": format!("Unknown organisation status: {}", other) }),
+            )),
+        }
+    }
+}
+
+/// Provenance of the listing (`organisations.added_by`, TEXT + CHECK constraint).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AddedBy {
+    Official,
+    Community,
+    Volunteer,
+}
+
+impl AddedBy {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            AddedBy::Official => "official",
+            AddedBy::Community => "community",
+            AddedBy::Volunteer => "volunteer",
+        }
+    }
+}
+
+impl TryFrom<&str> for AddedBy {
+    type Error = AppError;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        match value {
+            "official" => Ok(AddedBy::Official),
+            "community" => Ok(AddedBy::Community),
+            "volunteer" => Ok(AddedBy::Volunteer),
+            other => Err(AppError::UnprocessableEntity(
+                json!({ "error": format!("Unknown added_by value: {}", other) }),
+            )),
+        }
+    }
+}
+
+/// Whether the service costs money (`organisations.cost`, TEXT + CHECK constraint).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Cost {
+    Free,
+    Paid,
+}
+
+impl Cost {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Cost::Free => "free",
+            Cost::Paid => "paid",
+        }
+    }
+}
+
+impl TryFrom<&str> for Cost {
+    type Error = AppError;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        match value {
+            "free" => Ok(Cost::Free),
+            "paid" => Ok(Cost::Paid),
+            other => Err(AppError::UnprocessableEntity(
+                json!({ "error": format!("Unknown cost value: {}", other) }),
+            )),
+        }
+    }
+}
 
 #[derive(Debug, Associations, Serialize, Deserialize, Queryable, Insertable, Selectable, Clone)]
 // #[diesel(belongs_to(Country, foreign_key = location_country_id))]
@@ -25,6 +122,25 @@ pub struct Organisation {
     pub latitude: Option<BigDecimal>,
     pub longitude: Option<BigDecimal>,
     pub founder_country_id: Option<Uuid>,
+    pub created_by: Option<Uuid>,
+    pub verified: bool,
+    pub status: String,
+    pub moderation_note: Option<String>,
+    pub added_by: Option<String>,
+    pub city: Option<String>,
+    pub website: Option<String>,
+    pub telegram: Option<String>,
+    pub whatsapp: Option<String>,
+    pub services: Vec<Option<String>>,
+    pub languages: Vec<Option<String>>,
+    pub opening_hours: Option<serde_json::Value>,
+    pub timezone: Option<String>,
+    pub cost: Option<String>,
+    pub google_place_id: Option<String>,
+    pub google_rating: Option<f64>,
+    pub visits_count: i64,
+    pub rating_avg: Option<f64>,
+    pub reviews_count: i64,
 }
 
 impl Organisation {
@@ -62,6 +178,113 @@ impl Organisation {
             .get_result::<Organisation>(conn)?;
 
         Ok(result)
+    }
+
+    /// Records a community check-in ("I was here, still active" + tip).
+    pub fn checkin(
+        conn: &mut PgConnection,
+        organisation_id: Uuid,
+        user_id: Uuid,
+        still_active: bool,
+        tip: Option<String>,
+    ) -> Result<(), AppError> {
+        use crate::data::schema::org_checkins;
+
+        diesel::insert_into(org_checkins::table)
+            .values((
+                org_checkins::organisation_id.eq(organisation_id),
+                org_checkins::user_id.eq(user_id),
+                org_checkins::still_active.eq(still_active),
+                org_checkins::tip.eq(tip),
+            ))
+            .execute(conn)?;
+
+        Ok(())
+    }
+
+    /// Community-signals block for the detail page: how many people came,
+    /// what share confirmed "still active", when the last check-in was, and
+    /// the most recent tips.
+    pub fn community_signals(
+        conn: &mut PgConnection,
+        organisation_id: Uuid,
+    ) -> Result<CommunitySignals, AppError> {
+        use crate::data::schema::org_checkins;
+
+        let total = org_checkins::table
+            .filter(org_checkins::organisation_id.eq(organisation_id))
+            .count()
+            .get_result::<i64>(conn)?;
+
+        let active = org_checkins::table
+            .filter(org_checkins::organisation_id.eq(organisation_id))
+            .filter(org_checkins::still_active.eq(true))
+            .count()
+            .get_result::<i64>(conn)?;
+
+        let last_checkin_at = org_checkins::table
+            .filter(org_checkins::organisation_id.eq(organisation_id))
+            .select(diesel::dsl::max(org_checkins::created_at))
+            .first::<Option<NaiveDateTime>>(conn)?;
+
+        let tips = org_checkins::table
+            .filter(org_checkins::organisation_id.eq(organisation_id))
+            .filter(org_checkins::tip.is_not_null())
+            .order(org_checkins::created_at.desc())
+            .select(org_checkins::tip)
+            .limit(5)
+            .load::<Option<String>>(conn)?
+            .into_iter()
+            .flatten()
+            .collect();
+
+        Ok(CommunitySignals {
+            people_came: total,
+            still_active_pct: if total > 0 {
+                Some((active as f64 / total as f64 * 100.0).round())
+            } else {
+                None
+            },
+            last_checkin_at,
+            tips,
+        })
+    }
+
+    /// Submit-time auto-check: does a live org with a very similar name exist
+    /// within ~1 km of these coordinates?
+    pub fn has_duplicate_nearby(
+        conn: &mut PgConnection,
+        name: &str,
+        latitude: Option<&BigDecimal>,
+        longitude: Option<&BigDecimal>,
+    ) -> Result<bool, AppError> {
+        let (Some(lat), Some(lng)) = (latitude, longitude) else {
+            return Ok(false);
+        };
+
+        // ~1 km box around the point (1 degree latitude ≈ 111 km).
+        let delta = BigDecimal::try_from(0.01).map_err(|_| AppError::InternalServerError)?;
+
+        let count = organisations::table
+            .filter(organisations::name.ilike(name))
+            .filter(organisations::latitude.between(lat - &delta, lat + &delta))
+            .filter(organisations::longitude.between(lng - &delta, lng + &delta))
+            .count()
+            .get_result::<i64>(conn)?;
+
+        Ok(count > 0)
+    }
+
+    pub fn increment_visits(
+        conn: &mut PgConnection,
+        organisation_id: Uuid,
+    ) -> Result<i64, AppError> {
+        let visits = diesel::update(organisations::table.find(organisation_id))
+            .set(organisations::visits_count.eq(organisations::visits_count + 1))
+            .returning(organisations::visits_count)
+            .get_result::<i64>(conn)?;
+
+        Ok(visits)
     }
 
     pub fn fetch_by_location_country(
@@ -112,6 +335,15 @@ impl Organisation {
     }
 }
 
+/// Aggregated community check-in signals (never stored, always computed).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CommunitySignals {
+    pub people_came: i64,
+    pub still_active_pct: Option<f64>,
+    pub last_checkin_at: Option<NaiveDateTime>,
+    pub tips: Vec<String>,
+}
+
 #[derive(Insertable, Clone)]
 #[diesel(table_name = organisations)]
 pub struct CreateOrganisation {
@@ -125,6 +357,19 @@ pub struct CreateOrganisation {
     pub latitude: Option<BigDecimal>,
     pub longitude: Option<BigDecimal>,
     pub founder_country_id: Option<Uuid>,
+    pub created_by: Option<Uuid>,
+    pub status: String,
+    pub added_by: Option<String>,
+    pub city: Option<String>,
+    pub website: Option<String>,
+    pub telegram: Option<String>,
+    pub whatsapp: Option<String>,
+    pub services: Vec<Option<String>>,
+    pub languages: Vec<Option<String>>,
+    pub opening_hours: Option<serde_json::Value>,
+    pub timezone: Option<String>,
+    pub cost: Option<String>,
+    pub google_place_id: Option<String>,
 }
 
 #[derive(AsChangeset, Clone)]
@@ -141,4 +386,56 @@ pub struct UpdateOrganisation {
     pub latitude: Option<BigDecimal>,
     pub longitude: Option<BigDecimal>,
     pub founder_country_id: Option<Uuid>,
+    pub city: Option<String>,
+    pub website: Option<String>,
+    pub telegram: Option<String>,
+    pub whatsapp: Option<String>,
+    pub services: Option<Vec<Option<String>>>,
+    pub languages: Option<Vec<Option<String>>>,
+    pub opening_hours: Option<serde_json::Value>,
+    pub timezone: Option<String>,
+    pub cost: Option<String>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_organisation_status_roundtrip() {
+        for status in [
+            OrganisationStatus::Pending,
+            OrganisationStatus::Live,
+            OrganisationStatus::Rejected,
+        ] {
+            assert_eq!(
+                OrganisationStatus::try_from(status.as_str()).unwrap(),
+                status
+            );
+        }
+        assert!(OrganisationStatus::try_from("draft").is_err());
+    }
+
+    #[test]
+    fn test_added_by_roundtrip() {
+        for added_by in [AddedBy::Official, AddedBy::Community, AddedBy::Volunteer] {
+            assert_eq!(AddedBy::try_from(added_by.as_str()).unwrap(), added_by);
+        }
+        assert!(AddedBy::try_from("bot").is_err());
+    }
+
+    #[test]
+    fn test_cost_roundtrip() {
+        assert_eq!(Cost::try_from("free").unwrap(), Cost::Free);
+        assert_eq!(Cost::try_from("paid").unwrap(), Cost::Paid);
+        assert!(Cost::try_from("donation").is_err());
+    }
+
+    #[test]
+    fn test_enum_errors_are_unprocessable_entity() {
+        match OrganisationStatus::try_from("nope") {
+            Err(AppError::UnprocessableEntity(_)) => (),
+            other => panic!("expected UnprocessableEntity, got {:?}", other.err()),
+        }
+    }
 }

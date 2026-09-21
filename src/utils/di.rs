@@ -2,6 +2,10 @@ use super::{db::DbPool, redis::RedisPool};
 use crate::app::features::common::{
     presenters::CommonPresenterImpl, repositories::CommonRepositoryImpl, usecases::CommonUsecase,
 };
+use crate::app::features::corridor::{
+    presenters::CorridorPresenterImpl, repositories::CorridorRepositoryImpl,
+    usecases::CorridorUsecase,
+};
 use crate::app::features::country_connection::{
     presenters::CountryConnectionPresenterImpl, repositories::CountryConnectionRepositoryImpl,
     usecases::CountryConnectionUsecase,
@@ -9,9 +13,25 @@ use crate::app::features::country_connection::{
 use crate::app::features::images::{
     presenters::ImagePresenterImpl, repositories::ImageRepositoryImpl, usecases::ImageUsecase,
 };
+use crate::app::features::moderation::{
+    presenters::ModerationPresenterImpl, repositories::ModerationRepositoryImpl,
+    usecases::ModerationUsecase,
+};
 use crate::app::features::organisation::{
     presenters::OrganisationPresenterImpl, repositories::OrganisationRepositoryImpl,
     usecases::OrganisationUsecase,
+};
+use crate::app::features::person::{
+    presenters::PersonPresenterImpl, repositories::PersonRepositoryImpl, usecases::PersonUsecase,
+};
+use crate::app::features::report::{
+    presenters::ReportPresenterImpl, repositories::ReportRepositoryImpl, usecases::ReportUsecase,
+};
+use crate::app::features::review::{
+    presenters::ReviewPresenterImpl, repositories::ReviewRepositoryImpl, usecases::ReviewUsecase,
+};
+use crate::app::features::saved::{
+    presenters::SavedPresenterImpl, repositories::SavedRepositoryImpl, usecases::SavedUsecase,
 };
 use crate::app::features::user::{
     oauth::google::OAuthGoogle, presenters::UserPresenterImpl, repositories::UserRepositoryImpl,
@@ -26,12 +46,19 @@ use std::sync::Arc;
 pub struct DiContainer {
     pub organisation_usecase: OrganisationUsecase,
     pub common_usecase: CommonUsecase,
+    pub corridor_usecase: CorridorUsecase,
     pub country_connection_usecase: CountryConnectionUsecase,
     pub user_usecase: UserUsecase,
     pub image_usecase: ImageUsecase,
+    pub person_usecase: PersonUsecase,
+    pub review_usecase: ReviewUsecase,
+    pub saved_usecase: SavedUsecase,
+    pub report_usecase: ReportUsecase,
+    pub moderation_usecase: ModerationUsecase,
     pub redis_cache_service: TypedCache<Arc<dyn CacheService>>,
     pub storage_service: Arc<dyn StorageService>,
-    pub oauth_google: OAuthGoogle,
+    /// None when GOOGLE_* env vars are absent — OAuth endpoints answer 503.
+    pub oauth_google: Option<OAuthGoogle>,
 }
 
 impl DiContainer {
@@ -67,8 +94,11 @@ impl DiContainer {
             OrganisationRepositoryImpl::new(pool.clone(), typed_cache_service.clone());
         let organisation_presenter = OrganisationPresenterImpl::new();
 
-        let common_repo = CommonRepositoryImpl::new(pool.clone());
+        let common_repo = CommonRepositoryImpl::new(pool.clone(), typed_cache_service.clone());
         let common_presenter = CommonPresenterImpl::new();
+
+        let corridor_repo = CorridorRepositoryImpl::new(pool.clone(), typed_cache_service.clone());
+        let corridor_presenter = CorridorPresenterImpl::new();
 
         let country_connection_repo =
             CountryConnectionRepositoryImpl::new(pool.clone(), typed_cache_service.clone());
@@ -80,6 +110,23 @@ impl DiContainer {
         let image_repo = ImageRepositoryImpl::new(pool.clone(), typed_cache_service.clone());
         let image_presenter = ImagePresenterImpl::new();
 
+        let moderation_repo =
+            ModerationRepositoryImpl::new(pool.clone(), typed_cache_service.clone());
+        let moderation_repo_arc: Arc<ModerationRepositoryImpl> = Arc::new(moderation_repo);
+        let moderation_presenter = ModerationPresenterImpl::new();
+
+        let person_repo = PersonRepositoryImpl::new(pool.clone(), typed_cache_service.clone());
+        let person_presenter = PersonPresenterImpl::new();
+
+        let review_repo = ReviewRepositoryImpl::new(pool.clone(), typed_cache_service.clone());
+        let review_presenter = ReviewPresenterImpl::new();
+
+        let saved_repo = SavedRepositoryImpl::new(pool.clone());
+        let saved_presenter = SavedPresenterImpl::new();
+
+        let report_repo = ReportRepositoryImpl::new(pool.clone());
+        let report_presenter = ReportPresenterImpl::new();
+
         Self {
             redis_cache_service: typed_cache_service.clone(),
             storage_service: storage_service.clone(),
@@ -87,10 +134,36 @@ impl DiContainer {
             organisation_usecase: OrganisationUsecase::new(
                 Arc::new(organisation_repo.clone()),
                 Arc::new(organisation_presenter.clone()),
+                moderation_repo_arc.clone(),
+            ),
+            person_usecase: PersonUsecase::new(
+                Arc::new(person_repo.clone()),
+                Arc::new(person_presenter.clone()),
+                moderation_repo_arc.clone(),
+            ),
+            review_usecase: ReviewUsecase::new(
+                Arc::new(review_repo.clone()),
+                Arc::new(review_presenter.clone()),
+            ),
+            saved_usecase: SavedUsecase::new(
+                Arc::new(saved_repo.clone()),
+                Arc::new(saved_presenter.clone()),
+            ),
+            report_usecase: ReportUsecase::new(
+                Arc::new(report_repo.clone()),
+                Arc::new(report_presenter.clone()),
+            ),
+            moderation_usecase: ModerationUsecase::new(
+                moderation_repo_arc.clone(),
+                Arc::new(moderation_presenter.clone()),
             ),
             common_usecase: CommonUsecase::new(
                 Arc::new(common_repo.clone()),
                 Arc::new(common_presenter.clone()),
+            ),
+            corridor_usecase: CorridorUsecase::new(
+                Arc::new(corridor_repo.clone()),
+                Arc::new(corridor_presenter.clone()),
             ),
             country_connection_usecase: CountryConnectionUsecase::new(
                 Arc::new(country_connection_repo.clone()),
@@ -105,7 +178,16 @@ impl DiContainer {
                 Arc::new(image_presenter),
                 storage_service,
             ),
-            oauth_google: OAuthGoogle::new(typed_cache_service.clone()),
+            oauth_google: {
+                let oauth = OAuthGoogle::try_new(typed_cache_service.clone());
+                if oauth.is_none() {
+                    log::warn!(
+                        "Google OAuth is not configured (missing GOOGLE_* env vars). \
+                         /api/user/oauth/google/* endpoints will return 503."
+                    );
+                }
+                oauth
+            },
         }
     }
 }

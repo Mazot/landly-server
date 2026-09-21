@@ -90,10 +90,15 @@ impl<T: CacheService> TypedCache<T> {
     where
         U: Serialize,
     {
+        // A serialization failure must not panic the worker thread.
         let key_ser_val_vec: Vec<(String, String)> = items
             .iter()
-            .map(|(k, v)| (k.clone(), serde_json::to_string(v).unwrap()))
-            .collect();
+            .map(|(k, v)| {
+                serde_json::to_string(v)
+                    .map(|s| (k.clone(), s))
+                    .map_err(|_| AppError::InternalServerError)
+            })
+            .collect::<Result<_, _>>()?;
 
         self.cache_service.mset_string(&key_ser_val_vec, ttl)
     }
@@ -387,6 +392,34 @@ impl CacheKeys {
     pub fn images_pattern() -> String {
         "img:*".to_string()
     }
+
+    pub fn common_pattern() -> String {
+        "common:*".to_string()
+    }
+
+    pub fn corridors_by_user(user_id: &uuid::Uuid) -> String {
+        format!("cor:user:{}", user_id)
+    }
+
+    pub fn corridor_stats(corridor_id: &uuid::Uuid) -> String {
+        format!("cor:stats:{}", corridor_id)
+    }
+
+    pub fn corridor_pattern() -> String {
+        "cor:*".to_string()
+    }
+
+    pub fn person_pattern() -> String {
+        "per:*".to_string()
+    }
+
+    pub fn common_org_types_pattern() -> String {
+        "common:organisation_types:*".to_string()
+    }
+
+    pub fn common_countries_pattern() -> String {
+        "common:countries:*".to_string()
+    }
 }
 
 #[cfg(test)]
@@ -543,5 +576,73 @@ mod tests {
     fn test_cache_config_default() {
         let config = CacheConfig::default();
         assert_eq!(config.default_ttl, Some(Duration::from_secs(3600)));
+    }
+
+    #[test]
+    fn test_cache_keys_corridors_by_user() {
+        let user_id = Uuid::new_v4();
+        assert_eq!(
+            CacheKeys::corridors_by_user(&user_id),
+            format!("cor:user:{}", user_id)
+        );
+    }
+
+    #[test]
+    fn test_cache_keys_corridor_stats() {
+        let corridor_id = Uuid::new_v4();
+        assert_eq!(
+            CacheKeys::corridor_stats(&corridor_id),
+            format!("cor:stats:{}", corridor_id)
+        );
+    }
+
+    /// The corridor pattern must cover both per-user and stats keys so a
+    /// single invalidate_pattern call clears everything corridor-related.
+    #[test]
+    fn test_corridor_pattern_covers_corridor_keys() {
+        assert_eq!(CacheKeys::corridor_pattern(), "cor:*");
+        assert!(CacheKeys::corridors_by_user(&Uuid::new_v4()).starts_with("cor:"));
+        assert!(CacheKeys::corridor_stats(&Uuid::new_v4()).starts_with("cor:"));
+    }
+
+    /// Every feature namespace must stay distinct — two features sharing a
+    /// prefix would invalidate each other's keys on every write.
+    #[test]
+    fn test_feature_patterns_are_distinct() {
+        let patterns = [
+            CacheKeys::organisation_pattern(),
+            CacheKeys::country_connection_pattern(),
+            CacheKeys::images_pattern(),
+            CacheKeys::corridor_pattern(),
+            CacheKeys::person_pattern(),
+            CacheKeys::common_pattern(),
+        ];
+
+        for (i, a) in patterns.iter().enumerate() {
+            assert!(a.ends_with(":*"), "{} is not a namespace pattern", a);
+
+            for b in patterns.iter().skip(i + 1) {
+                assert_ne!(a, b);
+                let (a_ns, b_ns) = (a.trim_end_matches('*'), b.trim_end_matches('*'));
+                assert!(
+                    !a_ns.starts_with(b_ns) && !b_ns.starts_with(a_ns),
+                    "{} and {} overlap",
+                    a,
+                    b
+                );
+            }
+        }
+    }
+
+    /// The common pattern must cover the request-reply cache prefixes used in
+    /// common/config.rs.
+    #[test]
+    fn test_common_patterns() {
+        assert_eq!(CacheKeys::common_pattern(), "common:*");
+        assert_eq!(
+            CacheKeys::common_org_types_pattern(),
+            "common:organisation_types:*"
+        );
+        assert_eq!(CacheKeys::common_countries_pattern(), "common:countries:*");
     }
 }

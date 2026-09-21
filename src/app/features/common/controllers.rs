@@ -5,13 +5,23 @@ use crate::app::{
 };
 use crate::error::AppError;
 use actix_web::{
-    HttpResponse,
-    web::{Data, Json, Query},
+    HttpMessage, HttpRequest, HttpResponse,
+    web::{Data, Json, Path, Query},
 };
 use serde::Deserialize;
-use std::cmp::min;
+use serde_json::json;
 use utoipa::{IntoParams, ToSchema};
+use uuid::Uuid;
 
+/// Extracts the authenticated user id inserted by the auth middleware.
+fn caller_user_id(req: &HttpRequest) -> Result<Uuid, AppError> {
+    req.extensions()
+        .get::<Uuid>()
+        .copied()
+        .ok_or_else(|| AppError::Unauthorized(json!({ "error": "Missing authenticated user" })))
+}
+
+// [authorship] Human-written (original codebase).
 #[utoipa::path(
     get,
     path = "/common/countries",
@@ -26,8 +36,10 @@ pub async fn fetch_all_countries(
     state: Data<AppState>,
     params: Query<CountriesListQueryParams>,
 ) -> Result<HttpResponse, AppError> {
-    let offset = min(params.offset.unwrap_or(0), 150);
-    let limit = params.limit.unwrap_or(20);
+    // Clamp to sane bounds: negative values reach Postgres as
+    // `OFFSET -n` / `LIMIT -n` and blow up with a 500.
+    let offset = params.offset.unwrap_or(0).clamp(0, 150);
+    let limit = params.limit.unwrap_or(20).clamp(0, 250);
     let name = params.name.clone();
 
     state
@@ -40,6 +52,32 @@ pub async fn fetch_all_countries(
         })
 }
 
+// [authorship] AI-generated (Claude).
+#[utoipa::path(
+    get,
+    path = "/common/countries/{id}",
+    context_path = "/api",
+    params(
+        ("id" = Uuid, Path, description = "Country ID")
+    ),
+    responses(
+        (status = 200, description = "Country with live-organisation breakdown by type", body = super::presenters::CountryDetailContent),
+        (status = 404, description = "Not found", body = AppError),
+        (status = 500, description = "Internal server error", body = AppError)
+    ),
+    tag = "Common"
+)]
+pub async fn fetch_country_detail(
+    state: Data<AppState>,
+    id: Path<Uuid>,
+) -> Result<HttpResponse, AppError> {
+    state
+        .di_container
+        .common_usecase
+        .fetch_country_detail(id.into_inner())
+}
+
+// [authorship] Human-written (original codebase).
 #[utoipa::path(
     get,
     path = "/common/org_types",
@@ -53,6 +91,8 @@ pub async fn fetch_all_organisation_types(state: Data<AppState>) -> Result<HttpR
     state.di_container.common_usecase.fetch_organisation_types()
 }
 
+// [authorship] Human-written (original codebase); extended by AI (Claude):
+// admin-only RBAC gate + optional stable slug.
 #[utoipa::path(
     post,
     path = "/common/org_types",
@@ -61,22 +101,28 @@ pub async fn fetch_all_organisation_types(state: Data<AppState>) -> Result<HttpR
     responses(
         (status = 200, description = "Organisation type created successfully", body = super::presenters::OrganisationTypeContent),
         (status = 400, description = "Bad request", body = AppError),
+        (status = 401, description = "Unauthorized", body = AppError),
+        (status = 403, description = "Forbidden (admin only)", body = AppError),
         (status = 500, description = "Internal server error", body = AppError)
     ),
     tag = "Common"
 )]
 pub async fn create_organisation_type(
+    req: HttpRequest,
     state: Data<AppState>,
     form: Json<CreateOrganisationTypeRequest>,
 ) -> Result<HttpResponse, AppError> {
-    state
-        .di_container
-        .common_usecase
-        .create_organisation_type(CreateOrganisationTypeUsecaseInput {
+    let caller = caller_user_id(&req)?;
+
+    state.di_container.common_usecase.create_organisation_type(
+        caller,
+        CreateOrganisationTypeUsecaseInput {
             org_type: form.org_type.to_owned(),
             color: form.color.to_owned(),
             title: form.title.to_owned(),
-        })
+            slug: form.slug.to_owned(),
+        },
+    )
 }
 
 #[derive(Deserialize, ToSchema)]
@@ -84,6 +130,7 @@ pub struct CreateOrganisationTypeRequest {
     pub org_type: String,
     pub color: String,
     pub title: String,
+    pub slug: Option<String>,
 }
 
 #[derive(Deserialize, ToSchema, IntoParams)]
