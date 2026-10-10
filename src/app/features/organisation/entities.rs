@@ -395,6 +395,8 @@ pub struct UpdateOrganisation {
     pub opening_hours: Option<serde_json::Value>,
     pub timezone: Option<String>,
     pub cost: Option<String>,
+    /// Only set when an edit has to go back through moderation.
+    pub status: Option<String>,
 }
 
 #[cfg(test)]

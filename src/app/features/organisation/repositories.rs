@@ -433,6 +433,7 @@ impl OrganisationRepository for OrganisationRepositoryImpl {
                 opening_hours: params.opening_hours,
                 timezone: params.timezone,
                 cost: params.cost,
+                status: params.status,
                 updated_at: chrono::Utc::now().naive_utc(),
             },
         )?;
@@ -539,6 +540,7 @@ pub struct UpdateOrganisationRepositoryInput {
     pub opening_hours: Option<serde_json::Value>,
     pub timezone: Option<String>,
     pub cost: Option<String>,
+    pub status: Option<String>,
 }
 
 pub struct FetchOrganisationsRepositoryInput {

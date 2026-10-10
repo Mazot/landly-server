@@ -89,7 +89,7 @@ When adding a mutating endpoint: put it in `AUTH_REQUIRED_ROUTES`, then decide i
 ### Domain rules to preserve
 
 - New organisations are created with `status='pending'`; `list`/`search` only ever return `status='live'` rows. Approval flips the flag (see the `moderation` feature).
-- Organisation `update`/`delete` are allowed only for `created_by` or a user whose `users.role` is `moderator`/`admin` (checked in `OrganisationUsecase::ensure_can_manage`).
+- Organisation `update`/`delete` are allowed only for `created_by` or a user whose `users.role` is `moderator`/`admin` (checked in `OrganisationUsecase::ensure_can_manage`). When the **creator** (not a moderator) edits a `live` organisation, it goes back to `pending` and a `submitted` event with `editedAfterApproval` is recorded — approved content must never change unreviewed.
 - `openNow` is always computed at response time from `opening_hours` (JSONB `{"mon": [["09:00","13:00"]], ...}`) + `timezone` (IANA name) via `compute_open_now` in `organisation/presenters.rs`; it is never stored.
 - Geo search (`GET /api/organisation/search`) is PostGIS-free: bbox filtering on the `(latitude, longitude)` index in SQL, Haversine distance + `nearest` sorting in Rust (`haversine_km` in `organisation/repositories.rs`, scan capped at 500 rows).
 - Signup v2 creates the user and an optional default corridor in one transaction (`User::signup_v2`). A user has at most one default corridor (partial unique index).

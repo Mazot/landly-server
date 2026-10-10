@@ -179,7 +179,7 @@ pub async fn fetch_organisation(
         ("id" = Uuid, Path, description = "Organisation ID to update")
     ),
     responses(
-        (status = 200, description = "Organisation updated successfully", body = super::presenters::OrganisationContent),
+        (status = 200, description = "Organisation updated; a creator edit of a live organisation sends it back to `pending`", body = super::presenters::OrganisationContent),
         (status = 400, description = "Bad request", body = AppError),
         (status = 500, description = "Internal server error", body = AppError)
     ),
