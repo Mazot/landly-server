@@ -126,6 +126,9 @@ services:
       RUST_LOG: ${RUST_LOG:-info}
       JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env}
       JWT_EXPIRATION: ${JWT_EXPIRATION:-3600}
+      # Set to true only behind a reverse proxy that overwrites
+      # X-Forwarded-For/Forwarded (rate limiting keys on the client IP).
+      TRUST_PROXY_HEADERS: ${TRUST_PROXY_HEADERS:-false}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
       OAUTH_GOOGLE_REDIRECT_URL: ${OAUTH_GOOGLE_REDIRECT_URL}

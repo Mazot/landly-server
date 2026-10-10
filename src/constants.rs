@@ -9,6 +9,8 @@ pub mod env_key {
     pub const OAUTH_GOOGLE_REDIRECT_URL: &str = "OAUTH_GOOGLE_REDIRECT_URL";
     pub const JWT_SECRET: &str = "JWT_SECRET";
     pub const JWT_EXPIRATION: &str = "JWT_EXPIRATION";
+    /// Rate limiting keys clients by `Forwarded`/`X-Forwarded-For` when "true".
+    pub const TRUST_PROXY_HEADERS: &str = "TRUST_PROXY_HEADERS";
 
     // Redis Pool Configuration
     pub const REDIS_POOL_MAX_SIZE: &str = "REDIS_POOL_MAX_SIZE";

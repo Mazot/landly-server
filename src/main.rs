@@ -5,7 +5,8 @@ pub mod data;
 mod error;
 pub mod utils;
 
-use crate::app::drivers::middlewares::{auth::Authentication, cors::cors};
+use crate::app::drivers::middlewares::{auth::Authentication, cors::cors, rate_limit};
+use actix_governor::Governor;
 use actix_web::middleware::Logger;
 use actix_web::{App, HttpResponse, HttpServer, web};
 use dotenv::dotenv;
@@ -66,6 +67,11 @@ async fn main() -> std::io::Result<()> {
     // /api-docs/openapi.json would be wasted work since the doc is static.
     let openapi = build_openapi();
 
+    // Rate limiter state must be shared by all workers, so the configs are
+    // built once here and only cloned into each worker's App.
+    let api_rate_limit = rate_limit::api_rate_limit();
+    let auth_rate_limit = rate_limit::auth_rate_limit();
+
     HttpServer::new(move || {
         let country_connection_configure_services =
             app::features::country_connection::config::create_configure_services_closure(
@@ -75,6 +81,8 @@ async fn main() -> std::io::Result<()> {
             app::features::organisation::config::create_configure_services_closure(
                 app_state.di_container.redis_cache_service.clone(),
             );
+        let user_configure_services =
+            app::features::user::config::create_configure_services_closure(auth_rate_limit.clone());
         let images_configure_services =
             app::features::images::config::create_configure_services_closure(
                 app_state.di_container.redis_cache_service.clone(),
@@ -84,6 +92,8 @@ async fn main() -> std::io::Result<()> {
             .app_data(web::Data::new(app_state.clone()))
             .app_data(web::Data::new(openapi.clone()))
             .wrap(Logger::default())
+            // Inside CORS so that 429 responses still carry CORS headers.
+            .wrap(Governor::new(&api_rate_limit))
             .wrap(cors())
             .wrap(Authentication)
             // API docs: Scalar UI (replaces the heavier Swagger UI, which
@@ -107,7 +117,7 @@ async fn main() -> std::io::Result<()> {
                         web::get().to(app::features::healthcheck::controllers::index),
                     ))
                     .configure(app::features::common::config::configure_services)
-                    .configure(app::features::user::config::configure_services)
+                    .configure(user_configure_services)
                     .configure(app::features::corridor::config::configure_services)
                     .configure(app::features::person::config::configure_services)
                     .configure(app::features::review::config::configure_services)

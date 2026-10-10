@@ -117,6 +117,10 @@ state: web::Data<AppState>
 
 Route patterns are matched by `path_matches`: a `{param}` segment matches exactly one non-empty path segment (`/api/organisation/update/{id}` matches `/api/organisation/update/<uuid>`), and a pattern ending with `/` is a prefix match (images style). Never rely on plain `starts_with` — a literal `{id}` in the pattern would silently disable auth for that route (this was a real bug). The test `test_every_auth_required_route_matches_a_real_path` guards against regressions; keep it passing when adding routes.
 
+### Rate limiting
+
+`src/app/drivers/middlewares/rate_limit.rs` (actix-governor, keyed by client IP via `ClientIpKeyExtractor`): the whole app gets `api_rate_limit()` (burst 100, 20 req/s), and the credential routes (`/user/signin`, `/user/signup`, `/user/oauth/google/*`) additionally get `auth_rate_limit()` (burst 10, then 1 per 6 s) in `user/config.rs`. Configs are built once in `main` and cloned into workers — never construct a limiter inside the `HttpServer::new` closure, or each worker counts separately.
+
 ### Cache abstraction
 
 `src/utils/cache.rs` defines `CacheService` trait and `TypedCache<T>` wrapper. At startup:
@@ -198,5 +202,6 @@ Endpoint handlers carry `// [authorship]` comments (skip: images/S3 feature). Ke
 | `S3_BUCKET` | no | S3/R2 bucket name |
 | `S3_REGION` | no | Region (defaults to `"auto"`) |
 | `S3_PUBLIC_URL` | no | Public base URL for object access |
+| `TRUST_PROXY_HEADERS` | no | `true` = rate limiter keys clients by `Forwarded`/`X-Forwarded-For` (only behind a proxy that overwrites them); default: TCP peer IP |
 | `HOST` | yes | Server bind host |
 | `PORT` | yes | Server bind port |

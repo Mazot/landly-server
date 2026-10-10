@@ -49,6 +49,7 @@ aws-config = "1.5"
 mime = "0.3"
 actix-multipart = "0.7"
 urlencoding = "2.1"
+actix-governor = "0.10.0"
 
 [dev-dependencies]
 serial_test = "3"
