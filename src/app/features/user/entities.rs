@@ -374,7 +374,16 @@ impl User {
     ) -> Result<(Self, String), AppError> {
         let user_by_email = users::table
             .filter(lower(users::email).eq(email_lookup_key(&email)))
-            .first::<User>(conn)?;
+            .first::<User>(conn)
+            .optional()?;
+
+        // An unknown email must look exactly like a wrong password: same 401
+        // and (via a dummy bcrypt check) roughly the same response time, so
+        // signin cannot be used to discover registered emails.
+        let Some(user_by_email) = user_by_email else {
+            let _ = hash::verify(&password, hash::dummy_hash());
+            return Err(hash::invalid_credentials());
+        };
 
         hash::ensure_password_matches(&password, &user_by_email.password_hash)?;
         let token = user_by_email.generate_token()?;

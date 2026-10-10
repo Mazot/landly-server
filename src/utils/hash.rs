@@ -2,6 +2,7 @@ use crate::error::AppError;
 pub use bcrypt::verify;
 use bcrypt::{BcryptResult, DEFAULT_COST, hash};
 use serde_json::json;
+use std::sync::OnceLock;
 
 /// Hashes a plaintext password with bcrypt at the default cost.
 /// Verification goes through the re-exported `verify`.
@@ -22,6 +23,17 @@ pub fn ensure_password_matches(password: &str, password_hash: &str) -> Result<()
     Err(invalid_credentials())
 }
 
+/// A valid bcrypt hash of a random value at the production cost, verified
+/// against when the email is unknown so that signin takes as long as for a
+/// real account.
+pub fn dummy_hash() -> &'static str {
+    static DUMMY: OnceLock<String> = OnceLock::new();
+
+    DUMMY.get_or_init(|| {
+        hash_password(&uuid::Uuid::new_v4().to_string()).expect("bcrypt hashing never fails")
+    })
+}
+
 /// The single 401 returned for every failed login, so callers cannot tell
 /// which part of the credentials was wrong.
 pub fn invalid_credentials() -> AppError {
@@ -31,6 +43,12 @@ pub fn invalid_credentials() -> AppError {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_dummy_hash_is_a_real_bcrypt_hash() {
+        assert!(dummy_hash().starts_with("$2"));
+        assert!(!verify("anything", dummy_hash()).unwrap());
+    }
 
     #[test]
     fn test_ensure_password_matches_accepts_correct_password() {

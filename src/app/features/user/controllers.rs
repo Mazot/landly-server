@@ -29,6 +29,7 @@ fn caller_user_id(req: &HttpRequest) -> Result<Uuid, AppError> {
     responses(
         (status = 200, description = "User signed in successfully", body = super::presenters::AuthUserContent),
         (status = 400, description = "Bad request", body = AppError),
+        (status = 401, description = "Invalid email or password (same response for unknown emails)", body = AppError),
         (status = 500, description = "Internal server error", body = AppError)
     ),
     tag = "User"

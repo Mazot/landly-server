@@ -140,7 +140,8 @@ Cache keys follow the `CacheKeys` namespace helper in the same file (`org:*`, `c
 
 `src/error.rs` defines `AppError` (Unauthorized, Forbidden, NotFound, UnprocessableEntity, InternalServerError, ServiceUnavailable). It implements `ResponseError` for Actix and `From<_>` for all library error types (Diesel, JWT, bcrypt, Redis, UUID). All controller and usecase functions return `Result<HttpResponse, AppError>`.
 
-- Diesel constraint violations (unique, foreign key, CHECK, NOT NULL) map to **422**, because they are caused by client input; every other `DatabaseError` stays a 500 and leaks no DB detail.
+- Diesel constraint violations (unique, foreign key, CHECK, NOT NULL) map to **422**, because they are caused by client input, with a generic per-kind message plus the `constraint` name — never Postgres' message/details, which echo column names and values. Every other `DatabaseError` stays a 500 and leaks no DB detail.
+- Signin answers the same 401 `Invalid email or password` for an unknown email and a wrong password (with a dummy bcrypt check for timing) — keep it that way.
 - `ServiceUnavailable` (503) means a backing integration is not configured — currently the Google OAuth endpoints when the `GOOGLE_*` env vars are absent.
 
 ### OpenAPI
