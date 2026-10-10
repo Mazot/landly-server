@@ -3,7 +3,11 @@ use super::{
     repositories::UserRepository,
 };
 use crate::{
-    app::features::user::entities::{HereAs, Locale, SignUpV2Input, UpdateUserProfile, User},
+    app::features::user::entities::{
+        AVATAR_COLOR_MAX_CHARS, BIO_MAX_CHARS, CITY_MAX_CHARS, HereAs, Locale, NAME_MAX_CHARS,
+        SignUpV2Input, UpdateUserProfile, User, email_lookup_key, normalize_email,
+        normalize_username, validate_max_chars, validate_password,
+    },
     error::AppError,
 };
 use actix_web::HttpResponse;
@@ -29,7 +33,9 @@ impl UserUsecase {
 
     /// Email + password login; returns the user with a fresh JWT.
     pub fn signin(&self, email: String, password: String) -> Result<HttpResponse, AppError> {
-        let (user, token) = self.user_repository.signin(email, password)?;
+        let (user, token) = self
+            .user_repository
+            .signin(email_lookup_key(&email), password)?;
         let response = self.user_presenter.to_single_json(user, token);
 
         Ok(response)
@@ -38,6 +44,16 @@ impl UserUsecase {
     /// Signup v2: validates enum-like fields, then creates the user and an
     /// optional default corridor in one transaction.
     pub fn signup(&self, params: SignUpUsecaseInput) -> Result<HttpResponse, AppError> {
+        let email = normalize_email(&params.email)?;
+        let username = normalize_username(&params.username)?;
+        validate_password(&params.password)?;
+        validate_max_chars("name", params.name.as_deref(), NAME_MAX_CHARS)?;
+        validate_max_chars(
+            "avatar_color",
+            params.avatar_color.as_deref(),
+            AVATAR_COLOR_MAX_CHARS,
+        )?;
+
         // Validate enum-like fields before touching the database.
         if let Some(locale) = params.locale.as_deref() {
             Locale::try_from(locale)?;
@@ -68,8 +84,8 @@ impl UserUsecase {
         }
 
         let (user, token) = self.user_repository.signup(SignUpV2Input {
-            username: params.username,
-            email: params.email,
+            username,
+            email,
             password: params.password,
             name: params.name,
             locale: params.locale,
@@ -105,6 +121,14 @@ impl UserUsecase {
         if let Some(here_as) = params.here_as.as_deref() {
             HereAs::try_from(here_as)?;
         }
+        validate_max_chars("name", params.name.as_deref(), NAME_MAX_CHARS)?;
+        validate_max_chars("bio", params.bio.as_deref(), BIO_MAX_CHARS)?;
+        validate_max_chars("city", params.city.as_deref(), CITY_MAX_CHARS)?;
+        validate_max_chars(
+            "avatar_color",
+            params.avatar_color.as_deref(),
+            AVATAR_COLOR_MAX_CHARS,
+        )?;
 
         let (user, stats) = self.user_repository.update_profile(
             user_id,
@@ -196,7 +220,7 @@ impl UserUsecase {
         let (user, token) = self.user_repository.upsert_oauth_user(
             "google".to_string(),
             provider_user_id,
-            email,
+            email_lookup_key(&email),
         )?;
         Ok(AuthUserContent::from((user, token)))
     }
@@ -287,7 +311,7 @@ mod tests {
 
     fn signup_input() -> SignUpUsecaseInput {
         SignUpUsecaseInput {
-            username: "u".to_string(),
+            username: "user1".to_string(),
             email: "u@example.com".to_string(),
             password: "secret123".to_string(),
             name: None,
@@ -305,6 +329,39 @@ mod tests {
             Err(AppError::UnprocessableEntity(_)) => (),
             other => panic!("expected UnprocessableEntity, got {:?}", other.err()),
         }
+    }
+
+    #[test]
+    fn test_signup_rejects_weak_password_and_bad_email() {
+        let mut params = signup_input();
+        params.password = String::new();
+        expect_422(usecase().signup(params));
+
+        let mut params = signup_input();
+        params.password = "short".to_string();
+        expect_422(usecase().signup(params));
+
+        let mut params = signup_input();
+        params.email = "not-an-email".to_string();
+        expect_422(usecase().signup(params));
+    }
+
+    #[test]
+    fn test_update_profile_rejects_oversized_fields() {
+        let result = usecase().update_profile(
+            Uuid::new_v4(),
+            UpdateProfileUsecaseInput {
+                name: None,
+                bio: Some("x".repeat(BIO_MAX_CHARS + 1)),
+                city: None,
+                home_country_id: None,
+                avatar_color: None,
+                locale: None,
+                here_as: None,
+            },
+        );
+
+        expect_422(result);
     }
 
     #[test]

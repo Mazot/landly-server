@@ -53,6 +53,7 @@ pub async fn signin(
     responses(
         (status = 200, description = "User signed up successfully", body = super::presenters::AuthUserContent),
         (status = 400, description = "Bad request", body = AppError),
+        (status = 422, description = "Invalid email, password shorter than 8 characters / over 72 bytes, bad username or oversized field", body = AppError),
         (status = 500, description = "Internal server error", body = AppError)
     ),
     tag = "User"
