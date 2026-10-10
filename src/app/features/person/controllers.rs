@@ -217,8 +217,9 @@ pub async fn claim_preview(
     ),
     responses(
         (status = 200, description = "Person confirmed (claimed when authenticated)", body = super::presenters::ClaimPreviewContent),
+        (status = 403, description = "The recommender tried to claim the profile", body = AppError),
         (status = 404, description = "Unknown token", body = AppError),
-        (status = 422, description = "Token used/expired or person already resolved", body = AppError),
+        (status = 422, description = "Not yet approved by moderation, token used/expired or person already resolved", body = AppError),
         (status = 500, description = "Internal server error", body = AppError)
     ),
     tag = "Person"
