@@ -1,6 +1,7 @@
 use crate::constants::env_key;
 use crate::error::AppError;
 use crate::utils::cache::{CacheService, TypedCache};
+use actix_web::cookie::{Cookie, SameSite, time::Duration as CookieDuration};
 use oauth2::basic::BasicTokenType;
 use oauth2::url::Url;
 use oauth2::{AuthUrl, TokenUrl, basic::BasicClient};
@@ -14,10 +15,19 @@ use serde_json::json;
 use std::sync::Arc;
 use utoipa::ToSchema;
 
+/// HttpOnly cookie that binds the OAuth `state` to the browser that started
+/// the flow. Without it an attacker could start a login themselves and send
+/// the victim their callback URL (login CSRF).
+pub const STATE_COOKIE: &str = "landly_oauth_google_state";
+const STATE_COOKIE_PATH: &str = "/api/user/oauth/google";
+const STATE_TTL_SECS: u64 = 300;
+
 #[derive(Clone)]
 pub struct OAuthGoogle {
     client: BasicClient<EndpointSet, EndpointNotSet, EndpointNotSet, EndpointSet, EndpointSet>,
     cache: TypedCache<Arc<dyn CacheService>>,
+    /// Mark the state cookie `Secure` when the callback is served over https.
+    secure_cookie: bool,
 }
 
 #[derive(Deserialize, ToSchema)]
@@ -29,6 +39,23 @@ pub struct GoogleUserInfo {
     pub email_verified: Option<bool>,
     pub name: Option<String>,
     pub picture: Option<String>,
+}
+
+/// The callback's `state` must equal the one stored in this browser's
+/// cookie. Compared in constant time.
+pub fn state_matches_cookie(cookie_state: Option<&str>, state: &str) -> bool {
+    let Some(cookie_state) = cookie_state else {
+        return false;
+    };
+    if cookie_state.is_empty() || cookie_state.len() != state.len() {
+        return false;
+    }
+
+    cookie_state
+        .bytes()
+        .zip(state.bytes())
+        .fold(0u8, |acc, (a, b)| acc | (a ^ b))
+        == 0
 }
 
 impl GoogleUserInfo {
@@ -60,6 +87,7 @@ impl OAuthGoogle {
             AuthUrl::new("https://accounts.google.com/o/oauth2/v2/auth".to_string()).unwrap();
         let token_url = TokenUrl::new("https://oauth2.googleapis.com/token".to_string()).unwrap();
 
+        let secure_cookie = redirect.starts_with("https://");
         let redirect_url = match RedirectUrl::new(redirect) {
             Ok(url) => url,
             Err(e) => {
@@ -78,7 +106,11 @@ impl OAuthGoogle {
                     .expect("Invalid revocation endpoint URL"),
             );
 
-        Some(Self { client, cache })
+        Some(Self {
+            client,
+            cache,
+            secure_cookie,
+        })
     }
 
     pub fn auth_url(&self) -> Result<(Url, CsrfToken), AppError> {
@@ -104,10 +136,38 @@ impl OAuthGoogle {
         let key = format!("oauth:google:pkce:{}", csrf_token.secret());
         let verifier = pkce_code_verifier.secret().to_string();
 
-        self.cache
-            .set(&key, &verifier, Some(std::time::Duration::from_secs(300)))?;
+        self.cache.set(
+            &key,
+            &verifier,
+            Some(std::time::Duration::from_secs(STATE_TTL_SECS)),
+        )?;
 
         Ok((auth_url, csrf_token))
+    }
+
+    /// Cookie carrying the `state` to the callback (same-site top-level
+    /// navigations only, never readable from JS).
+    pub fn state_cookie(&self, state: &CsrfToken) -> Cookie<'static> {
+        Cookie::build(STATE_COOKIE, state.secret().to_owned())
+            .path(STATE_COOKIE_PATH)
+            .http_only(true)
+            .secure(self.secure_cookie)
+            .same_site(SameSite::Lax)
+            .max_age(CookieDuration::seconds(STATE_TTL_SECS as i64))
+            .finish()
+    }
+
+    /// Expires the state cookie once the callback consumed it.
+    pub fn clear_state_cookie(&self) -> Cookie<'static> {
+        let mut cookie = Cookie::build(STATE_COOKIE, "")
+            .path(STATE_COOKIE_PATH)
+            .http_only(true)
+            .secure(self.secure_cookie)
+            .same_site(SameSite::Lax)
+            .finish();
+        cookie.make_removal();
+
+        cookie
     }
 
     // ! Example URL http://localhost:8080/api/user/oauth/google/callback?state=state&code=code&scope=email+https://www.googleapis.com/auth/userinfo.email+openid&authuser=0&prompt=consent
@@ -189,6 +249,16 @@ mod tests {
             name: None,
             picture: None,
         }
+    }
+
+    #[test]
+    fn test_state_must_match_the_browser_cookie() {
+        assert!(state_matches_cookie(Some("abc123"), "abc123"));
+
+        assert!(!state_matches_cookie(None, "abc123"));
+        assert!(!state_matches_cookie(Some(""), ""));
+        assert!(!state_matches_cookie(Some("abc124"), "abc123"));
+        assert!(!state_matches_cookie(Some("abc"), "abc123"));
     }
 
     #[test]

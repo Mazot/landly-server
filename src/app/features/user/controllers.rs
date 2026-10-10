@@ -1,3 +1,4 @@
+use super::oauth::google::{STATE_COOKIE, state_matches_cookie};
 use super::requests::{
     AddLanguagesRequest, DeleteLanguageRequest, OAuthCallbackParams, SignInRequest, SignUpRequest,
     UpdateNotificationSettingsRequest, UpdateProfileRequest,
@@ -240,7 +241,7 @@ pub async fn fetch_languages(
     path = "/user/oauth/google/login",
     context_path = "/api",
     responses(
-        (status = 302, description = "Redirect to Google OAuth")
+        (status = 302, description = "Redirect to Google OAuth; sets the HttpOnly state cookie checked by the callback")
     ),
     tag = "User"
 )]
@@ -248,10 +249,11 @@ pub async fn oauth_google_login(state: Data<AppState>) -> Result<HttpResponse, A
     let oauth = state.di_container.oauth_google.as_ref().ok_or_else(|| {
         AppError::ServiceUnavailable(json!({ "error": "Google OAuth is not configured" }))
     })?;
-    let (url, _state) = oauth.auth_url()?;
+    let (url, state) = oauth.auth_url()?;
 
     Ok(HttpResponse::Found()
         .append_header(("Location", url.to_string()))
+        .cookie(oauth.state_cookie(&state))
         .finish())
 }
 
@@ -270,12 +272,21 @@ pub async fn oauth_google_login(state: Data<AppState>) -> Result<HttpResponse, A
     tag = "User"
 )]
 pub async fn oauth_google_callback(
+    req: HttpRequest,
     state: Data<AppState>,
     query: Query<OAuthCallbackParams>,
 ) -> Result<HttpResponse, AppError> {
     let oauth = state.di_container.oauth_google.as_ref().ok_or_else(|| {
         AppError::ServiceUnavailable(json!({ "error": "Google OAuth is not configured" }))
     })?;
+
+    // The state must come back to the same browser that started the flow.
+    let cookie_state = req.cookie(STATE_COOKIE);
+    if !state_matches_cookie(cookie_state.as_ref().map(|c| c.value()), &query.state) {
+        return Err(AppError::Unauthorized(
+            json!({ "error": "OAuth state does not match this browser session" }),
+        ));
+    }
     let user_info = oauth
         .exchange_and_userinfo(query.code.to_owned(), query.state.to_owned())
         .await?;
@@ -300,5 +311,6 @@ pub async fn oauth_google_callback(
 
     Ok(HttpResponse::Found()
         .append_header(("Location", redirect_url))
+        .cookie(oauth.clear_state_cookie())
         .finish())
 }
