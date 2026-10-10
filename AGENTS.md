@@ -80,6 +80,8 @@ Roles live in `users.role` (`user` < `moderator` < `admin`), Rust side is `UserR
 | Own profile, languages, corridors | — | ✓ | ✓ | ✓ |
 | Create organisation (goes to `pending`) | — | ✓ | ✓ | ✓ |
 | Update/delete organisation | — | only own (`created_by`) | any | any |
+| Upload / set-primary organisation image | — | only own org (`created_by`) | any | any |
+| Delete organisation image | — | own upload or own org | any | any |
 | System reference tables (`POST /common/org_types`, country-connection create/update/delete) | — | — | — | ✓ |
 
 When adding a mutating endpoint: put it in `AUTH_REQUIRED_ROUTES`, then decide in the usecase whether it needs ownership (`ensure_can_manage` pattern) or a role gate (`ensure_admin` pattern in `country_connection/usecases.rs`).
