@@ -270,7 +270,7 @@ impl User {
             .filter(users::email.eq(email))
             .first::<User>(conn)?;
 
-        hash::verify(password, &user_by_email.password_hash)?;
+        hash::ensure_password_matches(&password, &user_by_email.password_hash)?;
         let token = user_by_email.generate_token()?;
 
         Ok((user_by_email, token))

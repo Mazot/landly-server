@@ -1,5 +1,7 @@
+use crate::error::AppError;
 pub use bcrypt::verify;
 use bcrypt::{BcryptResult, DEFAULT_COST, hash};
+use serde_json::json;
 
 /// Hashes a plaintext password with bcrypt at the default cost.
 /// Verification goes through the re-exported `verify`.
@@ -7,9 +9,47 @@ pub fn hash_password(naive_password: &str) -> BcryptResult<String> {
     hash(naive_password, DEFAULT_COST)
 }
 
+/// Succeeds only when `password` matches `password_hash`.
+///
+/// `bcrypt::verify` reports a wrong password as `Ok(false)`, not as an error,
+/// so its result must never be consumed with a bare `?` — that would accept
+/// any password. Every login path goes through this helper instead.
+pub fn ensure_password_matches(password: &str, password_hash: &str) -> Result<(), AppError> {
+    if verify(password, password_hash)? {
+        return Ok(());
+    }
+
+    Err(invalid_credentials())
+}
+
+/// The single 401 returned for every failed login, so callers cannot tell
+/// which part of the credentials was wrong.
+pub fn invalid_credentials() -> AppError {
+    AppError::Unauthorized(json!({ "error": "Invalid email or password" }))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_ensure_password_matches_accepts_correct_password() {
+        let hashed = hash_password("correct_password").unwrap();
+
+        assert!(ensure_password_matches("correct_password", &hashed).is_ok());
+    }
+
+    /// Regression: signin used `verify(..)?` and ignored the returned bool,
+    /// so any password produced a valid JWT.
+    #[test]
+    fn test_ensure_password_matches_rejects_wrong_password() {
+        let hashed = hash_password("correct_password").unwrap();
+
+        match ensure_password_matches("wrong_password", &hashed) {
+            Err(AppError::Unauthorized(_)) => (),
+            other => panic!("expected Unauthorized, got {:?}", other),
+        }
+    }
 
     #[test]
     fn test_hash_password_success() {
