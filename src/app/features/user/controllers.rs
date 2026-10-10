@@ -263,7 +263,8 @@ pub async fn oauth_google_login(state: Data<AppState>) -> Result<HttpResponse, A
     params(OAuthCallbackParams),
     responses(
         (status = 200, description = "Google OAuth callback handled successfully", body = super::presenters::AuthUserContent),
-        (status = 401, description = "Unauthorized", body = AppError),
+        (status = 401, description = "Invalid state, or the Google email is missing/unverified", body = AppError),
+        (status = 403, description = "A password account with this email already exists", body = AppError),
         (status = 500, description = "Internal server error", body = AppError)
     ),
     tag = "User"
@@ -278,9 +279,7 @@ pub async fn oauth_google_callback(
     let user_info = oauth
         .exchange_and_userinfo(query.code.to_owned(), query.state.to_owned())
         .await?;
-    let email = user_info
-        .email
-        .ok_or_else(|| AppError::Unauthorized(serde_json::json!({"message":"no email"})))?;
+    let email = user_info.verified_email()?;
 
     let auth = state
         .di_container

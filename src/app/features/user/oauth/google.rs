@@ -24,8 +24,27 @@ pub struct OAuthGoogle {
 pub struct GoogleUserInfo {
     pub sub: String,
     pub email: Option<String>,
+    /// Google marks addresses it has not verified (e.g. a non-Gmail address
+    /// typed at account creation); those must never be trusted as identity.
+    pub email_verified: Option<bool>,
     pub name: Option<String>,
     pub picture: Option<String>,
+}
+
+impl GoogleUserInfo {
+    /// The email only when Google vouches for it. An unverified address is
+    /// attacker-controlled and would let them sign in as whoever owns it.
+    pub fn verified_email(&self) -> Result<String, AppError> {
+        match (&self.email, self.email_verified) {
+            (Some(email), Some(true)) => Ok(email.to_owned()),
+            (None, _) => Err(AppError::Unauthorized(
+                json!({ "error": "Google account has no email" }),
+            )),
+            _ => Err(AppError::Unauthorized(
+                json!({ "error": "Google account email is not verified" }),
+            )),
+        }
+    }
 }
 
 impl OAuthGoogle {
@@ -155,5 +174,43 @@ impl OAuthGoogle {
             .redirect(reqwest::redirect::Policy::none())
             .build()
             .expect("Failed to build HTTP client")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn info(email: Option<&str>, email_verified: Option<bool>) -> GoogleUserInfo {
+        GoogleUserInfo {
+            sub: "google-sub".to_string(),
+            email: email.map(str::to_string),
+            email_verified,
+            name: None,
+            picture: None,
+        }
+    }
+
+    #[test]
+    fn test_verified_email_accepts_verified_address() {
+        let email = info(Some("a@example.com"), Some(true))
+            .verified_email()
+            .unwrap();
+
+        assert_eq!(email, "a@example.com");
+    }
+
+    #[test]
+    fn test_verified_email_rejects_unverified_or_missing() {
+        for user_info in [
+            info(Some("a@example.com"), Some(false)),
+            info(Some("a@example.com"), None),
+            info(None, Some(true)),
+        ] {
+            match user_info.verified_email() {
+                Err(AppError::Unauthorized(_)) => (),
+                other => panic!("expected Unauthorized, got {:?}", other),
+            }
+        }
     }
 }
