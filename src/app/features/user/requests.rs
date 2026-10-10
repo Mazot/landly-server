@@ -51,6 +51,13 @@ pub struct DeleteLanguageRequest {
     pub language_id: Uuid,
 }
 
+/// Body of `POST /user/oauth/google/exchange`.
+#[derive(Deserialize, Serialize, Debug, ToSchema)]
+pub struct OAuthExchangeRequest {
+    /// Single-use code from the `/auth/google/callback?code=` redirect.
+    pub code: String,
+}
+
 #[derive(Deserialize, ToSchema, IntoParams)]
 pub struct OAuthCallbackParams {
     pub code: String,

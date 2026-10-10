@@ -1,3 +1,4 @@
+use crate::app::features::user::presenters::AuthUserContent;
 use crate::constants::env_key;
 use crate::error::AppError;
 use crate::utils::cache::{CacheService, TypedCache};
@@ -14,11 +15,17 @@ use serde::Deserialize;
 use serde_json::json;
 use std::sync::Arc;
 use utoipa::ToSchema;
+use uuid::Uuid;
 
 /// HttpOnly cookie that binds the OAuth `state` to the browser that started
 /// the flow. Without it an attacker could start a login themselves and send
 /// the victim their callback URL (login CSRF).
 pub const STATE_COOKIE: &str = "landly_oauth_google_state";
+const LOGIN_CODE_TTL_SECS: u64 = 60;
+
+fn login_code_key(code: &str) -> String {
+    format!("oauth:google:login-code:{}", code)
+}
 const STATE_COOKIE_PATH: &str = "/api/user/oauth/google";
 const STATE_TTL_SECS: u64 = 300;
 
@@ -170,6 +177,33 @@ impl OAuthGoogle {
         cookie
     }
 
+    /// Parks the issued session under a single-use, short-lived code so the
+    /// callback redirect never carries the JWT itself (URLs leak through
+    /// browser history, proxy/CDN logs and the Referer header).
+    pub fn issue_login_code(&self, auth: &AuthUserContent) -> Result<String, AppError> {
+        let code = format!("{}{}", Uuid::new_v4().simple(), Uuid::new_v4().simple());
+
+        self.cache.set(
+            &login_code_key(&code),
+            auth,
+            Some(std::time::Duration::from_secs(LOGIN_CODE_TTL_SECS)),
+        )?;
+
+        Ok(code)
+    }
+
+    /// Exchanges a login code for the session exactly once.
+    pub fn redeem_login_code(&self, code: &str) -> Result<AuthUserContent, AppError> {
+        let key = login_code_key(code);
+        let auth: AuthUserContent = self.cache.get(&key)?.ok_or_else(|| {
+            AppError::Unauthorized(json!({ "error": "Invalid or expired login code" }))
+        })?;
+
+        self.cache.delete(&key)?;
+
+        Ok(auth)
+    }
+
     // ! Example URL http://localhost:8080/api/user/oauth/google/callback?state=state&code=code&scope=email+https://www.googleapis.com/auth/userinfo.email+openid&authuser=0&prompt=consent
     pub async fn exchange_and_userinfo(
         &self,
@@ -240,6 +274,105 @@ impl OAuthGoogle {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashMap;
+    use std::sync::Mutex;
+    use std::time::Duration;
+
+    /// In-memory cache so the login-code round trip can be exercised.
+    #[derive(Default)]
+    struct MemoryCache(Mutex<HashMap<String, String>>);
+
+    impl CacheService for MemoryCache {
+        fn get_string(&self, key: &str) -> Result<Option<String>, AppError> {
+            Ok(self.0.lock().unwrap().get(key).cloned())
+        }
+        fn set_string(
+            &self,
+            key: &str,
+            value: &str,
+            _ttl: Option<Duration>,
+        ) -> Result<(), AppError> {
+            self.0
+                .lock()
+                .unwrap()
+                .insert(key.to_string(), value.to_string());
+            Ok(())
+        }
+        fn delete(&self, key: &str) -> Result<(), AppError> {
+            self.0.lock().unwrap().remove(key);
+            Ok(())
+        }
+        fn exists(&self, key: &str) -> Result<bool, AppError> {
+            Ok(self.0.lock().unwrap().contains_key(key))
+        }
+        fn invalidate_pattern(&self, _pattern: &str) -> Result<(), AppError> {
+            Ok(())
+        }
+        fn mget_string(&self, keys: &[String]) -> Result<Vec<Option<String>>, AppError> {
+            keys.iter().map(|k| self.get_string(k)).collect()
+        }
+        fn mset_string(
+            &self,
+            items: &[(String, String)],
+            ttl: Option<Duration>,
+        ) -> Result<(), AppError> {
+            for (k, v) in items {
+                self.set_string(k, v, ttl)?;
+            }
+            Ok(())
+        }
+    }
+
+    fn oauth_with_memory_cache() -> OAuthGoogle {
+        let client = BasicClient::new(ClientId::new("client-id".to_string()))
+            .set_client_secret(ClientSecret::new("secret".to_string()))
+            .set_redirect_uri(
+                RedirectUrl::new("https://api.example.com/callback".to_string()).unwrap(),
+            )
+            .set_token_uri(
+                TokenUrl::new("https://oauth2.googleapis.com/token".to_string()).unwrap(),
+            )
+            .set_auth_uri(
+                AuthUrl::new("https://accounts.google.com/o/oauth2/v2/auth".to_string()).unwrap(),
+            )
+            .set_revocation_url(
+                RevocationUrl::new("https://oauth2.googleapis.com/revoke".to_string()).unwrap(),
+            );
+
+        OAuthGoogle {
+            client,
+            cache: TypedCache::new(Arc::new(MemoryCache::default()) as Arc<dyn CacheService>),
+            secure_cookie: true,
+        }
+    }
+
+    #[test]
+    fn test_login_code_is_single_use_and_hides_the_token() {
+        let oauth = oauth_with_memory_cache();
+        let auth = AuthUserContent {
+            id: uuid::Uuid::new_v4(),
+            username: "u".to_string(),
+            email: "u@example.com".to_string(),
+            token: "jwt-token".to_string(),
+        };
+
+        let code = oauth.issue_login_code(&auth).unwrap();
+        assert!(!code.contains("jwt-token"));
+        assert!(code.len() >= 64, "code must be unguessable");
+
+        let redeemed = oauth.redeem_login_code(&code).unwrap();
+        assert_eq!(redeemed.token, "jwt-token");
+
+        match oauth.redeem_login_code(&code) {
+            Err(AppError::Unauthorized(_)) => (),
+            other => panic!("second redemption must fail, got {:?}", other.err()),
+        }
+    }
+
+    #[test]
+    fn test_unknown_login_code_is_rejected() {
+        assert!(oauth_with_memory_cache().redeem_login_code("nope").is_err());
+    }
 
     fn info(email: Option<&str>, email_verified: Option<bool>) -> GoogleUserInfo {
         GoogleUserInfo {

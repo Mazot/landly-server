@@ -1,7 +1,7 @@
 use super::oauth::google::{STATE_COOKIE, state_matches_cookie};
 use super::requests::{
-    AddLanguagesRequest, DeleteLanguageRequest, OAuthCallbackParams, SignInRequest, SignUpRequest,
-    UpdateNotificationSettingsRequest, UpdateProfileRequest,
+    AddLanguagesRequest, DeleteLanguageRequest, OAuthCallbackParams, OAuthExchangeRequest,
+    SignInRequest, SignUpRequest, UpdateNotificationSettingsRequest, UpdateProfileRequest,
 };
 use super::usecases::{SignUpUsecaseInput, UpdateProfileUsecaseInput};
 use crate::{app::drivers::middlewares::state::AppState, constants::env_key, error::AppError};
@@ -300,17 +300,43 @@ pub async fn oauth_google_callback(
     let frontend_origin = std::env::var(env_key::FRONTEND_ORIGIN)
         .unwrap_or_else(|_| "http://localhost:5173".to_string());
 
+    // Only a single-use code travels in the URL; the frontend trades it for
+    // the session via POST /user/oauth/google/exchange.
+    let login_code = oauth.issue_login_code(&auth)?;
     let redirect_url = format!(
-        "{}/auth/google/callback?token={}&id={}&username={}&email={}",
+        "{}/auth/google/callback?code={}",
         frontend_origin,
-        urlencoding::encode(&auth.token),
-        auth.id,
-        urlencoding::encode(&auth.username),
-        urlencoding::encode(&auth.email),
+        urlencoding::encode(&login_code),
     );
 
     Ok(HttpResponse::Found()
         .append_header(("Location", redirect_url))
         .cookie(oauth.clear_state_cookie())
         .finish())
+}
+
+// [authorship] AI-generated (Claude) — replaces the JWT-in-URL callback
+// redirect with a single-use code exchange.
+#[utoipa::path(
+    post,
+    path = "/user/oauth/google/exchange",
+    context_path = "/api",
+    request_body = OAuthExchangeRequest,
+    responses(
+        (status = 200, description = "Session for the Google login the code was issued for", body = super::presenters::AuthUserContent),
+        (status = 401, description = "Unknown, expired or already used code", body = AppError),
+        (status = 503, description = "Google OAuth is not configured", body = AppError),
+        (status = 500, description = "Internal server error", body = AppError)
+    ),
+    tag = "User"
+)]
+pub async fn oauth_google_exchange(
+    state: Data<AppState>,
+    form: Json<OAuthExchangeRequest>,
+) -> Result<HttpResponse, AppError> {
+    let oauth = state.di_container.oauth_google.as_ref().ok_or_else(|| {
+        AppError::ServiceUnavailable(json!({ "error": "Google OAuth is not configured" }))
+    })?;
+
+    Ok(HttpResponse::Ok().json(oauth.redeem_login_code(&form.code)?))
 }

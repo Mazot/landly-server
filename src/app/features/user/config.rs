@@ -1,6 +1,7 @@
 use super::controllers::{
     add_languages, delete_language, fetch_languages, fetch_me, oauth_google_callback,
-    oauth_google_login, signin, signup, update_me, update_notification_settings,
+    oauth_google_exchange, oauth_google_login, signin, signup, update_me,
+    update_notification_settings,
 };
 use actix_web::{web, web::ServiceConfig};
 
@@ -13,6 +14,10 @@ pub fn configure_services(cfg: &mut ServiceConfig) {
             .route(
                 "/oauth/google/callback",
                 web::get().to(oauth_google_callback),
+            )
+            .route(
+                "/oauth/google/exchange",
+                web::post().to(oauth_google_exchange),
             )
             .route("/me", web::get().to(fetch_me))
             .route("/me", web::put().to(update_me))
