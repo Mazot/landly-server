@@ -169,6 +169,7 @@ Keep these definitions in sync when conventions change (routes, env vars, RBAC r
 
 - The server container healthcheck must target `/api/healthcheck` (there is no `/health` route); `curl` is installed in the runtime image for this.
 - `JWT_EXPIRATION` is required by `utils/token.rs` and is passed through docker-compose (default 3600). The old docs mentioned a nonexistent `JWT_EXP_SECS`.
+- Service credentials (`POSTGRES_PASSWORD`, `REDIS_PASSWORD`, `MINIO_ROOT_USER`/`MINIO_ROOT_PASSWORD`, `JWT_SECRET`) are required via `${VAR:?}` — never reintroduce hardcoded defaults. db/redis/minio ports bind to `SERVICES_BIND_ADDRESS` (default `127.0.0.1`), and the bucket is `mc anonymous set download` (read-only; `public` would allow anonymous uploads).
 - The redis healthcheck uses an authenticated `PING` — plain `redis-cli incr ping` always exits 0 even on NOAUTH and mutates a key.
 
 ## Authorship map

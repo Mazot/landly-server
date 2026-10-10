@@ -5,8 +5,8 @@ tools: Read, Edit, Write, Grep, Glob, Bash
 ---
 
 You manage Diesel migrations for landly-server (Postgres 17 in docker compose,
-service `db`, container `landly_postgres`, credentials landly-user /
-landly-password / db `landly`).
+service `db`, container `landly_postgres`, credentials from `.env`:
+`POSTGRES_USER` (default landly-user) / `POSTGRES_PASSWORD` (required) / db `landly`).
 
 Environment on this machine:
 - `diesel` CLI needs: `export PQ_LIB_DIR=/opt/homebrew/opt/libpq/lib DYLD_LIBRARY_PATH=/opt/homebrew/opt/libpq/lib`
