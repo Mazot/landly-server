@@ -46,19 +46,20 @@ impl OrganisationUsecase {
     }
 
     /// Update/delete are allowed for the creator or a moderator/admin.
-    /// Returns which of the two granted access.
+    /// Returns which of the two granted access; the role wins, so a
+    /// moderator editing their own organisation counts as a moderator.
     fn ensure_can_manage(
         &self,
         organisation: &Organisation,
         caller_user_id: Uuid,
     ) -> Result<ManagedBy, AppError> {
-        if organisation.created_by == Some(caller_user_id) {
-            return Ok(ManagedBy::Creator);
-        }
-
         let role = self.organisation_repo.fetch_user_role(caller_user_id)?;
         if role.is_moderator() {
             return Ok(ManagedBy::Moderator);
+        }
+
+        if organisation.created_by == Some(caller_user_id) {
+            return Ok(ManagedBy::Creator);
         }
 
         Err(AppError::Forbidden(
@@ -650,6 +651,20 @@ mod tests {
             *repo.updated_status.lock().unwrap(),
             vec![Some(OrganisationStatus::Pending.as_str().to_string())]
         );
+    }
+
+    /// Review regression: a moderator who created the organisation was
+    /// classified as a plain creator and their edit sent it back to pending.
+    #[test]
+    fn test_moderator_editing_own_org_keeps_it_live() {
+        let moderator = Uuid::new_v4();
+        let repo = stub_repo(test_organisation(Some(moderator)), UserRole::Moderator);
+
+        usecase_with_repo(repo.clone())
+            .update_organisation(Uuid::new_v4(), moderator, empty_update())
+            .unwrap();
+
+        assert_eq!(*repo.updated_status.lock().unwrap(), vec![None]);
     }
 
     #[test]
