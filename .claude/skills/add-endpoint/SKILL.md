@@ -103,7 +103,8 @@ Rules:
    - name the param `{id}` — `test_every_auth_required_route_matches_a_real_path` only substitutes `{id}`;
    - a trailing `/` means prefix match (images style) — don't use it for new routes;
    - bump the array length `[AuthRequiredRoute; N]` and `test_auth_required_routes_count`.
-3. Public route: do nothing in `auth.rs` (auth is opt-in; `SKIP_AUTH_ROUTES` is NOT consulted). If it must stay public on purpose, add a guard test like `test_person_claim_routes_are_not_auth_required`.
+3. Public **mutating** route (rare — only when the request carries its own credential): `cargo test` fails until it is listed in `INTENTIONALLY_PUBLIC_MUTATING_ROUTES` (auth.rs tests) with a reason. Adding an entry there is a security decision — ask the user first, never add one just to make the test pass. Public GET routes need nothing (auth is opt-in; `SKIP_AUTH_ROUTES` is NOT consulted).
+4. Guards that will fail if you missed something: `test_every_mutating_route_is_protected_or_intentionally_public`, `test_every_auth_required_route_protects_a_registered_route` (both in auth.rs).
 
 ## 5. Rate limiting (only if step 0 said so)
 
@@ -112,7 +113,7 @@ Wrap the single route with the shared limiter passed from `main`, like `user/con
 
 ## 6. OpenAPI — `<feature>/mod.rs`
 
-Add the handler to `paths(...)` and every new request/response type to `components(schemas(...))` of the feature's `ApiDoc`. Never touch the root `#[openapi]` in `main.rs`. Removing/renaming a route → remove/rename it here too.
+Add the handler to `paths(...)` and every new request/response type to `components(schemas(...))` of the feature's `ApiDoc`. Never touch the root `#[openapi]` in `main.rs`. Removing/renaming a route → remove/rename it here too. `test_every_registered_route_is_in_the_openapi_spec` / `test_every_openapi_operation_is_a_registered_route` (main.rs) fail if the route and its `#[utoipa::path]` method/path or `ApiDoc` entry disagree.
 
 ## 7. Tests (inline `#[cfg(test)]`, no database)
 

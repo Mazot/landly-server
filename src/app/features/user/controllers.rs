@@ -243,7 +243,8 @@ pub async fn fetch_languages(
     path = "/user/oauth/google/login",
     context_path = "/api",
     responses(
-        (status = 302, description = "Redirect to Google OAuth; sets the HttpOnly state cookie checked by the callback")
+        (status = 302, description = "Redirect to Google OAuth; sets the HttpOnly state cookie checked by the callback"),
+        (status = 503, description = "Google OAuth is not configured", body = AppError)
     ),
     tag = "User"
 )]
@@ -266,9 +267,10 @@ pub async fn oauth_google_login(state: Data<AppState>) -> Result<HttpResponse, A
     context_path = "/api",
     params(OAuthCallbackParams),
     responses(
-        (status = 200, description = "Google OAuth callback handled successfully", body = super::presenters::AuthUserContent),
+        (status = 302, description = "Redirect to {FRONTEND_ORIGIN}/auth/google/callback?code=<single-use code>; exchange it via POST /api/user/oauth/google/exchange"),
         (status = 401, description = "Invalid state, or the Google email is missing/unverified", body = AppError),
         (status = 403, description = "A password account with this email already exists", body = AppError),
+        (status = 503, description = "Google OAuth is not configured", body = AppError),
         (status = 500, description = "Internal server error", body = AppError)
     ),
     tag = "User"

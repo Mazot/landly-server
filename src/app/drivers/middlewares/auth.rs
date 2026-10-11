@@ -428,6 +428,136 @@ mod tests {
         ));
     }
 
+    /// Mutating routes that are public ON PURPOSE. Each needs a reason; adding
+    /// a route here is a security decision, not a way to make the test pass.
+    const INTENTIONALLY_PUBLIC_MUTATING_ROUTES: [(&str, &str, &str); 6] = [
+        (
+            "POST",
+            "/api/user/signin",
+            "credentials are the request itself",
+        ),
+        (
+            "POST",
+            "/api/user/signup",
+            "creates the account; rate limited",
+        ),
+        (
+            "POST",
+            "/api/user/oauth/google/exchange",
+            "the single-use login code is the credential",
+        ),
+        (
+            "POST",
+            "/api/organisation/visit/{id}",
+            "anonymous visit counter",
+        ),
+        (
+            "POST",
+            "/api/person/claim/{token}/confirm",
+            "the claim token is the credential",
+        ),
+        (
+            "POST",
+            "/api/person/claim/{token}/decline",
+            "the claim token is the credential",
+        ),
+    ];
+
+    /// A registered route with every `{param}` replaced by a UUID, i.e. what
+    /// real traffic looks like to the middleware.
+    fn real_request_path(route_path: &str) -> String {
+        let id = Uuid::new_v4().to_string();
+        let mut out = String::new();
+        let mut in_param = false;
+        for c in route_path.chars() {
+            match c {
+                '{' => {
+                    in_param = true;
+                    out.push_str(&id);
+                }
+                '}' => in_param = false,
+                _ if in_param => {}
+                _ => out.push(c),
+            }
+        }
+        out
+    }
+
+    fn is_protected(method: &str, real_path: &str) -> bool {
+        AUTH_REQUIRED_ROUTES
+            .iter()
+            .any(|r| r.method.as_str() == method && path_matches(r.path, real_path))
+    }
+
+    /// Every POST/PUT/DELETE route must go through the auth middleware unless
+    /// it is listed above. Auth is opt-in, so forgetting AUTH_REQUIRED_ROUTES
+    /// would ship an unauthenticated write (controllers then fail only with a
+    /// generic "Missing authenticated user", or worse, never ask).
+    #[test]
+    fn test_every_mutating_route_is_protected_or_intentionally_public() {
+        use crate::app::route_inventory::{normalize_params, registered_routes};
+
+        let allowlisted = |method: &str, path: &str| {
+            INTENTIONALLY_PUBLIC_MUTATING_ROUTES
+                .iter()
+                .any(|(m, p, _)| *m == method && normalize_params(p) == normalize_params(path))
+        };
+
+        let unprotected: Vec<String> = registered_routes()
+            .into_iter()
+            .filter(|r| r.method != "GET")
+            .filter(|r| !is_protected(&r.method, &real_request_path(&r.path)))
+            .filter(|r| !allowlisted(&r.method, &r.path))
+            .map(|r| format!("{} {}", r.method, r.path))
+            .collect();
+
+        assert!(
+            unprotected.is_empty(),
+            "mutating routes without auth — add them to AUTH_REQUIRED_ROUTES (or, if public \
+             on purpose, to INTENTIONALLY_PUBLIC_MUTATING_ROUTES with a reason):\n  {}",
+            unprotected.join("\n  ")
+        );
+    }
+
+    /// The allowlist must not go stale: every entry is a real, unprotected route.
+    #[test]
+    fn test_intentionally_public_routes_exist_and_are_unprotected() {
+        use crate::app::route_inventory::{normalize_params, registered_routes};
+
+        let routes = registered_routes();
+        for (method, path, _) in INTENTIONALLY_PUBLIC_MUTATING_ROUTES {
+            assert!(
+                routes
+                    .iter()
+                    .any(|r| r.method == method && r.normalized_path() == normalize_params(path)),
+                "{method} {path} is allowlisted but not registered"
+            );
+            assert!(
+                !is_protected(method, &real_request_path(path)),
+                "{method} {path} is allowlisted as public but is in AUTH_REQUIRED_ROUTES"
+            );
+        }
+    }
+
+    /// Every AUTH_REQUIRED_ROUTES pattern must protect at least one registered
+    /// route with the same method — a typo or a renamed route would otherwise
+    /// leave the real route public while this list looks complete.
+    #[test]
+    fn test_every_auth_required_route_protects_a_registered_route() {
+        use crate::app::route_inventory::registered_routes;
+
+        let routes = registered_routes();
+        for pattern in AUTH_REQUIRED_ROUTES.iter() {
+            assert!(
+                routes.iter().any(|r| r.method == pattern.method.as_str()
+                    && path_matches(pattern.path, &real_request_path(&r.path))),
+                "AUTH_REQUIRED_ROUTES entry {} {} matches no registered route",
+                pattern.method,
+                pattern.path
+            );
+        }
+    }
+
     /// Every entry in AUTH_REQUIRED_ROUTES must match a realistic request path.
     /// Guards against patterns (e.g. containing a literal `{id}`) that can never
     /// match real traffic and would silently disable auth for that route.

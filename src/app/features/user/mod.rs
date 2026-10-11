@@ -21,6 +21,8 @@ use utoipa::OpenApi;
         controllers::add_languages,
         controllers::delete_language,
         controllers::fetch_languages,
+        controllers::oauth_google_login,
+        controllers::oauth_google_callback,
         controllers::oauth_google_exchange,
     ),
     components(schemas(

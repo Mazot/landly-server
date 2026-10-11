@@ -133,3 +133,72 @@ async fn main() -> std::io::Result<()> {
     .run()
     .await
 }
+
+#[cfg(test)]
+mod tests {
+    use super::build_openapi;
+    use crate::app::route_inventory::{normalize_params, registered_routes};
+    use std::collections::BTreeSet;
+
+    /// (METHOD, normalized path) of every operation in the merged spec.
+    fn documented_operations() -> BTreeSet<(String, String)> {
+        let mut ops = BTreeSet::new();
+
+        for (path, item) in build_openapi().paths.paths {
+            let methods = [
+                ("GET", item.get.is_some()),
+                ("POST", item.post.is_some()),
+                ("PUT", item.put.is_some()),
+                ("DELETE", item.delete.is_some()),
+                ("PATCH", item.patch.is_some()),
+            ];
+            for (method, present) in methods {
+                if present {
+                    ops.insert((method.to_string(), normalize_params(&path)));
+                }
+            }
+        }
+
+        ops
+    }
+
+    /// A route that is registered but missing from its feature `ApiDoc`
+    /// silently disappears from /scalar (this happened to the OAuth routes).
+    #[test]
+    fn test_every_registered_route_is_in_the_openapi_spec() {
+        let documented = documented_operations();
+        let missing: Vec<String> = registered_routes()
+            .into_iter()
+            .filter(|r| !documented.contains(&(r.method.clone(), r.normalized_path())))
+            .map(|r| format!("{} {} ({})", r.method, r.path, r.feature))
+            .collect();
+
+        assert!(
+            missing.is_empty(),
+            "routes missing from the OpenAPI spec — add the handler to paths(...) in \
+             <feature>/mod.rs and check its #[utoipa::path] method/path:\n  {}",
+            missing.join("\n  ")
+        );
+    }
+
+    /// The reverse: the spec must not advertise routes that do not exist
+    /// (stale `#[utoipa::path]` after a rename, wrong method or path).
+    #[test]
+    fn test_every_openapi_operation_is_a_registered_route() {
+        let registered: BTreeSet<(String, String)> = registered_routes()
+            .into_iter()
+            .map(|r| (r.method.clone(), r.normalized_path()))
+            .collect();
+        let stale: Vec<String> = documented_operations()
+            .into_iter()
+            .filter(|op| !registered.contains(op))
+            .map(|(method, path)| format!("{method} {path}"))
+            .collect();
+
+        assert!(
+            stale.is_empty(),
+            "OpenAPI operations with no registered route:\n  {}",
+            stale.join("\n  ")
+        );
+    }
+}

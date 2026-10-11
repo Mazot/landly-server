@@ -19,17 +19,21 @@ AGENTS = (ROOT / "AGENTS.md").read_text()
 COPILOT_PATH = ROOT / ".github/copilot-instructions.md"
 COPILOT = COPILOT_PATH.read_text() if COPILOT_PATH.exists() else ""
 
-# Mutating routes that are public ON PURPOSE (the request carries its own
-# credential, or the action is anonymous by design). Anything else that
-# mutates without being in AUTH_REQUIRED_ROUTES is reported.
-INTENTIONALLY_PUBLIC = {
-    ("POST", "/api/user/signin"),
-    ("POST", "/api/user/signup"),
-    ("POST", "/api/user/oauth/google/exchange"),
-    ("POST", "/api/organisation/visit/{}"),
-    ("POST", "/api/person/claim/{}/confirm"),
-    ("POST", "/api/person/claim/{}/decline"),
-}
+# Mutating routes that are public ON PURPOSE live in one place: the
+# INTENTIONALLY_PUBLIC_MUTATING_ROUTES list in auth.rs tests (enforced by
+# `cargo test`). Read it from there instead of keeping a second copy.
+def _intentionally_public():
+    text = AUTH_RS.read_text()
+    block = re.search(r"INTENTIONALLY_PUBLIC_MUTATING_ROUTES[^=]*=\s*\[(.*?)\n\s*\];", text, re.S)
+    if not block:
+        return set()
+    return {
+        (m, re.sub(r"\{[^}]*\}", "{}", p))
+        for m, p in re.findall(r'\(\s*"(\w+)",\s*"(/api[^"]*)"', block.group(1))
+    }
+
+
+INTENTIONALLY_PUBLIC = _intentionally_public()
 
 problems = 0
 
@@ -181,7 +185,7 @@ for pattern, method in auth:
 for key, (feature, raw) in sorted(routes.items()):
     if key[0] != "GET" and key not in protected and key not in INTENTIONALLY_PUBLIC:
         bad(f"{key[0]} {raw} mutates but is not in AUTH_REQUIRED_ROUTES "
-            f"(protect it, or add it to INTENTIONALLY_PUBLIC in this script on purpose)")
+            f"(protect it, or add it to INTENTIONALLY_PUBLIC_MUTATING_ROUTES in auth.rs with a reason)")
 if problems == before:
     ok(f"{len(auth)} protected patterns all match real routes; no unexpected public mutating route")
 

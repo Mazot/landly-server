@@ -131,6 +131,11 @@ state: web::Data<AppState>
 
 Route patterns are matched by `path_matches`: a `{param}` segment matches exactly one non-empty path segment (`/api/organisation/update/{id}` matches `/api/organisation/update/<uuid>`), and a pattern ending with `/` is a prefix match (images style). Never rely on plain `starts_with` — a literal `{id}` in the pattern would silently disable auth for that route (this was a real bug). The test `test_every_auth_required_route_matches_a_real_path` guards against regressions; keep it passing when adding routes.
 
+Route-table guard tests (they parse every feature `config.rs` via the test-only `src/app/route_inventory.rs`, so new features are covered automatically):
+
+- `auth.rs` → `test_every_mutating_route_is_protected_or_intentionally_public`: every POST/PUT/DELETE route must be in `AUTH_REQUIRED_ROUTES` or in the test's `INTENTIONALLY_PUBLIC_MUTATING_ROUTES` (each with a reason — adding one is a security decision); `test_intentionally_public_routes_exist_and_are_unprotected` keeps that list honest; `test_every_auth_required_route_protects_a_registered_route` catches typos/renamed routes.
+- `main.rs` → `test_every_registered_route_is_in_the_openapi_spec` / `test_every_openapi_operation_is_a_registered_route`: routes and the merged OpenAPI spec must match both ways.
+
 ### Rate limiting
 
 `src/app/drivers/middlewares/rate_limit.rs` (actix-governor, keyed by client IP via `ClientIpKeyExtractor`): the whole app gets `api_rate_limit()` (burst 100, 20 req/s), and the credential routes (`/user/signin`, `/user/signup`, `/user/oauth/google/*`) additionally get `auth_rate_limit()` (burst 10, then 1 per 6 s) in `user/config.rs`. Configs are built once in `main` and cloned into workers — never construct a limiter inside the `HttpServer::new` closure, or each worker counts separately.
@@ -161,7 +166,7 @@ Cache keys follow the `CacheKeys` namespace helper in the same file (`org:*`, `c
 
 The OpenAPI doc is split per feature: **every** feature declares its own `#[derive(OpenApi)] pub struct ApiDoc` in `<feature>/mod.rs` (paths + schemas + tag) and is merged into the root doc in `build_openapi()` in `src/main.rs`. The root `#[openapi(...)]` macro in `main.rs` now only carries `info` + `servers` — do NOT add paths or schemas to it. The API docs UI is **Scalar** (`utoipa-scalar`) at `/scalar`; the raw spec is served at `/api-docs/openapi.json`, and the legacy `/swagger-ui` path 307-redirects to `/scalar`. These stay public because auth is opt-in: only paths listed in `AUTH_REQUIRED_ROUTES` are checked. `SKIP_AUTH_ROUTES` documents the intended-public paths, but `is_skip_auth_route` is currently never called from the middleware — do not rely on it to open a route.
 
-> **RULE:** When adding, removing, or updating routes (controllers), you MUST also update the corresponding per-feature `ApiDoc` in `<feature>/mod.rs` — add/remove paths and schemas so Scalar stays accurate, and register a brand-new feature's `ApiDoc` in `build_openapi()`. Do NOT add paths or schemas to the root `#[openapi(...)]` macro in `main.rs`.
+> **RULE** (enforced by the OpenAPI guard tests in `main.rs`): When adding, removing, or updating routes (controllers), you MUST also update the corresponding per-feature `ApiDoc` in `<feature>/mod.rs` — add/remove paths and schemas so Scalar stays accurate, and register a brand-new feature's `ApiDoc` in `build_openapi()`. Do NOT add paths or schemas to the root `#[openapi(...)]` macro in `main.rs`.
 
 ## Sub-agents
 
