@@ -106,6 +106,8 @@ answer `503 Service Unavailable`.
 `docker compose` additionally requires the service credentials `POSTGRES_PASSWORD`,
 `REDIS_PASSWORD`, `MINIO_ROOT_USER`, `MINIO_ROOT_PASSWORD` and `JWT_SECRET` (see
 `.env.example`) — there are no built-in defaults, and it refuses to start without them.
+Generate them URL-safe (e.g. `openssl rand -hex 32`): the Postgres and Redis passwords are
+embedded into the `DATABASE_URL`/`REDIS_URL` the server container receives.
 Postgres, Redis and MinIO are published on `127.0.0.1` only (override with
 `SERVICES_BIND_ADDRESS`); the image bucket is anonymously readable, never writable.
 

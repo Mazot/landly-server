@@ -37,10 +37,15 @@ services:
     environment:
       REDIS_USER: ${REDIS_USER:-redis}
       REDIS_PASSWORD: ${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
+    # Credentials are read from the container environment at runtime ($$VAR,
+    # quoted) instead of being pasted into the shell text by compose, so
+    # shell metacharacters in them can neither break startup nor inject.
+    # With --aclfile, --requirepass is ignored and the `default` user would
+    # stay passwordless, so the ACL disables it explicitly.
     command: >
       sh -c '
-        echo "user ${REDIS_USER:-redis} on +@all ~* >${REDIS_PASSWORD}" > /tmp/users.acl &&
-        redis-server --appendonly yes --aclfile /tmp/users.acl --requirepass ${REDIS_PASSWORD}
+        printf "user default off\nuser %s on +@all ~* >%s\n" "$$REDIS_USER" "$$REDIS_PASSWORD" > /tmp/users.acl &&
+        exec redis-server --appendonly yes --aclfile /tmp/users.acl
       '
     restart: unless-stopped
     ports:
@@ -53,7 +58,7 @@ services:
       # Authenticated PING: the unauthenticated `incr ping` variant always
       # exits 0 (redis-cli does not propagate NOAUTH as a failure) and also
       # mutates a "ping" key.
-      test: ["CMD-SHELL", "redis-cli -a $${REDIS_PASSWORD} ping | grep -q PONG"]
+      test: ["CMD-SHELL", "redis-cli --no-auth-warning --user \"$${REDIS_USER}\" --pass \"$${REDIS_PASSWORD}\" ping | grep -q PONG"]
       interval: 10s
       timeout: 3s
       retries: 5
@@ -104,13 +109,18 @@ services:
     depends_on:
       minio:
         condition: service_healthy
+    # Same as redis: credentials come from the environment, quoted.
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?Set MINIO_ROOT_USER in .env}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?Set MINIO_ROOT_PASSWORD in .env}
+      S3_BUCKET: ${S3_BUCKET:-landly-images}
     entrypoint: >
-      /bin/sh -c "
-        mc alias set local http://minio:9000 ${MINIO_ROOT_USER} ${MINIO_ROOT_PASSWORD} &&
-        mc mb --ignore-existing local/${S3_BUCKET:-landly-images} &&
-        mc anonymous set download local/${S3_BUCKET:-landly-images} &&
-        echo 'MinIO bucket ${S3_BUCKET:-landly-images} is ready.'
-      "
+      /bin/sh -c '
+        mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD" &&
+        mc mb --ignore-existing "local/$$S3_BUCKET" &&
+        mc anonymous set download "local/$$S3_BUCKET" &&
+        echo "MinIO bucket $$S3_BUCKET is ready."
+      '
     networks:
       - landly_network
 
