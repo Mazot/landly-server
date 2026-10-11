@@ -188,14 +188,10 @@ impl OAuthGoogle {
 
     /// Exchanges a login code for the session exactly once.
     pub fn redeem_login_code(&self, code: &str) -> Result<AuthUserContent, AppError> {
-        let key = login_code_key(code);
-        let auth: AuthUserContent = self.cache.get(&key)?.ok_or_else(|| {
+        // GETDEL: two concurrent exchanges can never both get the session.
+        self.cache.take(&login_code_key(code))?.ok_or_else(|| {
             AppError::Unauthorized(json!({ "error": "Invalid or expired login code" }))
-        })?;
-
-        self.cache.delete(&key)?;
-
-        Ok(auth)
+        })
     }
 
     // ! Example URL http://localhost:8080/api/user/oauth/google/callback?state=state&code=code&scope=email+https://www.googleapis.com/auth/userinfo.email+openid&authuser=0&prompt=consent
@@ -205,11 +201,10 @@ impl OAuthGoogle {
         state: String,
     ) -> Result<GoogleUserInfo, AppError> {
         let key = format!("oauth:google:pkce:{}", state);
-        let verifier: String = self.cache.get(&key)?.ok_or(AppError::Unauthorized(json!(
+        // Consumed atomically so a state can be redeemed only once.
+        let verifier: String = self.cache.take(&key)?.ok_or(AppError::Unauthorized(json!(
             "Invalid CSRF token".to_string()
         )))?;
-
-        let _ = self.cache.delete(&key);
 
         let http_client = Self::make_http_client();
 
@@ -295,6 +290,9 @@ mod tests {
         fn delete(&self, key: &str) -> Result<(), AppError> {
             self.0.lock().unwrap().remove(key);
             Ok(())
+        }
+        fn take_string(&self, key: &str) -> Result<Option<String>, AppError> {
+            Ok(self.0.lock().unwrap().remove(key))
         }
         fn exists(&self, key: &str) -> Result<bool, AppError> {
             Ok(self.0.lock().unwrap().contains_key(key))

@@ -9,6 +9,10 @@ pub trait CacheService: Send + Sync + 'static {
     fn get_string(&self, key: &str) -> Result<Option<String>, AppError>;
     fn set_string(&self, key: &str, value: &str, ttl: Option<Duration>) -> Result<(), AppError>;
     fn delete(&self, key: &str) -> Result<(), AppError>;
+    /// Atomically reads and deletes a key (Redis `GETDEL`). Use it for
+    /// single-use values, where a separate get + delete would let two
+    /// concurrent callers both consume the same value.
+    fn take_string(&self, key: &str) -> Result<Option<String>, AppError>;
     fn exists(&self, key: &str) -> Result<bool, AppError>;
     fn invalidate_pattern(&self, pattern: &str) -> Result<(), AppError>;
     fn mget_string(&self, keys: &[String]) -> Result<Vec<Option<String>>, AppError>;
@@ -107,6 +111,19 @@ impl<T: CacheService> TypedCache<T> {
         self.cache_service.delete(key)
     }
 
+    /// Atomic get + delete of a single-use value (see `CacheService::take_string`).
+    pub fn take<U>(&self, key: &str) -> Result<Option<U>, AppError>
+    where
+        U: for<'de> Deserialize<'de>,
+    {
+        match self.cache_service.take_string(key)? {
+            Some(json_str) => serde_json::from_str(&json_str)
+                .map(Some)
+                .map_err(|_| AppError::InternalServerError),
+            None => Ok(None),
+        }
+    }
+
     pub fn exists(&self, key: &str) -> Result<bool, AppError> {
         self.cache_service.exists(key)
     }
@@ -177,6 +194,10 @@ impl CacheService for Arc<dyn CacheService> {
         (**self).delete(key)
     }
 
+    fn take_string(&self, key: &str) -> Result<Option<String>, AppError> {
+        (**self).take_string(key)
+    }
+
     fn exists(&self, key: &str) -> Result<bool, AppError> {
         (**self).exists(key)
     }
@@ -216,6 +237,16 @@ impl CacheService for RedisCacheService {
             .map_err(|_| AppError::InternalServerError)?;
 
         Ok(())
+    }
+
+    fn take_string(&self, key: &str) -> Result<Option<String>, AppError> {
+        let connection = &mut self.get_connection()?;
+        let res: Option<String> = redis::cmd("GETDEL")
+            .arg(key)
+            .query(&mut **connection)
+            .map_err(|_| AppError::InternalServerError)?;
+
+        Ok(res)
     }
 
     fn exists(&self, key: &str) -> Result<bool, AppError> {
@@ -316,6 +347,10 @@ impl CacheService for NoOpCacheService {
 
     fn delete(&self, _key: &str) -> Result<(), AppError> {
         Ok(())
+    }
+
+    fn take_string(&self, _key: &str) -> Result<Option<String>, AppError> {
+        Ok(None)
     }
 
     fn exists(&self, _key: &str) -> Result<bool, AppError> {
@@ -426,6 +461,34 @@ impl CacheKeys {
 mod tests {
     use super::*;
     use uuid::Uuid;
+
+    #[test]
+    fn test_no_op_cache_service_take() {
+        assert_eq!(NoOpCacheService.take_string("k").unwrap(), None);
+    }
+
+    /// Runs against a real Redis only when REDIS_TEST_URL is set (CI has no
+    /// Redis): GETDEL must hand a value out exactly once.
+    #[test]
+    fn test_redis_take_string_is_single_use() {
+        let Ok(url) = std::env::var("REDIS_TEST_URL") else {
+            return;
+        };
+        let pool = r2d2::Pool::builder()
+            .max_size(1)
+            .build(redis::Client::open(url).unwrap())
+            .unwrap();
+        let cache = RedisCacheService::new(pool);
+        let key = format!("test:take:{}", uuid::Uuid::new_v4());
+
+        cache
+            .set_string(&key, "value", Some(Duration::from_secs(60)))
+            .unwrap();
+
+        assert_eq!(cache.take_string(&key).unwrap().as_deref(), Some("value"));
+        assert_eq!(cache.take_string(&key).unwrap(), None);
+        assert!(!cache.exists(&key).unwrap());
+    }
 
     #[test]
     fn test_no_op_cache_service_get() {
