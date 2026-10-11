@@ -38,6 +38,17 @@ impl ImageUsecase {
         }
     }
 
+    /// Cheap pre-check the controller runs BEFORE reading the multipart
+    /// body, so strangers are rejected without buffering up to 10 MB.
+    /// `upload_image` repeats the check, so it stays safe on its own.
+    pub fn authorize_upload(
+        &self,
+        organisation_id: Uuid,
+        caller_user_id: Uuid,
+    ) -> Result<(), AppError> {
+        self.ensure_can_manage_organisation(organisation_id, caller_user_id)
+    }
+
     /// Organisation photos are managed like the organisation itself: by its
     /// creator or a moderator/admin. Without this any user could add images
     /// to (and replace the primary image of) any organisation.
@@ -406,6 +417,22 @@ mod tests {
             !matches!(result, Err(AppError::Forbidden(_))),
             "moderator must be allowed"
         );
+    }
+
+    #[test]
+    fn test_authorize_upload_matches_the_upload_rule() {
+        let repo = Arc::new(StubRepo::new(UserRole::User));
+        let creator = repo.org_creator;
+
+        assert!(
+            usecase(repo.clone())
+                .authorize_upload(Uuid::new_v4(), creator)
+                .is_ok()
+        );
+        assert!(matches!(
+            usecase(repo).authorize_upload(Uuid::new_v4(), Uuid::new_v4()),
+            Err(AppError::Forbidden(_))
+        ));
     }
 
     /// Uploading alone no longer lets a stranger pick the primary image.

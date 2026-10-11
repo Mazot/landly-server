@@ -38,6 +38,13 @@ pub async fn upload_image(
         .ok_or_else(|| AppError::Unauthorized(json!({ "error": "Missing authenticated user" })))?;
     let organisation_id = org_id.into_inner();
 
+    // Reject callers who may not manage this organisation before reading
+    // (and buffering) the upload body.
+    state
+        .di_container
+        .image_usecase
+        .authorize_upload(organisation_id, caller_user_id)?;
+
     let mut file_bytes: Option<Vec<u8>> = None;
     let mut file_name: Option<String> = None;
     let mut content_type: Option<String> = None;
