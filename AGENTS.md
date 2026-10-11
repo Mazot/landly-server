@@ -176,6 +176,7 @@ Keep these definitions in sync when conventions change (routes, env vars, RBAC r
 Repo skills live in `.claude/skills/` (invoked automatically by description or as `/<name>`):
 
 - **`add-endpoint`** — step-by-step checklist for adding/changing/removing a route in an existing feature: DTO → controller + `#[utoipa::path]` + `[authorship]` → usecase validation/RBAC → cache invalidation → `config.rs` → `AUTH_REQUIRED_ROUTES` + count test → rate limit → `ApiDoc` → stub-repo tests → README/AGENTS.md → fmt/clippy/test, ending with a ✓/✗ report. Update it together with this file when a convention changes.
+- **`sync-docs`** — brings README/AGENTS/copilot/agent/skill docs and per-feature `ApiDoc`s back in line with the code. Starts with `python3 .claude/skills/sync-docs/check_docs.py` (routes ↔ README, `#[utoipa::path]` ↔ `ApiDoc`, `AUTH_REQUIRED_ROUTES` ↔ real routes + unexpected public mutating routes, env vars, feature list, authorship map; exits 1 on mismatch), then a manual checklist for what the script cannot parse. Fixes docs only and reports code issues separately.
 
 ## CI (.github/workflows)
 
