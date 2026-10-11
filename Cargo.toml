@@ -44,7 +44,14 @@ redis = { version = "0.32", features = ["r2d2"] }
 r2d2 = "0.8"
 oauth2 = { version = "5.0.0", features = ["reqwest", "reqwest-blocking"] }
 reqwest = { version = "0.12.23", features = ["json"] }
-aws-sdk-s3 = "1.70"
+# `rustls` (on by default) pulls the legacy hyper 0.14 / rustls 0.21 stack with
+# unpatched advisories; `default-https-client` is the maintained TLS client.
+aws-sdk-s3 = { version = "1.70", default-features = false, features = [
+    "sigv4a",
+    "http-1x",
+    "default-https-client",
+    "rt-tokio",
+] }
 aws-config = "1.5"
 mime = "0.3"
 actix-multipart = "0.7"
