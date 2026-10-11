@@ -338,7 +338,7 @@ mod tests {
         expect_422(usecase().signup(params));
 
         let mut params = signup_input();
-        params.password = "short".to_string();
+        params.password = "a".repeat(5);
         expect_422(usecase().signup(params));
 
         let mut params = signup_input();

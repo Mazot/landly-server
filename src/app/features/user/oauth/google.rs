@@ -33,8 +33,6 @@ const STATE_TTL_SECS: u64 = 300;
 pub struct OAuthGoogle {
     client: BasicClient<EndpointSet, EndpointNotSet, EndpointNotSet, EndpointSet, EndpointSet>,
     cache: TypedCache<Arc<dyn CacheService>>,
-    /// Mark the state cookie `Secure` when the callback is served over https.
-    secure_cookie: bool,
 }
 
 #[derive(Deserialize, ToSchema)]
@@ -94,7 +92,6 @@ impl OAuthGoogle {
             AuthUrl::new("https://accounts.google.com/o/oauth2/v2/auth".to_string()).unwrap();
         let token_url = TokenUrl::new("https://oauth2.googleapis.com/token".to_string()).unwrap();
 
-        let secure_cookie = redirect.starts_with("https://");
         let redirect_url = match RedirectUrl::new(redirect) {
             Ok(url) => url,
             Err(e) => {
@@ -113,11 +110,7 @@ impl OAuthGoogle {
                     .expect("Invalid revocation endpoint URL"),
             );
 
-        Some(Self {
-            client,
-            cache,
-            secure_cookie,
-        })
+        Some(Self { client, cache })
     }
 
     pub fn auth_url(&self) -> Result<(Url, CsrfToken), AppError> {
@@ -153,12 +146,13 @@ impl OAuthGoogle {
     }
 
     /// Cookie carrying the `state` to the callback (same-site top-level
-    /// navigations only, never readable from JS).
+    /// navigations only, never readable from JS). Always `Secure`: browsers
+    /// still accept it on `http://localhost` for local development.
     pub fn state_cookie(&self, state: &CsrfToken) -> Cookie<'static> {
         Cookie::build(STATE_COOKIE, state.secret().to_owned())
             .path(STATE_COOKIE_PATH)
             .http_only(true)
-            .secure(self.secure_cookie)
+            .secure(true)
             .same_site(SameSite::Lax)
             .max_age(CookieDuration::seconds(STATE_TTL_SECS as i64))
             .finish()
@@ -169,7 +163,7 @@ impl OAuthGoogle {
         let mut cookie = Cookie::build(STATE_COOKIE, "")
             .path(STATE_COOKIE_PATH)
             .http_only(true)
-            .secure(self.secure_cookie)
+            .secure(true)
             .same_site(SameSite::Lax)
             .finish();
         cookie.make_removal();
@@ -342,7 +336,6 @@ mod tests {
         OAuthGoogle {
             client,
             cache: TypedCache::new(Arc::new(MemoryCache::default()) as Arc<dyn CacheService>),
-            secure_cookie: true,
         }
     }
 
@@ -367,6 +360,21 @@ mod tests {
             Err(AppError::Unauthorized(_)) => (),
             other => panic!("second redemption must fail, got {:?}", other.err()),
         }
+    }
+
+    #[test]
+    fn test_state_cookie_is_locked_down() {
+        let oauth = oauth_with_memory_cache();
+        let cookie = oauth.state_cookie(&CsrfToken::new("state-value".to_string()));
+
+        assert_eq!(cookie.value(), "state-value");
+        assert_eq!(cookie.secure(), Some(true));
+        assert_eq!(cookie.http_only(), Some(true));
+        assert_eq!(cookie.same_site(), Some(SameSite::Lax));
+
+        let cleared = oauth.clear_state_cookie();
+        assert_eq!(cleared.secure(), Some(true));
+        assert_eq!(cleared.value(), "");
     }
 
     #[test]

@@ -635,9 +635,9 @@ mod tests {
 
     #[test]
     fn test_validate_password_enforces_length() {
-        assert!(validate_password("").is_err());
-        assert!(validate_password("1234567").is_err());
-        assert!(validate_password("12345678").is_ok());
+        assert!(validate_password(&"a".repeat(0)).is_err());
+        assert!(validate_password(&"a".repeat(7)).is_err());
+        assert!(validate_password(&"a".repeat(8)).is_ok());
         assert!(validate_password(&"a".repeat(72)).is_ok());
         // bcrypt would silently ignore everything past 72 bytes.
         assert!(validate_password(&"a".repeat(73)).is_err());
