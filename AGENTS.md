@@ -33,7 +33,13 @@ diesel migration run
 diesel migration revert
 ```
 
-On macOS with Homebrew `libpq`, cargo needs `RUSTFLAGS="-L /opt/homebrew/opt/libpq/lib"` and the diesel CLI `PQ_LIB_DIR`/`DYLD_LIBRARY_PATH=/opt/homebrew/opt/libpq/lib`. The locked dependencies need Rust ≥ 1.94 (`aws-sdk-s3`); the crate uses edition 2024.
+On macOS with Homebrew `libpq` (keg-only), linking needs `PQ_LIB_DIR=/opt/homebrew/opt/libpq/lib` — Claude Code sessions get it from `.claude/settings.local.json`. Prefer it over `RUSTFLAGS="-L …"`: changing `RUSTFLAGS` invalidates every crate's fingerprint, so switching between a terminal and Claude rebuilds the world. Caveat: pq-sys 0.7.6 does not rerun its build script when `PQ_LIB_DIR` changes (its `rerun-if-env-changed` is mis-quoted), so after first setting it run `cargo clean -p pq-sys` once. The diesel CLI binary already links libpq by absolute path and needs nothing. The locked dependencies need Rust ≥ 1.94 (`aws-sdk-s3`); the crate uses edition 2024.
+
+### Claude Code hooks (`.claude/settings.json`)
+
+- **PreToolUse** `.claude/hooks/guard-edits.sh` denies Write/Edit on `src/data/schema.rs` and on any migration directory except the newest (new migration directories are allowed). Shell commands are not blocked — `diesel migration run` must still regenerate `schema.rs`.
+- **PostToolUse** `.claude/hooks/rustfmt-edited.sh` runs `rustfmt` (edition 2024; 2021 under `scripts/crates`) on every edited `.rs` file; it never blocks, so a file that does not parse yet is left as is.
+- Pre-approved commands: `cargo build/test/fmt/clippy`, `diesel migration *`, `docker compose ps/logs`.
 
 ## Architecture
 

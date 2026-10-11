@@ -9,8 +9,12 @@ service `db`, container `landly_postgres`, credentials from `.env`:
 `POSTGRES_USER` (default landly-user) / `POSTGRES_PASSWORD` (required) / db `landly`).
 
 Environment on this machine:
-- `diesel` CLI needs: `export PQ_LIB_DIR=/opt/homebrew/opt/libpq/lib DYLD_LIBRARY_PATH=/opt/homebrew/opt/libpq/lib`
-- `cargo` needs: `export RUSTFLAGS="-L /opt/homebrew/opt/libpq/lib"`
+- `PQ_LIB_DIR=/opt/homebrew/opt/libpq/lib` is set for Claude Code sessions via
+  `.claude/settings.local.json`; do not add `RUSTFLAGS` (it forces full rebuilds).
+  If linking still fails with `library 'pq' not found`, run `cargo clean -p pq-sys` once.
+- A project hook denies Write/Edit on `src/data/schema.rs` and on every
+  migration except the newest — that is intentional; regenerate / add a new
+  migration instead of fighting it.
 - Start the DB if needed: `docker compose up -d db`
 
 Workflow for every migration:

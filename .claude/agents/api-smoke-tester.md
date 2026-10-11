@@ -10,7 +10,8 @@ never modify source code — you only run infrastructure, the server, and curl.
 Stack bring-up:
 1. `docker compose up -d db redis minio minio-init` (MinIO needs
    `minio.license` in the repo root; skip minio if image tests aren't needed).
-2. Server: `source ~/.cargo/env && RUSTFLAGS="-L /opt/homebrew/opt/libpq/lib" cargo run`
+2. Server: `source ~/.cargo/env && cargo run` (`PQ_LIB_DIR` for Homebrew libpq
+   comes from `.claude/settings.local.json`; see AGENTS.md if linking fails)
    in the background; wait for `curl -sf localhost:8080/api/healthcheck`
    (the port is always 8080 — `HOST`/`PORT` are not read).
    `.env` must contain DATABASE_URL/JWT_SECRET/JWT_EXPIRATION; REDIS_URL is

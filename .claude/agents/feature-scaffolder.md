@@ -54,6 +54,6 @@ Rules that must hold:
   stub repository that records its writes, so a rejected call can be asserted
   never to have reached it (see `review/usecases.rs`).
 
-Finish by running `cargo fmt`, `cargo clippy`, `cargo test` (use
-`RUSTFLAGS="-L /opt/homebrew/opt/libpq/lib"` on this machine) and report
-results honestly.
+Finish by running `cargo fmt`, `cargo clippy`, `cargo test` and report
+results honestly. (Edited `.rs` files are already rustfmt-ed by a project hook;
+if linking fails with `library 'pq' not found`, see the libpq note in AGENTS.md.)
