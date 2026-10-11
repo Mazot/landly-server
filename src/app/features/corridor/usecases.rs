@@ -90,8 +90,12 @@ impl CorridorUsecase {
 }
 
 pub struct CreateCorridorUsecaseInput {
+    /// Owner (the authenticated user; never taken from the request body).
     pub user_id: Uuid,
+    /// Home country the user comes from.
     pub from_country_id: Uuid,
+    /// Destination country the map opens to; must differ from `from_country_id`.
     pub to_country_id: Uuid,
+    /// Make it the default corridor.
     pub is_default: bool,
 }

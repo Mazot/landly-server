@@ -167,14 +167,24 @@ impl ImageRepository for ImageRepositoryImpl {
 // ---------------------------------------------------------------------------
 
 pub struct CreateImageRepositoryInput {
+    /// Organisation the photo belongs to.
     pub organisation_id: Uuid,
+    /// User who uploaded it (the authenticated caller).
     pub uploaded_by: Uuid,
+    /// Object key in the bucket: `images/{organisation_id}/{uuid}.{ext}`.
     pub s3_key: String,
+    /// Bucket the object was stored in (`S3_BUCKET` at upload time).
     pub s3_bucket: String,
+    /// Original file name from the multipart upload.
     pub file_name: String,
+    /// MIME type: image/jpeg, image/png, image/webp or image/gif.
     pub content_type: String,
+    /// Size in bytes (max 10 MB).
     pub file_size: i64,
+    /// Width in pixels; not computed yet, always null.
     pub width: Option<i32>,
+    /// Height in pixels; not computed yet, always null.
     pub height: Option<i32>,
+    /// Whether this is the organisation's main photo. `set-primary` clears the flag on the other images; an upload with the flag set does not.
     pub is_primary: bool,
 }

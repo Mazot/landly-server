@@ -66,14 +66,23 @@ impl CommonPresenter for CommonPresenterImpl {
 #[derive(Deserialize, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CountryContent {
+    /// Country ID.
     pub id: Uuid,
+    /// Country name in English, e.g. "Germany".
     pub name: String,
+    /// Country border as a GeoJSON geometry (`Polygon` / `MultiPolygon`) for map rendering.
     pub geo_json: Option<Value>,
+    /// Flag emoji, e.g. "🇩🇪".
     pub flag: Option<String>,
+    /// Capital city name.
     pub capital_city: Option<String>,
+    /// Free-text description shown on the country page.
     pub description: Option<String>,
+    /// Local currency, e.g. "EUR" (free text, not validated).
     pub currency: Option<String>,
+    /// International dialling prefix, e.g. "+49".
     pub phone_code: Option<String>,
+    /// Main cities for the country page, as stored JSON (typically an array of city names).
     pub top_cities: Option<Value>,
 }
 impl From<Country> for CountryContent {
@@ -95,7 +104,9 @@ impl From<Country> for CountryContent {
 #[derive(Deserialize, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CountryPlacesByType {
+    /// Organisation type slug; "other" for types without a slug.
     pub slug: String,
+    /// Number of live organisations of this type in the country.
     pub count: i64,
 }
 
@@ -104,9 +115,12 @@ pub struct CountryPlacesByType {
 #[derive(Deserialize, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CountryDetailContent {
+    /// The country itself (flattened into this object).
     #[serde(flatten)]
     pub country: CountryContent,
+    /// Number of live organisations located in the country.
     pub total_places: i64,
+    /// Live organisations per organisation type.
     pub places_by_type: Vec<CountryPlacesByType>,
 }
 
@@ -132,10 +146,15 @@ impl From<(Country, Vec<(String, i64)>)> for CountryDetailContent {
 #[derive(Deserialize, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct OrganisationTypeContent {
+    /// Organisation type ID.
     pub id: Uuid,
+    /// Type key, e.g. "embassy".
     pub r#type: String,
+    /// Map pin / badge colour as a hex string, e.g. "#4A6D8C".
     pub color: Option<String>,
+    /// Human-readable name, e.g. "Embassy".
     pub title: Option<String>,
+    /// Stable machine key used by filters and stats (`embassy`, `business`, `helper`, `community`, `volunteer`); unique when set.
     pub slug: Option<String>,
 }
 impl From<OrganisationType> for OrganisationTypeContent {

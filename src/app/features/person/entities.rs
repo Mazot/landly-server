@@ -84,27 +84,49 @@ impl TryFrom<&str> for SendVia {
 #[derive(Debug, Serialize, Deserialize, Queryable, Insertable, Selectable, Clone)]
 #[diesel(table_name = people)]
 pub struct Person {
+    /// Person ID.
     pub id: Uuid,
+    /// Display name, e.g. "Daria K.".
     pub name: String,
+    /// Short free-text bio.
     pub bio: Option<String>,
+    /// City; shown publicly only when `show_city` is on.
     pub city: Option<String>,
+    /// Country the person lives in.
     pub location_country_id: Option<Uuid>,
+    /// What they help with, free-text tags, e.g. ["Relocation", "Housing"].
     pub skills: Vec<Option<String>>,
+    /// Hidden contact. Used to deliver the claim link; public only after confirm/claim with `show_email` on.
     pub email: Option<String>,
+    /// Hidden contact. Used to deliver the claim link; public only after confirm/claim with `show_whatsapp` on.
     pub whatsapp: Option<String>,
+    /// How the recommender sends the claim link: `email` or `whatsapp`.
     pub send_via: Option<String>,
+    /// The person agreed to be recommended (required to create).
     pub consent_given: bool,
+    /// `pending` (moderation) → `awaiting` (approved, waiting for the person) → `confirmed` / `claimed` (linked to an account), or `declined`. Only confirmed/claimed are public.
     pub status: String,
+    /// Privacy toggle: publish WhatsApp once confirmed. Default false.
     pub show_whatsapp: bool,
+    /// Privacy toggle: publish email once confirmed. Default false.
     pub show_email: bool,
+    /// Privacy toggle: publish the city. Default true.
     pub show_city: bool,
+    /// Whether reviews of this person are accepted. Default true.
     pub allow_reviews: bool,
+    /// User who recommended the person; null if that account was deleted.
     pub recommended_by: Option<Uuid>,
+    /// Account the person linked when claiming (status `claimed`).
     pub claimed_by: Option<Uuid>,
+    /// Moderator note from request-changes / reject.
     pub moderation_note: Option<String>,
+    /// Average review rating (1–5); null without reviews. Recomputed on every review create/delete.
     pub rating_avg: Option<f64>,
+    /// Number of reviews.
     pub reviews_count: i64,
+    /// Recommendation time (UTC, no timezone).
     pub created_at: NaiveDateTime,
+    /// Last change (UTC, no timezone).
     pub updated_at: NaiveDateTime,
 }
 
@@ -159,41 +181,67 @@ impl Person {
 #[derive(Insertable, Clone)]
 #[diesel(table_name = people)]
 pub struct CreatePerson {
+    /// Display name, e.g. "Daria K.".
     pub name: String,
+    /// Short free-text bio.
     pub bio: Option<String>,
+    /// City; shown publicly only when `show_city` is on.
     pub city: Option<String>,
+    /// Country the person lives in.
     pub location_country_id: Option<Uuid>,
+    /// What they help with, free-text tags, e.g. ["Relocation", "Housing"].
     pub skills: Vec<Option<String>>,
+    /// Hidden contact. Used to deliver the claim link; public only after confirm/claim with `show_email` on.
     pub email: Option<String>,
+    /// Hidden contact. Used to deliver the claim link; public only after confirm/claim with `show_whatsapp` on.
     pub whatsapp: Option<String>,
+    /// How the recommender sends the claim link: `email` or `whatsapp`.
     pub send_via: Option<String>,
+    /// The person agreed to be recommended (required to create).
     pub consent_given: bool,
+    /// Always `pending` for new recommendations.
     pub status: String,
+    /// Privacy toggle: publish WhatsApp once confirmed. Default false.
     pub show_whatsapp: bool,
+    /// Privacy toggle: publish email once confirmed. Default false.
     pub show_email: bool,
+    /// Privacy toggle: publish the city. Default true.
     pub show_city: bool,
+    /// Whether reviews of this person are accepted. Default true.
     pub allow_reviews: bool,
+    /// User who recommended the person; null if that account was deleted.
     pub recommended_by: Option<Uuid>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Queryable, Insertable, Selectable, Clone)]
 #[diesel(table_name = person_claim_tokens)]
 pub struct PersonClaimToken {
+    /// Token row ID.
     pub id: Uuid,
+    /// Person the claim link is for.
     pub person_id: Uuid,
+    /// Secret token from the claim link; it IS the credential for /person/claim/{token}. Never expose it.
     pub token: String,
+    /// Expiry, 30 days after creation (UTC).
     pub expires_at: NaiveDateTime,
+    /// When the token was used to confirm or decline; a used token cannot be reused.
     pub used_at: Option<NaiveDateTime>,
+    /// Issue time (UTC).
     pub created_at: NaiveDateTime,
 }
 
 #[derive(Debug, Serialize, Deserialize, Queryable, Insertable, Selectable, Clone)]
 #[diesel(table_name = person_vouches)]
 pub struct PersonVouch {
+    /// Vouch ID.
     pub id: Uuid,
+    /// Person being vouched for.
     pub person_id: Uuid,
+    /// User who vouched (one vouch per user and person).
     pub user_id: Uuid,
+    /// Optional comment.
     pub note: Option<String>,
+    /// Vouch time (UTC).
     pub created_at: NaiveDateTime,
 }
 
@@ -446,10 +494,15 @@ pub enum ClaimOutcome {
 }
 
 pub struct ListPeopleFilters {
+    /// Case-insensitive substring filter on the city.
     pub city: Option<String>,
+    /// Only people with at least one of these skills.
     pub skills: Option<Vec<String>>,
+    /// Only people speaking at least one of these languages.
     pub language_ids: Option<Vec<Uuid>>,
+    /// Page size (already clamped by the controller).
     pub limit: i64,
+    /// Rows to skip.
     pub offset: i64,
 }
 

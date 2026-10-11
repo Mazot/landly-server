@@ -233,25 +233,42 @@ impl UserUsecase {
 }
 
 pub struct SignUpUsecaseInput {
+    /// Unique username, 3–50 characters, no whitespace.
     pub username: String,
+    /// Login email, stored trimmed and lowercased; unique case-insensitively.
     pub email: String,
+    /// Plain password, 8 characters to 72 bytes (bcrypt limit); only its hash is stored.
     pub password: String,
+    /// Display name (max 100 characters).
     pub name: Option<String>,
+    /// UI language: `en`, `ru` or `uk` (default `en`).
     pub locale: Option<String>,
+    /// Why the user is on Landly: `newcomer`, `helping` or `exploring`.
     pub here_as: Option<String>,
+    /// Country the user comes from.
     pub home_country_id: Option<Uuid>,
+    /// Avatar background colour, e.g. a hex string (max 32 characters).
     pub avatar_color: Option<String>,
+    /// Optional default corridor: home country. Give both corridor ids or neither.
     pub corridor_from_country_id: Option<Uuid>,
+    /// Optional default corridor: destination country. Created with the user in one transaction.
     pub corridor_to_country_id: Option<Uuid>,
 }
 
 pub struct UpdateProfileUsecaseInput {
+    /// Display name (max 100 characters); `None` keeps the current value.
     pub name: Option<String>,
+    /// Free-text bio (max 1000 characters); `None` keeps the current value.
     pub bio: Option<String>,
+    /// Current city (max 100 characters); `None` keeps the current value.
     pub city: Option<String>,
+    /// Country the user comes from; `None` keeps the current value.
     pub home_country_id: Option<Uuid>,
+    /// Avatar background colour, e.g. a hex string (max 32 characters); `None` keeps the current value.
     pub avatar_color: Option<String>,
+    /// UI language: `en`, `ru` or `uk`; `None` keeps the current value.
     pub locale: Option<String>,
+    /// Why the user is on Landly: `newcomer`, `helping` or `exploring`; `None` keeps the current value.
     pub here_as: Option<String>,
 }
 

@@ -141,6 +141,7 @@ pub struct RedisCacheService {
 
 #[derive(Clone, Debug)]
 pub struct CacheConfig {
+    /// TTL applied when a write passes no explicit TTL (1 hour by default).
     pub default_ttl: Option<Duration>,
 }
 

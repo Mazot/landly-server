@@ -109,37 +109,69 @@ impl TryFrom<&str> for Cost {
 #[diesel(belongs_to(OrganisationType, foreign_key = organisation_type_id))]
 #[diesel(table_name = organisations)]
 pub struct Organisation {
+    /// Organisation ID.
     pub id: Uuid,
+    /// Display name.
     pub name: String,
+    /// Contact phone, free text (format is only sanity-checked into moderation flags).
     pub tel: Option<String>,
+    /// Contact email.
     pub email: Option<String>,
+    /// Street address, free text.
     pub address: Option<String>,
+    /// Free-text description.
     pub description: Option<String>,
+    /// Country the organisation is located in.
     pub location_country_id: Option<Uuid>,
+    /// Organisation type (embassy, business, helper, community, volunteer, …).
     pub organisation_type_id: Option<Uuid>,
+    /// Submission time (UTC, no timezone).
     pub created_at: NaiveDateTime,
+    /// Last edit (UTC, no timezone).
     pub updated_at: NaiveDateTime,
+    /// Latitude in degrees (-90..90).
     pub latitude: Option<BigDecimal>,
+    /// Longitude in degrees (-180..180).
     pub longitude: Option<BigDecimal>,
+    /// Home country of the founders / community it serves (the corridor's "from" country).
     pub founder_country_id: Option<Uuid>,
+    /// User who submitted it; null for seeded/legacy rows or when that user was deleted.
     pub created_by: Option<Uuid>,
+    /// Verified badge. No API sets it — only changed directly in the database.
     pub verified: bool,
+    /// Moderation status: `pending`, `live` or `rejected`. Only `live` rows appear in list/search.
     pub status: String,
+    /// Moderator note from request-changes / reject.
     pub moderation_note: Option<String>,
+    /// Who added it: `official`, `community` or `volunteer`.
     pub added_by: Option<String>,
+    /// City name.
     pub city: Option<String>,
+    /// Website URL.
     pub website: Option<String>,
+    /// Telegram handle or link.
     pub telegram: Option<String>,
+    /// WhatsApp number or link.
     pub whatsapp: Option<String>,
+    /// Services offered, free-text tags.
     pub services: Vec<Option<String>>,
+    /// Languages spoken, by name (e.g. "Russian"); matched by the search `languages` filter.
     pub languages: Vec<Option<String>>,
+    /// Weekly hours as JSON: `{"mon": [["09:00","13:00"], ["14:00","18:00"]], …}` (keys mon..sun).
     pub opening_hours: Option<serde_json::Value>,
+    /// IANA timezone of the place, e.g. "Europe/Berlin"; used with `opening_hours` for `openNow`.
     pub timezone: Option<String>,
+    /// `free` or `paid`.
     pub cost: Option<String>,
+    /// Google Places ID when imported from Google.
     pub google_place_id: Option<String>,
+    /// Google rating at import time (0–5).
     pub google_rating: Option<f64>,
+    /// Detail-page visit counter (POST /organisation/visit/{id}).
     pub visits_count: i64,
+    /// Average review rating (1–5); null without reviews. Recomputed from reviews on every create/delete.
     pub rating_avg: Option<f64>,
+    /// Number of reviews.
     pub reviews_count: i64,
 }
 
@@ -338,62 +370,109 @@ impl Organisation {
 /// Aggregated community check-in signals (never stored, always computed).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CommunitySignals {
+    /// Number of community check-ins.
     pub people_came: i64,
+    /// Share of check-ins confirming the place is still active, 0–100; None without check-ins.
     pub still_active_pct: Option<f64>,
+    /// Time of the latest check-in (UTC).
     pub last_checkin_at: Option<NaiveDateTime>,
+    /// Up to 5 latest check-in tips, newest first.
     pub tips: Vec<String>,
 }
 
 #[derive(Insertable, Clone)]
 #[diesel(table_name = organisations)]
 pub struct CreateOrganisation {
+    /// Display name.
     pub name: String,
+    /// Contact phone, free text (format is only sanity-checked into moderation flags).
     pub tel: Option<String>,
+    /// Contact email.
     pub email: Option<String>,
+    /// Street address, free text.
     pub address: Option<String>,
+    /// Free-text description.
     pub description: Option<String>,
+    /// Country the organisation is located in.
     pub location_country_id: Option<Uuid>,
+    /// Organisation type (embassy, business, helper, community, volunteer, …).
     pub organisation_type_id: Option<Uuid>,
+    /// Latitude in degrees (-90..90).
     pub latitude: Option<BigDecimal>,
+    /// Longitude in degrees (-180..180).
     pub longitude: Option<BigDecimal>,
+    /// Home country of the founders / community it serves (the corridor's "from" country).
     pub founder_country_id: Option<Uuid>,
+    /// User who submitted it; null for seeded/legacy rows or when that user was deleted.
     pub created_by: Option<Uuid>,
+    /// Always `pending` for API submissions.
     pub status: String,
+    /// Who added it: `official`, `community` or `volunteer`.
     pub added_by: Option<String>,
+    /// City name.
     pub city: Option<String>,
+    /// Website URL.
     pub website: Option<String>,
+    /// Telegram handle or link.
     pub telegram: Option<String>,
+    /// WhatsApp number or link.
     pub whatsapp: Option<String>,
+    /// Services offered, free-text tags.
     pub services: Vec<Option<String>>,
+    /// Languages spoken, by name (e.g. "Russian"); matched by the search `languages` filter.
     pub languages: Vec<Option<String>>,
+    /// Weekly hours as JSON: `{"mon": [["09:00","13:00"], ["14:00","18:00"]], …}` (keys mon..sun).
     pub opening_hours: Option<serde_json::Value>,
+    /// IANA timezone of the place, e.g. "Europe/Berlin"; used with `opening_hours` for `openNow`.
     pub timezone: Option<String>,
+    /// `free` or `paid`.
     pub cost: Option<String>,
+    /// Google Places ID when imported from Google.
     pub google_place_id: Option<String>,
 }
 
 #[derive(AsChangeset, Clone)]
 #[diesel(table_name = organisations)]
 pub struct UpdateOrganisation {
+    /// Display name; `None` keeps the current value.
     pub name: Option<String>,
+    /// Contact phone, free text (format is only sanity-checked into moderation flags); `None` keeps the current value.
     pub tel: Option<String>,
+    /// Contact email; `None` keeps the current value.
     pub email: Option<String>,
+    /// Street address, free text; `None` keeps the current value.
     pub address: Option<String>,
+    /// Free-text description; `None` keeps the current value.
     pub description: Option<String>,
+    /// Country the organisation is located in; `None` keeps the current value.
     pub location_country_id: Option<Uuid>,
+    /// Organisation type (embassy, business, helper, community, volunteer, …); `None` keeps the current value.
     pub organisation_type_id: Option<Uuid>,
+    /// Set to now on every update.
     pub updated_at: NaiveDateTime,
+    /// Latitude in degrees (-90..90); `None` keeps the current value.
     pub latitude: Option<BigDecimal>,
+    /// Longitude in degrees (-180..180); `None` keeps the current value.
     pub longitude: Option<BigDecimal>,
+    /// Home country of the founders / community it serves (the corridor's "from" country); `None` keeps the current value.
     pub founder_country_id: Option<Uuid>,
+    /// City name; `None` keeps the current value.
     pub city: Option<String>,
+    /// Website URL; `None` keeps the current value.
     pub website: Option<String>,
+    /// Telegram handle or link; `None` keeps the current value.
     pub telegram: Option<String>,
+    /// WhatsApp number or link; `None` keeps the current value.
     pub whatsapp: Option<String>,
+    /// Services offered, free-text tags; `None` keeps the current value.
     pub services: Option<Vec<Option<String>>>,
+    /// Languages spoken, by name (e.g. "Russian"); matched by the search `languages` filter; `None` keeps the current value.
     pub languages: Option<Vec<Option<String>>>,
+    /// Weekly hours as JSON: `{"mon": [["09:00","13:00"], ["14:00","18:00"]], …}` (keys mon..sun); `None` keeps the current value.
     pub opening_hours: Option<serde_json::Value>,
+    /// IANA timezone of the place, e.g. "Europe/Berlin"; used with `opening_hours` for `openNow`; `None` keeps the current value.
     pub timezone: Option<String>,
+    /// `free` or `paid`; `None` keeps the current value.
     pub cost: Option<String>,
     /// Only set when an edit has to go back through moderation.
     pub status: Option<String>,

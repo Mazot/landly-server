@@ -227,20 +227,35 @@ diesel::define_sql_function! {
 #[derive(Debug, Serialize, Deserialize, Queryable, Insertable, Selectable, Clone)]
 #[diesel(table_name = users)]
 pub struct User {
+    /// User ID.
     pub id: Uuid,
+    /// Unique username, 3–50 characters, no whitespace.
     pub username: String,
+    /// Login email, stored trimmed and lowercased; unique case-insensitively.
     pub email: String,
+    /// bcrypt hash. Never serialize it into a response.
     pub password_hash: String,
+    /// Registration time (UTC, no timezone).
     pub created_at: NaiveDateTime,
+    /// Last account/profile change (UTC, no timezone).
     pub updated_at: NaiveDateTime,
+    /// Display name (max 100 characters).
     pub name: Option<String>,
+    /// Free-text bio (max 1000 characters).
     pub bio: Option<String>,
+    /// Current city (max 100 characters).
     pub city: Option<String>,
+    /// Country the user comes from.
     pub home_country_id: Option<Uuid>,
+    /// Avatar background colour, e.g. a hex string (max 32 characters).
     pub avatar_color: Option<String>,
+    /// UI language: `en`, `ru` or `uk`. Default `en`.
     pub locale: String,
+    /// Why the user is on Landly: `newcomer`, `helping` or `exploring`.
     pub here_as: Option<String>,
+    /// RBAC role: `user`, `moderator` or `admin`. Changed only in the database.
     pub role: String,
+    /// Free-form notification preferences object, stored as-is.
     pub notification_settings: Option<serde_json::Value>,
 }
 
@@ -532,76 +547,118 @@ impl User {
 #[derive(Insertable, Clone)]
 #[diesel(table_name = users)]
 pub struct CreateUser {
+    /// Unique username, 3–50 characters, no whitespace.
     pub username: String,
+    /// Login email, stored trimmed and lowercased; unique case-insensitively.
     pub email: String,
+    /// bcrypt hash. Never serialize it into a response.
     pub password_hash: String,
+    /// Display name (max 100 characters).
     pub name: Option<String>,
+    /// UI language; `None` uses the database default `en`.
     pub locale: Option<String>,
+    /// Why the user is on Landly: `newcomer`, `helping` or `exploring`.
     pub here_as: Option<String>,
+    /// Country the user comes from.
     pub home_country_id: Option<Uuid>,
+    /// Avatar background colour, e.g. a hex string (max 32 characters).
     pub avatar_color: Option<String>,
 }
 
 /// Everything the account/corridor screens need to create a user in one go.
 pub struct SignUpV2Input {
+    /// Unique username, 3–50 characters, no whitespace.
     pub username: String,
+    /// Login email, stored trimmed and lowercased; unique case-insensitively.
     pub email: String,
+    /// Plain password, 8 characters to 72 bytes (bcrypt limit); only its hash is stored.
     pub password: String,
+    /// Display name (max 100 characters).
     pub name: Option<String>,
+    /// UI language: `en`, `ru` or `uk` (default `en`).
     pub locale: Option<String>,
+    /// Why the user is on Landly: `newcomer`, `helping` or `exploring`.
     pub here_as: Option<String>,
+    /// Country the user comes from.
     pub home_country_id: Option<Uuid>,
+    /// Avatar background colour, e.g. a hex string (max 32 characters).
     pub avatar_color: Option<String>,
+    /// Optional default corridor: home country. Give both corridor ids or neither.
     pub corridor_from_country_id: Option<Uuid>,
+    /// Optional default corridor: destination country. Created with the user in one transaction.
     pub corridor_to_country_id: Option<Uuid>,
 }
 
 #[derive(AsChangeset, Clone)]
 #[diesel(table_name = users)]
 pub struct UpdateUser {
+    /// User to update.
     pub id: Uuid,
+    /// New username; `None` keeps the current one.
     pub username: Option<String>,
+    /// New email (normalized); `None` keeps the current one.
     pub email: Option<String>,
+    /// New bcrypt hash; `None` keeps the current one.
     pub password_hash: Option<String>,
+    /// Set to now when anything changes.
     pub updated_at: Option<NaiveDateTime>,
 }
 
 #[derive(AsChangeset, Clone, Default)]
 #[diesel(table_name = users)]
 pub struct UpdateUserProfile {
+    /// Display name (max 100 characters); `None` keeps the current value.
     pub name: Option<String>,
+    /// Free-text bio (max 1000 characters); `None` keeps the current value.
     pub bio: Option<String>,
+    /// Current city (max 100 characters); `None` keeps the current value.
     pub city: Option<String>,
+    /// Country the user comes from; `None` keeps the current value.
     pub home_country_id: Option<Uuid>,
+    /// Avatar background colour, e.g. a hex string (max 32 characters); `None` keeps the current value.
     pub avatar_color: Option<String>,
+    /// UI language: `en`, `ru` or `uk`; `None` keeps the current value.
     pub locale: Option<String>,
+    /// Why the user is on Landly: `newcomer`, `helping` or `exploring`; `None` keeps the current value.
     pub here_as: Option<String>,
+    /// New notification settings; `None` keeps the current value.
     pub notification_settings: Option<serde_json::Value>,
+    /// Set to now on every update.
     pub updated_at: Option<NaiveDateTime>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Queryable, Insertable, Selectable, Clone)]
 #[diesel(table_name = users_to_languages)]
 pub struct UserToLanguage {
+    /// User.
     pub user_id: Uuid,
+    /// Language the user speaks.
     pub language_id: Uuid,
 }
 
 #[derive(Insertable, Clone)]
 #[diesel(table_name = users_to_languages)]
 pub struct CreateUserToLanguage {
+    /// User (the authenticated caller).
     pub user_id: Uuid,
+    /// Language to add.
     pub language_id: Uuid,
 }
 
 #[derive(Debug, Serialize, Deserialize, Queryable, Insertable, Selectable, Clone)]
 #[diesel(table_name = user_providers)]
 pub struct UserProvider {
+    /// Link ID.
     pub id: Uuid,
+    /// Landly account linked to the external identity.
     pub user_id: Uuid,
+    /// Identity provider, e.g. `google`.
     pub provider: String,
+    /// Stable user ID at the provider (Google `sub`).
     pub provider_user_id: String,
+    /// Email reported by the provider at link time.
     pub email: Option<String>,
+    /// Link time (UTC).
     pub created_at: Option<NaiveDateTime>,
 }
 

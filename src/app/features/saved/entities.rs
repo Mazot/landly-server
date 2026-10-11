@@ -53,22 +53,34 @@ impl TryFrom<&str> for SavedKind {
 #[derive(Debug, Serialize, Deserialize, Queryable, Insertable, Selectable, Clone)]
 #[diesel(table_name = saved_items)]
 pub struct SavedItem {
+    /// Saved item ID.
     pub id: Uuid,
+    /// Owner (the authenticated user).
     pub user_id: Uuid,
+    /// What is saved: `org`, `person`, `country` or `corridor`.
     pub kind: String,
+    /// ID of the saved item (no FK — polymorphic). Each item can be saved once per user.
     pub target_id: Uuid,
+    /// Private note, visible only to the owner.
     pub note: Option<String>,
+    /// Optional user-defined list the item belongs to, e.g. "Moving checklist".
     pub list_name: Option<String>,
+    /// When it was saved (UTC, no timezone).
     pub created_at: NaiveDateTime,
 }
 
 #[derive(Insertable, Clone)]
 #[diesel(table_name = saved_items)]
 pub struct CreateSavedItem {
+    /// Owner (the authenticated user).
     pub user_id: Uuid,
+    /// What is saved: `org`, `person`, `country` or `corridor`.
     pub kind: String,
+    /// ID of the saved item (no FK — polymorphic). Each item can be saved once per user.
     pub target_id: Uuid,
+    /// Private note, visible only to the owner.
     pub note: Option<String>,
+    /// Optional user-defined list the item belongs to, e.g. "Moving checklist".
     pub list_name: Option<String>,
 }
 

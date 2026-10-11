@@ -17,9 +17,13 @@ pub trait UserPresenter: Send + Sync + 'static {
 #[derive(Deserialize, Serialize, Clone, Debug, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct UserProfileStatsContent {
+    /// Organisations this user submitted (any moderation status).
     pub places_added: i64,
+    /// Not computed yet — always 0.
     pub people_recommended: i64,
+    /// Not computed yet — always 0.
     pub people_helped: i64,
+    /// Not computed yet — always null.
     pub rating: Option<f64>,
 }
 
@@ -27,18 +31,31 @@ pub struct UserProfileStatsContent {
 #[derive(Deserialize, Serialize, Clone, Debug, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct UserProfileContent {
+    /// User ID.
     pub id: Uuid,
+    /// Unique username, 3–50 characters, no whitespace.
     pub username: String,
+    /// Login email, stored trimmed and lowercased; unique case-insensitively.
     pub email: String,
+    /// Display name (max 100 characters).
     pub name: Option<String>,
+    /// Free-text bio (max 1000 characters).
     pub bio: Option<String>,
+    /// Current city (max 100 characters).
     pub city: Option<String>,
+    /// Country the user comes from.
     pub home_country_id: Option<Uuid>,
+    /// Avatar background colour, e.g. a hex string (max 32 characters).
     pub avatar_color: Option<String>,
+    /// UI language: `en`, `ru` or `uk`. Default `en`.
     pub locale: String,
+    /// Why the user is on Landly: `newcomer`, `helping` or `exploring`.
     pub here_as: Option<String>,
+    /// RBAC role: `user`, `moderator` or `admin`. Changed only in the database.
     pub role: String,
+    /// Free-form notification preferences object, stored as-is.
     pub notification_settings: Option<serde_json::Value>,
+    /// Activity counters for the account screen.
     pub stats: UserProfileStatsContent,
 }
 
@@ -70,7 +87,9 @@ impl From<(User, ProfileStats)> for UserProfileContent {
 #[derive(Deserialize, Serialize, Clone, Debug, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct UserLanguagesContent {
+    /// User.
     pub user_id: Uuid,
+    /// Languages the user speaks.
     pub language_ids: Vec<Uuid>,
 }
 
@@ -89,9 +108,13 @@ impl From<Vec<UserToLanguage>> for UserLanguagesContent {
 #[derive(Deserialize, Serialize, Clone, Debug, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct AuthUserContent {
+    /// User ID.
     pub id: Uuid,
+    /// Unique username, 3–50 characters, no whitespace.
     pub username: String,
+    /// Normalized (lowercased) email.
     pub email: String,
+    /// JWT for `Authorization: Bearer <token>`; expires after `JWT_EXPIRATION` seconds.
     pub token: String,
 }
 

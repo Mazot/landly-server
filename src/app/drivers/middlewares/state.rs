@@ -2,6 +2,7 @@ use crate::utils::{db::DbPool, di::DiContainer, redis::establish_connection};
 
 #[derive(Clone)]
 pub struct AppState {
+    /// All usecases and shared services, built once at startup and shared by every worker.
     pub di_container: DiContainer,
 }
 

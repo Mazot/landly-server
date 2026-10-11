@@ -12,6 +12,7 @@ pub struct ModerationQueueQueryRequest {
 pub struct ModerationDecisionRequest {
     /// "org" | "person"
     pub kind: String,
+    /// ID of the pending organisation or person.
     pub target_id: Uuid,
     /// Note to the author; REQUIRED for request-changes
     pub note: Option<String>,

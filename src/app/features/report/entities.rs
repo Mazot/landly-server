@@ -43,12 +43,19 @@ impl TryFrom<&str> for ReportTargetKind {
 #[derive(Debug, Serialize, Deserialize, Queryable, Insertable, Selectable, Clone)]
 #[diesel(table_name = reports)]
 pub struct Report {
+    /// Report ID.
     pub id: Uuid,
+    /// User who filed the report; null if that account was deleted.
     pub reporter_id: Option<Uuid>,
+    /// What is reported: `org`, `person` or `conversation`.
     pub target_kind: String,
+    /// ID of the reported item (no FK — polymorphic).
     pub target_id: Uuid,
+    /// Free-text reason given by the reporter.
     pub reason: String,
+    /// `open` (new), `resolved` or `dismissed`; open reports are counted in the moderation queue.
     pub status: String,
+    /// Filing time (UTC, no timezone).
     pub created_at: NaiveDateTime,
 }
 

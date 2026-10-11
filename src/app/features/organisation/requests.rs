@@ -4,51 +4,89 @@ use uuid::Uuid;
 
 #[derive(Debug, Deserialize, Serialize, ToSchema)]
 pub struct CreateOrganisationRequest {
+    /// Display name.
     pub name: String,
+    /// Contact phone, free text (format is only sanity-checked into moderation flags).
     pub tel: Option<String>,
+    /// Contact email.
     pub email: Option<String>,
+    /// Street address, free text.
     pub address: Option<String>,
+    /// Free-text description.
     pub description: Option<String>,
+    /// Country the organisation is located in.
     pub location_country_id: Option<Uuid>,
+    /// Organisation type (embassy, business, helper, community, volunteer, …).
     pub organisation_type_id: Option<Uuid>,
+    /// Latitude in degrees (-90..90).
     pub latitude: Option<f64>,
+    /// Longitude in degrees (-180..180).
     pub longitude: Option<f64>,
+    /// Home country of the founders / community it serves (the corridor's "from" country).
     pub founder_country_id: Option<Uuid>,
+    /// City name.
     pub city: Option<String>,
+    /// Website URL.
     pub website: Option<String>,
+    /// Telegram handle or link.
     pub telegram: Option<String>,
+    /// WhatsApp number or link.
     pub whatsapp: Option<String>,
+    /// Services offered, free-text tags. Defaults to empty.
     pub services: Option<Vec<String>>,
+    /// Languages spoken, by name (e.g. "Russian"). Defaults to empty.
     pub languages: Option<Vec<String>>,
     /// Structured hours by weekday, e.g. {"mon": [["09:00","13:00"]], ...}
     pub opening_hours: Option<serde_json::Value>,
     /// IANA timezone name used to compute `openNow`, e.g. "Europe/Berlin"
     pub timezone: Option<String>,
+    /// `free` or `paid`.
     pub cost: Option<String>,
+    /// Who added it: `official`, `community` or `volunteer`.
     pub added_by: Option<String>,
+    /// Google Places ID when imported from Google.
     pub google_place_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize, ToSchema)]
 pub struct UpdateOrganisationRequest {
+    /// Display name; omit to keep the current value.
     pub name: Option<String>,
+    /// Contact phone, free text (format is only sanity-checked into moderation flags); omit to keep the current value.
     pub tel: Option<String>,
+    /// Contact email; omit to keep the current value.
     pub email: Option<String>,
+    /// Street address, free text; omit to keep the current value.
     pub address: Option<String>,
+    /// Free-text description; omit to keep the current value.
     pub description: Option<String>,
+    /// Country the organisation is located in; omit to keep the current value.
     pub location_country_id: Option<Uuid>,
+    /// Organisation type (embassy, business, helper, community, volunteer, …); omit to keep the current value.
     pub organisation_type_id: Option<Uuid>,
+    /// Latitude in degrees (-90..90); omit to keep the current value.
     pub latitude: Option<f64>,
+    /// Longitude in degrees (-180..180); omit to keep the current value.
     pub longitude: Option<f64>,
+    /// Home country of the founders / community it serves (the corridor's "from" country); omit to keep the current value.
     pub founder_country_id: Option<Uuid>,
+    /// City name; omit to keep the current value.
     pub city: Option<String>,
+    /// Website URL; omit to keep the current value.
     pub website: Option<String>,
+    /// Telegram handle or link; omit to keep the current value.
     pub telegram: Option<String>,
+    /// WhatsApp number or link; omit to keep the current value.
     pub whatsapp: Option<String>,
+    /// Services offered, free-text tags; omit to keep the current value.
     pub services: Option<Vec<String>>,
+    /// Languages spoken, by name (e.g. "Russian"); matched by the search `languages` filter; omit to keep the current value.
     pub languages: Option<Vec<String>>,
+    /// Weekly hours as JSON: `{"mon": [["09:00","13:00"], ["14:00","18:00"]], …}` (keys mon..sun); omit to keep the current value.
     pub opening_hours: Option<serde_json::Value>,
+    /// IANA timezone of the place, e.g. "Europe/Berlin"; used with `opening_hours` for `openNow`; omit to keep the current value.
     pub timezone: Option<String>,
+    /// `free` or `paid`; omit to keep the current value.
     pub cost: Option<String>,
 }
 
@@ -64,38 +102,61 @@ pub struct CheckinRequest {
 /// (min_lat/min_lng/max_lat/max_lng) or an origin point with radius_km.
 #[derive(Deserialize, Serialize, Debug, ToSchema, IntoParams)]
 pub struct SearchOrganisationsQueryRequest {
+    /// Bounding box south edge (-90..90). Give all four bbox values, or an origin.
     pub min_lat: Option<f64>,
+    /// Bounding box west edge (-180..180).
     pub min_lng: Option<f64>,
+    /// Bounding box north edge (-90..90).
     pub max_lat: Option<f64>,
+    /// Bounding box east edge (-180..180).
     pub max_lng: Option<f64>,
+    /// Origin latitude; enables `distanceKm` and `sort=nearest`.
     pub lat: Option<f64>,
+    /// Origin longitude.
     pub lng: Option<f64>,
+    /// Radius around the origin in km.
     pub radius_km: Option<f64>,
     /// Comma-separated org type slugs, e.g. "embassy,community"
     pub types: Option<String>,
+    /// Only places open right now. Default false.
     pub open_now: Option<bool>,
     /// Comma-separated language names, e.g. "Russian,English"
     pub languages: Option<String>,
+    /// Only verified places. Default false.
     pub verified: Option<bool>,
+    /// Minimum average review rating (1–5).
     pub min_rating: Option<f64>,
+    /// `official`, `community` or `volunteer`.
     pub added_by: Option<String>,
+    /// `free` or `paid`.
     pub cost: Option<String>,
     /// One of: nearest (default when origin given), recent, verified
     pub sort: Option<String>,
+    /// Page size (default 50, max 200). At most 500 rows are scanned per search.
     pub limit: Option<i64>,
+    /// Rows to skip (default 0).
     pub offset: Option<i64>,
 }
 
 #[derive(Deserialize, Serialize, Debug, ToSchema, IntoParams)]
 pub struct OrganisationsListQueryRequest {
+    /// Case-insensitive substring filter on the name.
     pub name: Option<String>,
+    /// Case-insensitive substring filter on the phone.
     pub tel: Option<String>,
+    /// Case-insensitive substring filter on the email.
     pub email: Option<String>,
+    /// Case-insensitive substring filter on the address.
     pub address: Option<String>,
+    /// Only organisations located in this country.
     pub location_country_id: Option<Uuid>,
+    /// Only this organisation type.
     pub organisation_type_id: Option<Uuid>,
+    /// Only organisations founded by people from this country.
     pub founder_country_id: Option<Uuid>,
+    /// Page size (default 20, max 100).
     pub limit: Option<i64>,
+    /// Rows to skip (default 0, max 150).
     pub offset: Option<i64>,
 }
 

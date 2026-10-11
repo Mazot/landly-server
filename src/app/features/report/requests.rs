@@ -6,6 +6,8 @@ use uuid::Uuid;
 pub struct CreateReportRequest {
     /// "org" | "person" | "conversation"
     pub target_kind: String,
+    /// ID of the reported item (no FK — polymorphic).
     pub target_id: Uuid,
+    /// Why the item is reported.
     pub reason: String,
 }

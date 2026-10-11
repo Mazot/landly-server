@@ -15,11 +15,17 @@ pub trait SavedPresenter: Send + Sync + 'static {
 #[derive(Deserialize, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct SavedItemContent {
+    /// Saved item ID.
     pub id: Uuid,
+    /// What is saved: `org`, `person`, `country` or `corridor`.
     pub kind: String,
+    /// ID of the saved item (no FK — polymorphic). Each item can be saved once per user.
     pub target_id: Uuid,
+    /// Private note, visible only to the owner.
     pub note: Option<String>,
+    /// Optional user-defined list the item belongs to, e.g. "Moving checklist".
     pub list_name: Option<String>,
+    /// When it was saved (UTC, no timezone).
     pub created_at: NaiveDateTime,
 }
 
@@ -38,17 +44,24 @@ impl From<SavedItem> for SavedItemContent {
 
 #[derive(Deserialize, Serialize, ToSchema)]
 pub struct MultipleSavedItemsResponse {
+    /// The caller's saved items, newest first.
     pub items: Vec<SavedItemContent>,
+    /// Number of items returned.
     pub total: i64,
 }
 
 #[derive(Deserialize, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct SavedCountsContent {
+    /// Saved organisations.
     pub org: i64,
+    /// Saved people.
     pub person: i64,
+    /// Saved countries.
     pub country: i64,
+    /// Saved corridors.
     pub corridor: i64,
+    /// All saved items.
     pub total: i64,
 }
 

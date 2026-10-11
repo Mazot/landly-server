@@ -9,18 +9,31 @@ use uuid::Uuid;
 #[diesel(table_name = images)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct Image {
+    /// Image ID.
     pub id: Uuid,
+    /// Organisation the photo belongs to.
     pub organisation_id: Uuid,
+    /// User who uploaded it (the authenticated caller).
     pub uploaded_by: Uuid,
+    /// Object key in the bucket: `images/{organisation_id}/{uuid}.{ext}`.
     pub s3_key: String,
+    /// Bucket the object was stored in (`S3_BUCKET` at upload time).
     pub s3_bucket: String,
+    /// Original file name from the multipart upload.
     pub file_name: String,
+    /// MIME type: image/jpeg, image/png, image/webp or image/gif.
     pub content_type: String,
+    /// Size in bytes (max 10 MB).
     pub file_size: i64,
+    /// Width in pixels; not computed yet, always null.
     pub width: Option<i32>,
+    /// Height in pixels; not computed yet, always null.
     pub height: Option<i32>,
+    /// Whether this is the organisation's main photo. `set-primary` clears the flag on the other images; an upload with the flag set does not.
     pub is_primary: bool,
+    /// Upload time (UTC, no timezone).
     pub created_at: NaiveDateTime,
+    /// Last change, e.g. primary flag toggled (UTC, no timezone).
     pub updated_at: NaiveDateTime,
 }
 
@@ -95,14 +108,24 @@ impl Image {
 #[derive(Debug, Insertable, Clone)]
 #[diesel(table_name = images)]
 pub struct CreateImage {
+    /// Organisation the photo belongs to.
     pub organisation_id: Uuid,
+    /// User who uploaded it (the authenticated caller).
     pub uploaded_by: Uuid,
+    /// Object key in the bucket: `images/{organisation_id}/{uuid}.{ext}`.
     pub s3_key: String,
+    /// Bucket the object was stored in (`S3_BUCKET` at upload time).
     pub s3_bucket: String,
+    /// Original file name from the multipart upload.
     pub file_name: String,
+    /// MIME type: image/jpeg, image/png, image/webp or image/gif.
     pub content_type: String,
+    /// Size in bytes (max 10 MB).
     pub file_size: i64,
+    /// Width in pixels; not computed yet, always null.
     pub width: Option<i32>,
+    /// Height in pixels; not computed yet, always null.
     pub height: Option<i32>,
+    /// Whether this is the organisation's main photo. `set-primary` clears the flag on the other images; an upload with the flag set does not.
     pub is_primary: bool,
 }

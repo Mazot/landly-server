@@ -254,11 +254,13 @@ impl ImageUsecase {
 // ---------------------------------------------------------------------------
 
 pub struct UploadImageUsecaseInput {
+    /// Organisation to attach the photo to; the caller must be its creator or a moderator.
     pub organisation_id: Uuid,
     /// ID of the authenticated user performing the upload.
     pub uploaded_by: Uuid,
     /// Raw file bytes.
     pub data: Vec<u8>,
+    /// Original file name; its extension becomes part of the object key.
     pub file_name: String,
     /// MIME content-type reported by the multipart field (e.g. `image/jpeg`).
     pub content_type: String,

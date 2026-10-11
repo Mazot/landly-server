@@ -75,36 +75,65 @@ fn flatten_text_array(values: Vec<Option<String>>) -> Vec<String> {
 #[derive(Deserialize, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct OrganisationContent {
+    /// Organisation ID.
     pub id: Uuid,
+    /// Display name.
     pub name: String,
+    /// Contact phone, free text (format is only sanity-checked into moderation flags).
     pub tel: Option<String>,
+    /// Contact email.
     pub email: Option<String>,
+    /// Street address, free text.
     pub address: Option<String>,
+    /// Free-text description.
     pub description: Option<String>,
+    /// Country the organisation is located in.
     pub location_country_id: Option<Uuid>,
+    /// Organisation type (embassy, business, helper, community, volunteer, …).
     pub organisation_type_id: Option<Uuid>,
+    /// Home country of the founders / community it serves (the corridor's "from" country).
     pub founder_country_id: Option<Uuid>,
+    /// Latitude in degrees (-90..90).
     pub latitude: Option<f64>,
+    /// Longitude in degrees (-180..180).
     pub longitude: Option<f64>,
+    /// User who submitted it; null for seeded/legacy rows or when that user was deleted.
     pub created_by: Option<Uuid>,
+    /// Verified badge. No API sets it — only changed directly in the database.
     pub verified: bool,
+    /// Moderation status: `pending`, `live` or `rejected`. Only `live` rows appear in list/search.
     pub status: String,
+    /// Who added it: `official`, `community` or `volunteer`.
     pub added_by: Option<String>,
+    /// City name.
     pub city: Option<String>,
+    /// Website URL.
     pub website: Option<String>,
+    /// Telegram handle or link.
     pub telegram: Option<String>,
+    /// WhatsApp number or link.
     pub whatsapp: Option<String>,
+    /// Services offered, free-text tags.
     pub services: Vec<String>,
+    /// Languages spoken, by name (e.g. "Russian"); matched by the search `languages` filter.
     pub languages: Vec<String>,
+    /// Weekly hours as JSON: `{"mon": [["09:00","13:00"], ["14:00","18:00"]], …}` (keys mon..sun).
     pub opening_hours: Option<serde_json::Value>,
+    /// IANA timezone of the place, e.g. "Europe/Berlin"; used with `opening_hours` for `openNow`.
     pub timezone: Option<String>,
     /// Computed from opening_hours + timezone at response time; never stored.
     pub open_now: Option<bool>,
+    /// `free` or `paid`.
     pub cost: Option<String>,
+    /// Google Places ID when imported from Google.
     pub google_place_id: Option<String>,
+    /// Google rating at import time (0–5).
     pub google_rating: Option<f64>,
+    /// Detail-page visit counter (POST /organisation/visit/{id}).
     pub visits_count: i64,
+    /// Average review rating (1–5); null without reviews. Recomputed from reviews on every create/delete.
     pub rating_avg: Option<f64>,
+    /// Number of reviews.
     pub reviews_count: i64,
     /// Distance from the search origin in km; present only in /search
     /// responses when an origin point was given.
@@ -113,7 +142,9 @@ pub struct OrganisationContent {
     /// Community check-in signals; present only on the detail (fetch) payload.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub community: Option<CommunitySignalsContent>,
+    /// Submission time (UTC, no timezone).
     pub created_at: NaiveDateTime,
+    /// Last edit (UTC, no timezone).
     pub updated_at: NaiveDateTime,
 }
 
@@ -121,10 +152,13 @@ pub struct OrganisationContent {
 #[derive(Deserialize, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CommunitySignalsContent {
+    /// Number of community check-ins.
     pub people_came: i64,
     /// Percentage of check-ins confirming "still active"; None with no data
     pub still_active_pct: Option<f64>,
+    /// Time of the latest check-in (UTC).
     pub last_checkin_at: Option<NaiveDateTime>,
+    /// Up to 5 latest check-in tips, newest first.
     pub tips: Vec<String>,
 }
 
@@ -193,7 +227,9 @@ impl From<(Organisation, Option<f64>)> for OrganisationContent {
 
 #[derive(Deserialize, Serialize, ToSchema)]
 pub struct MultipleOrganisationsResponse {
+    /// Organisations on this page.
     pub items: Vec<OrganisationContent>,
+    /// Number of items returned (not the total in the database).
     pub total: i64,
 }
 
@@ -213,6 +249,7 @@ impl From<Vec<Organisation>> for MultipleOrganisationsResponse {
 #[derive(Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct OrganisationVisitsContent {
+    /// Visit counter after the increment.
     pub visits_count: i64,
 }
 

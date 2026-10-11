@@ -15,8 +15,11 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 pub struct SubmittedEventInput {
+    /// Organisation or person.
     pub target_kind: TargetKind,
+    /// ID of the submitted organisation/person.
     pub target_id: Uuid,
+    /// Auto-check results stored in `moderation_events.flags`.
     pub flags: serde_json::Value,
 }
 

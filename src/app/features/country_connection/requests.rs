@@ -4,26 +4,39 @@ use uuid::Uuid;
 
 #[derive(Debug, Deserialize, Serialize, ToSchema)]
 pub struct CreateCountryConnectionRequest {
+    /// Organisation acting as the embassy for this connection.
     pub embassy_org_id: Option<Uuid>,
+    /// Organisation acting as the consulate for this connection.
     pub consulate_org_id: Option<Uuid>,
+    /// Free-text notes about consular services for this connection.
     pub common_info: Option<String>,
+    /// Country the embassy/consulate is located in.
     pub location_country_id: Option<Uuid>,
 }
 
 #[derive(Deserialize, Serialize, ToSchema, Debug)]
 pub struct UpdateCountryConnectionRequest {
+    /// Organisation acting as the embassy for this connection; omit to keep the current value.
     pub embassy_org_id: Option<Uuid>,
+    /// Organisation acting as the consulate for this connection; omit to keep the current value.
     pub consulate_org_id: Option<Uuid>,
+    /// Free-text notes about consular services for this connection; omit to keep the current value.
     pub common_info: Option<String>,
+    /// Country the embassy/consulate is located in; omit to keep the current value.
     pub location_country_id: Option<Uuid>,
 }
 
 #[derive(Deserialize, Serialize, ToSchema, IntoParams, Debug)]
 pub struct CountryConnectionsListQueryParams {
+    /// Only connections with this embassy organisation.
     pub embassy_org_id: Option<Uuid>,
+    /// Only connections with this consulate organisation.
     pub consulate_org_id: Option<Uuid>,
+    /// Only connections located in this country.
     pub location_country_id: Option<Uuid>,
+    /// Page size (default 20, max 100).
     pub limit: Option<i64>,
+    /// Rows to skip (default 0, max 150).
     pub offset: Option<i64>,
 }
 

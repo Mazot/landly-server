@@ -344,77 +344,140 @@ enum ManagedBy {
 }
 
 pub struct UpdateOrganisationUsecaseInput {
+    /// Display name; `None` keeps the current value.
     pub name: Option<String>,
+    /// Contact phone, free text (format is only sanity-checked into moderation flags); `None` keeps the current value.
     pub tel: Option<String>,
+    /// Contact email; `None` keeps the current value.
     pub email: Option<String>,
+    /// Street address, free text; `None` keeps the current value.
     pub address: Option<String>,
+    /// Free-text description; `None` keeps the current value.
     pub description: Option<String>,
+    /// Country the organisation is located in; `None` keeps the current value.
     pub location_country_id: Option<Uuid>,
+    /// Organisation type (embassy, business, helper, community, volunteer, …); `None` keeps the current value.
     pub organisation_type_id: Option<Uuid>,
+    /// Latitude in degrees (-90..90); `None` keeps the current value.
     pub latitude: Option<BigDecimal>,
+    /// Longitude in degrees (-180..180); `None` keeps the current value.
     pub longitude: Option<BigDecimal>,
+    /// Home country of the founders / community it serves (the corridor's "from" country); `None` keeps the current value.
     pub founder_country_id: Option<Uuid>,
+    /// City name; `None` keeps the current value.
     pub city: Option<String>,
+    /// Website URL; `None` keeps the current value.
     pub website: Option<String>,
+    /// Telegram handle or link; `None` keeps the current value.
     pub telegram: Option<String>,
+    /// WhatsApp number or link; `None` keeps the current value.
     pub whatsapp: Option<String>,
+    /// Services offered, free-text tags; `None` keeps the current value.
     pub services: Option<Vec<String>>,
+    /// Languages spoken, by name (e.g. "Russian"); matched by the search `languages` filter; `None` keeps the current value.
     pub languages: Option<Vec<String>>,
+    /// Weekly hours as JSON: `{"mon": [["09:00","13:00"], ["14:00","18:00"]], …}` (keys mon..sun); `None` keeps the current value.
     pub opening_hours: Option<serde_json::Value>,
+    /// IANA timezone of the place, e.g. "Europe/Berlin"; used with `opening_hours` for `openNow`; `None` keeps the current value.
     pub timezone: Option<String>,
+    /// `free` or `paid`; `None` keeps the current value.
     pub cost: Option<String>,
 }
 
 pub struct CreateOrganisationUsecaseInput {
+    /// Display name.
     pub name: String,
+    /// Contact phone, free text (format is only sanity-checked into moderation flags).
     pub tel: Option<String>,
+    /// Contact email.
     pub email: Option<String>,
+    /// Street address, free text.
     pub address: Option<String>,
+    /// Free-text description.
     pub description: Option<String>,
+    /// Country the organisation is located in.
     pub location_country_id: Option<Uuid>,
+    /// Organisation type (embassy, business, helper, community, volunteer, …).
     pub organisation_type_id: Option<Uuid>,
+    /// Latitude in degrees (-90..90).
     pub latitude: Option<BigDecimal>,
+    /// Longitude in degrees (-180..180).
     pub longitude: Option<BigDecimal>,
+    /// Home country of the founders / community it serves (the corridor's "from" country).
     pub founder_country_id: Option<Uuid>,
+    /// Submitting user (from the JWT).
     pub created_by: Uuid,
+    /// Who added it: `official`, `community` or `volunteer`.
     pub added_by: Option<String>,
+    /// City name.
     pub city: Option<String>,
+    /// Website URL.
     pub website: Option<String>,
+    /// Telegram handle or link.
     pub telegram: Option<String>,
+    /// WhatsApp number or link.
     pub whatsapp: Option<String>,
+    /// Services offered, free-text tags.
     pub services: Vec<String>,
+    /// Languages spoken, by name (e.g. "Russian"); matched by the search `languages` filter.
     pub languages: Vec<String>,
+    /// Weekly hours as JSON: `{"mon": [["09:00","13:00"], ["14:00","18:00"]], …}` (keys mon..sun).
     pub opening_hours: Option<serde_json::Value>,
+    /// IANA timezone of the place, e.g. "Europe/Berlin"; used with `opening_hours` for `openNow`.
     pub timezone: Option<String>,
+    /// `free` or `paid`.
     pub cost: Option<String>,
+    /// Google Places ID when imported from Google.
     pub google_place_id: Option<String>,
 }
 
 pub struct FetchOrganisationsUsecaseInput {
+    /// Case-insensitive substring filter on the name.
     pub name: Option<String>,
+    /// Case-insensitive substring filter on the phone.
     pub tel: Option<String>,
+    /// Case-insensitive substring filter on the email.
     pub email: Option<String>,
+    /// Case-insensitive substring filter on the address.
     pub address: Option<String>,
+    /// Only organisations located in this country.
     pub location_country_id: Option<Uuid>,
+    /// Only this organisation type.
     pub organisation_type_id: Option<Uuid>,
+    /// Only organisations founded by people from this country.
     pub founder_country_id: Option<Uuid>,
+    /// Page size.
     pub limit: i64,
+    /// Rows to skip.
     pub offset: i64,
 }
 
 pub struct SearchOrganisationsUsecaseInput {
+    /// (min_lat, min_lng, max_lat, max_lng), validated by the controller.
     pub bbox: Option<(f64, f64, f64, f64)>,
+    /// (lat, lng) search origin, validated by the controller.
     pub origin: Option<(f64, f64)>,
+    /// Search radius around the origin in km; narrows the bbox derived from it and filters by Haversine distance.
     pub radius_km: Option<f64>,
+    /// Only these organisation type slugs.
     pub type_slugs: Option<Vec<String>>,
+    /// Only places open right now (computed from hours + timezone).
     pub open_now: bool,
+    /// Places speaking at least one of these languages.
     pub languages: Option<Vec<String>>,
+    /// Only verified places.
     pub verified_only: bool,
+    /// Minimum `rating_avg`.
     pub min_rating: Option<f64>,
+    /// Only `official`, `community` or `volunteer` entries.
     pub added_by: Option<String>,
+    /// Only `free` or only `paid` places.
     pub cost: Option<String>,
+    /// `nearest` (default with an origin), `recent` (default without), or `verified`.
     pub sort: Option<String>,
+    /// Page size (already clamped by the controller).
     pub limit: i64,
+    /// Rows to skip.
     pub offset: i64,
 }
 

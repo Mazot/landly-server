@@ -159,28 +159,48 @@ impl PersonUsecase {
 }
 
 pub struct CreatePersonUsecaseInput {
+    /// Display name, e.g. "Daria K.".
     pub name: String,
+    /// Short free-text bio.
     pub bio: Option<String>,
+    /// City; shown publicly only when `show_city` is on.
     pub city: Option<String>,
+    /// Country the person lives in.
     pub location_country_id: Option<Uuid>,
+    /// What they help with, free-text tags, e.g. ["Relocation", "Housing"].
     pub skills: Vec<String>,
+    /// Languages the person speaks.
     pub language_ids: Vec<Uuid>,
+    /// Hidden contact. Used to deliver the claim link; public only after confirm/claim with `show_email` on.
     pub email: Option<String>,
+    /// Hidden contact. Used to deliver the claim link; public only after confirm/claim with `show_whatsapp` on.
     pub whatsapp: Option<String>,
+    /// How the recommender sends the claim link: `email` or `whatsapp`.
     pub send_via: Option<String>,
+    /// The person agreed to be recommended (required to create).
     pub consent_given: bool,
+    /// Privacy toggle: publish WhatsApp once confirmed. Default false.
     pub show_whatsapp: bool,
+    /// Privacy toggle: publish email once confirmed. Default false.
     pub show_email: bool,
+    /// Privacy toggle: publish the city. Default true.
     pub show_city: bool,
+    /// Whether reviews of this person are accepted. Default true.
     pub allow_reviews: bool,
+    /// Recommending user (from the JWT).
     pub recommended_by: Uuid,
 }
 
 pub struct ClaimConfirmUsecaseInput {
+    /// Account to link when the confirm request carries a valid Bearer token (→ `claimed`); otherwise None (→ `confirmed`).
     pub claimed_by: Option<Uuid>,
+    /// Privacy toggle: publish WhatsApp once confirmed; omit to keep the current value.
     pub show_whatsapp: Option<bool>,
+    /// Privacy toggle: publish email once confirmed; omit to keep the current value.
     pub show_email: Option<bool>,
+    /// Privacy toggle: publish the city; omit to keep the current value.
     pub show_city: Option<bool>,
+    /// Whether reviews are accepted; omit to keep the current value.
     pub allow_reviews: Option<bool>,
 }
 

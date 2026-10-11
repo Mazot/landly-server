@@ -128,8 +128,12 @@ impl CorridorRepository for CorridorRepositoryImpl {
 }
 
 pub struct CreateCorridorRepositoryInput {
+    /// Owner (the authenticated user; never taken from the request body).
     pub user_id: Uuid,
+    /// Home country the user comes from.
     pub from_country_id: Uuid,
+    /// Destination country the map opens to; must differ from `from_country_id`.
     pub to_country_id: Uuid,
+    /// Make it the default corridor (clears the previous default in the same transaction).
     pub is_default: bool,
 }

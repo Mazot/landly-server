@@ -4,8 +4,11 @@ use uuid::Uuid;
 
 #[derive(Debug, Deserialize, Serialize, ToSchema)]
 pub struct CreateCorridorRequest {
+    /// Home country the user comes from.
     pub from_country_id: Uuid,
+    /// Destination country; must differ from `from_country_id`.
     pub to_country_id: Uuid,
+    /// Make this the default corridor (replaces the current default). Defaults to false.
     pub is_default: Option<bool>,
 }
 

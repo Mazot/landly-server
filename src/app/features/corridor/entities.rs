@@ -9,20 +9,30 @@ use uuid::Uuid;
 #[derive(Debug, Serialize, Deserialize, Queryable, Insertable, Selectable, Clone)]
 #[diesel(table_name = corridors)]
 pub struct Corridor {
+    /// Corridor ID.
     pub id: Uuid,
+    /// Owner (the authenticated user; never taken from the request body).
     pub user_id: Uuid,
+    /// Home country the user comes from.
     pub from_country_id: Uuid,
+    /// Destination country the map opens to; must differ from `from_country_id`.
     pub to_country_id: Uuid,
+    /// Whether this is the user's default corridor (at most one per user).
     pub is_default: bool,
+    /// Creation time (UTC, no timezone).
     pub created_at: NaiveDateTime,
 }
 
 #[derive(Insertable, Clone)]
 #[diesel(table_name = corridors)]
 pub struct CreateCorridor {
+    /// Owner (the authenticated user; never taken from the request body).
     pub user_id: Uuid,
+    /// Home country the user comes from.
     pub from_country_id: Uuid,
+    /// Destination country the map opens to; must differ from `from_country_id`.
     pub to_country_id: Uuid,
+    /// Whether this is the user's default corridor (at most one per user).
     pub is_default: bool,
 }
 
@@ -30,9 +40,13 @@ pub struct CreateCorridor {
 /// (design: signup-corridor.jsx "🇷🇺 → 🇩🇪 has", map-corridor.jsx).
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct CorridorStats {
+    /// The corridor the counters belong to.
     pub corridor: Corridor,
+    /// Live organisations located in the destination country.
     pub total_places: i64,
+    /// Of those, how many were created during the last 7 days.
     pub new_this_week: i64,
+    /// Live organisations per organisation type slug (`"other"` when the type has no slug).
     pub by_type: Vec<(String, i64)>,
 }
 

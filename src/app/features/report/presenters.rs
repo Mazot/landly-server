@@ -12,11 +12,17 @@ pub trait ReportPresenter: Send + Sync + 'static {
 #[derive(Deserialize, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ReportContent {
+    /// Report ID.
     pub id: Uuid,
+    /// What is reported: `org`, `person` or `conversation`.
     pub target_kind: String,
+    /// ID of the reported item (no FK — polymorphic).
     pub target_id: Uuid,
+    /// Free-text reason given by the reporter.
     pub reason: String,
+    /// `open` (new), `resolved` or `dismissed`; open reports are counted in the moderation queue.
     pub status: String,
+    /// Filing time (UTC, no timezone).
     pub created_at: NaiveDateTime,
 }
 

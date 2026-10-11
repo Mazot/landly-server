@@ -57,13 +57,21 @@ impl ModerationAction {
 #[derive(Debug, Serialize, Deserialize, Queryable, Selectable, Clone)]
 #[diesel(table_name = moderation_events)]
 pub struct ModerationEvent {
+    /// Event ID.
     pub id: Uuid,
+    /// What was moderated: `org` or `person`.
     pub target_kind: String,
+    /// ID of the organisation or person (no FK — polymorphic).
     pub target_id: Uuid,
+    /// Moderator who acted; null for the automatic `submitted` event.
     pub moderator_id: Option<Uuid>,
+    /// `submitted`, `approve`, `request_changes` or `reject`.
     pub action: String,
+    /// Note to the author (required for `request_changes`).
     pub note: Option<String>,
+    /// Submit-time auto-checks, e.g. `duplicateNearby`, `phoneLooksValid`, `trustedVolunteer`/`creatorLiveOrgs` (orgs), `trustedRecommender`/`recommenderApprovedPeople` (people), `editedAfterApproval`.
     pub flags: Option<serde_json::Value>,
+    /// When the event happened (UTC, no timezone).
     pub created_at: NaiveDateTime,
 }
 
@@ -71,14 +79,23 @@ pub struct ModerationEvent {
 /// event (incl. submit-time auto-check flags) and open reports count.
 #[derive(Debug, Clone)]
 pub struct QueueItem {
+    /// Organisation or person.
     pub kind: TargetKind,
+    /// ID of the pending organisation or person.
     pub target_id: Uuid,
+    /// Organisation or person name.
     pub name: String,
+    /// Current status (always pending while in the queue).
     pub status: String,
+    /// City, if given.
     pub city: Option<String>,
+    /// Creator of the organisation / recommender of the person.
     pub submitted_by: Option<Uuid>,
+    /// Submission time (UTC, no timezone).
     pub created_at: NaiveDateTime,
+    /// Latest moderation event, including the submit-time auto-check flags.
     pub last_event: Option<ModerationEvent>,
+    /// Number of `open` user reports against this item.
     pub open_reports: i64,
 }
 

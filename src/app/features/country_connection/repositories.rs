@@ -188,23 +188,36 @@ impl CountryConnectionRepository for CountryConnectionRepositoryImpl {
 }
 
 pub struct UpdateCountryConnectionRepositoryInput {
+    /// Organisation acting as the embassy for this connection; `None` keeps the current value.
     pub embassy_org_id: Option<Uuid>,
+    /// Organisation acting as the consulate for this connection; `None` keeps the current value.
     pub consulate_org_id: Option<Uuid>,
+    /// Free-text notes about consular services for this connection; `None` keeps the current value.
     pub common_info: Option<String>,
+    /// Country the embassy/consulate is located in; `None` keeps the current value.
     pub location_country_id: Option<Uuid>,
 }
 
 pub struct FetchCountryConnectionsRepositoryInput {
+    /// Only connections with this embassy organisation.
     pub embassy_org_id: Option<Uuid>,
+    /// Only connections with this consulate organisation.
     pub consulate_org_id: Option<Uuid>,
+    /// Only connections located in this country.
     pub location_country_id: Option<Uuid>,
+    /// Page size (already clamped by the controller).
     pub limit: i64,
+    /// Rows to skip.
     pub offset: i64,
 }
 
 pub struct CreateCountryConnectionRepositoryInput {
+    /// Organisation acting as the embassy for this connection.
     pub embassy_org_id: Option<Uuid>,
+    /// Organisation acting as the consulate for this connection.
     pub consulate_org_id: Option<Uuid>,
+    /// Free-text notes about consular services for this connection.
     pub common_info: Option<String>,
+    /// Country the embassy/consulate is located in.
     pub location_country_id: Option<Uuid>,
 }

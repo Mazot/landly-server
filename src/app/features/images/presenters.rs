@@ -18,17 +18,27 @@ pub trait ImagePresenter: Send + Sync + 'static {
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ImageContent {
+    /// Image ID.
     pub id: Uuid,
+    /// Organisation the photo belongs to.
     pub organisation_id: Uuid,
+    /// Original file name from the multipart upload.
     pub file_name: String,
+    /// MIME type: image/jpeg, image/png, image/webp or image/gif.
     pub content_type: String,
+    /// Size in bytes (max 10 MB).
     pub file_size: i64,
+    /// Width in pixels; not computed yet, always null.
     pub width: Option<i32>,
+    /// Height in pixels; not computed yet, always null.
     pub height: Option<i32>,
+    /// Whether this is the organisation's main photo. `set-primary` clears the flag on the other images; an upload with the flag set does not.
     pub is_primary: bool,
     /// Publicly-accessible URL for this image.
     pub url: String,
+    /// Upload time (UTC, no timezone).
     pub created_at: NaiveDateTime,
+    /// Last change, e.g. primary flag toggled (UTC, no timezone).
     pub updated_at: NaiveDateTime,
 }
 
@@ -52,7 +62,9 @@ impl ImageContent {
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct MultipleImagesResponse {
+    /// Images of the organisation, newest first.
     pub items: Vec<ImageContent>,
+    /// Number of items returned.
     pub total: i64,
 }
 

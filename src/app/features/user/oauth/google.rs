@@ -37,12 +37,16 @@ pub struct OAuthGoogle {
 
 #[derive(Deserialize, ToSchema)]
 pub struct GoogleUserInfo {
+    /// Stable Google user ID.
     pub sub: String,
+    /// Google account email.
     pub email: Option<String>,
     /// Google marks addresses it has not verified (e.g. a non-Gmail address
     /// typed at account creation); those must never be trusted as identity.
     pub email_verified: Option<bool>,
+    /// Google display name.
     pub name: Option<String>,
+    /// Google avatar URL.
     pub picture: Option<String>,
 }
 

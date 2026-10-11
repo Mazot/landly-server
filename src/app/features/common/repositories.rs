@@ -157,19 +157,28 @@ impl CommonRepository for CommonRepositoryImpl {
 }
 
 pub struct GetCountryRepositoryInput {
+    /// Look up by ID (takes precedence over `name`).
     pub id: Option<Uuid>,
+    /// Look up by exact name when no ID is given.
     pub name: Option<String>,
 }
 
 pub struct GetAllCountriesRepositoryInput {
+    /// Page size (already clamped by the controller).
     pub limit: i64,
+    /// Rows to skip.
     pub offset: i64,
+    /// Case-insensitive substring filter on the name.
     pub name: Option<String>,
 }
 
 pub struct CreateOrganisationTypeRepositoryInput {
+    /// Type key.
     pub org_type: String,
+    /// Hex colour.
     pub color: String,
+    /// Human-readable name.
     pub title: String,
+    /// Optional unique slug.
     pub slug: Option<String>,
 }

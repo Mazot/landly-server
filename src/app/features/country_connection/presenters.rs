@@ -13,10 +13,15 @@ pub trait CountryConnectionPresenter: Send + Sync + 'static {
 #[derive(Deserialize, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CountryConnectionContent {
+    /// Country connection ID.
     pub id: Uuid,
+    /// Organisation acting as the embassy for this connection.
     pub embassy_org_id: Option<Uuid>,
+    /// Organisation acting as the consulate for this connection.
     pub consulate_org_id: Option<Uuid>,
+    /// Free-text notes about consular services for this connection.
     pub common_info: Option<String>,
+    /// Country the embassy/consulate is located in.
     pub location_country_id: Option<Uuid>,
 }
 
@@ -34,7 +39,9 @@ impl From<CountryConnection> for CountryConnectionContent {
 
 #[derive(Deserialize, Serialize, ToSchema)]
 pub struct MultipleCountryConnectionsResponse {
+    /// Connections matching the filters.
     pub items: Vec<CountryConnectionContent>,
+    /// Number of items returned.
     pub total: i64,
 }
 

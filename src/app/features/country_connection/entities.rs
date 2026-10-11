@@ -10,28 +10,41 @@ use uuid::Uuid;
 #[diesel(belongs_to(Country, foreign_key = location_country_id))]
 #[diesel(table_name = countries_connections)]
 pub struct CountryConnection {
+    /// Country connection ID.
     pub id: Uuid,
+    /// Organisation acting as the embassy for this connection.
     pub embassy_org_id: Option<Uuid>,
+    /// Organisation acting as the consulate for this connection.
     pub consulate_org_id: Option<Uuid>,
+    /// Country the embassy/consulate is located in.
     pub location_country_id: Option<Uuid>,
+    /// Free-text notes about consular services for this connection.
     pub common_info: Option<String>,
 }
 
 #[derive(Insertable, Clone)]
 #[diesel(table_name = countries_connections)]
 pub struct CreateCountryConnection {
+    /// Organisation acting as the embassy for this connection.
     pub embassy_org_id: Option<Uuid>,
+    /// Organisation acting as the consulate for this connection.
     pub consulate_org_id: Option<Uuid>,
+    /// Free-text notes about consular services for this connection.
     pub common_info: Option<String>,
+    /// Country the embassy/consulate is located in.
     pub location_country_id: Option<Uuid>,
 }
 
 #[derive(AsChangeset)]
 #[diesel(table_name = countries_connections)]
 pub struct UpdateCountryConnection {
+    /// Organisation acting as the embassy for this connection; `None` keeps the current value.
     pub embassy_org_id: Option<Uuid>,
+    /// Organisation acting as the consulate for this connection; `None` keeps the current value.
     pub consulate_org_id: Option<Uuid>,
+    /// Free-text notes about consular services for this connection; `None` keeps the current value.
     pub common_info: Option<String>,
+    /// Country the embassy/consulate is located in; `None` keeps the current value.
     pub location_country_id: Option<Uuid>,
 }
 

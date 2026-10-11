@@ -13,6 +13,7 @@ pub struct RegisteredRoute {
     pub method: String,
     /// Full path as registered, e.g. `/api/corridor/delete/{id}`.
     pub path: String,
+    /// Feature directory the route comes from, e.g. `corridor`.
     pub feature: String,
 }
 

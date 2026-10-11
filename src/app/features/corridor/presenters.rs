@@ -15,10 +15,15 @@ pub trait CorridorPresenter: Send + Sync + 'static {
 #[derive(Deserialize, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CorridorContent {
+    /// Corridor ID.
     pub id: Uuid,
+    /// Home country the user comes from.
     pub from_country_id: Uuid,
+    /// Destination country the map opens to; must differ from `from_country_id`.
     pub to_country_id: Uuid,
+    /// Whether this is the user's default corridor (at most one per user).
     pub is_default: bool,
+    /// Creation time (UTC, no timezone).
     pub created_at: NaiveDateTime,
 }
 
@@ -36,25 +41,35 @@ impl From<Corridor> for CorridorContent {
 
 #[derive(Deserialize, Serialize, ToSchema)]
 pub struct MultipleCorridorsResponse {
+    /// The caller's corridors, default first, then oldest first.
     pub items: Vec<CorridorContent>,
+    /// Number of items returned.
     pub total: i64,
 }
 
 #[derive(Deserialize, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CorridorTypeCount {
+    /// Organisation type slug (`"other"` when the type has no slug).
     pub slug: String,
+    /// Live organisations of this type in the destination country.
     pub count: i64,
 }
 
 #[derive(Deserialize, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CorridorStatsContent {
+    /// Corridor ID.
     pub corridor_id: Uuid,
+    /// Home country the user comes from.
     pub from_country_id: Uuid,
+    /// Destination country the map opens to; must differ from `from_country_id`.
     pub to_country_id: Uuid,
+    /// Live organisations located in the destination country.
     pub total_places: i64,
+    /// Of those, how many were created during the last 7 days.
     pub new_this_week: i64,
+    /// Live organisations per organisation type.
     pub by_type: Vec<CorridorTypeCount>,
 }
 

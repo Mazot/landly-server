@@ -20,22 +20,37 @@ pub trait PersonPresenter: Send + Sync + 'static {
 #[derive(Deserialize, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct PersonContent {
+    /// Person ID.
     pub id: Uuid,
+    /// Display name, e.g. "Daria K.".
     pub name: String,
+    /// Short free-text bio.
     pub bio: Option<String>,
+    /// City; null unless `show_city` is on.
     pub city: Option<String>,
+    /// Country the person lives in.
     pub location_country_id: Option<Uuid>,
+    /// What they help with, free-text tags, e.g. ["Relocation", "Housing"].
     pub skills: Vec<String>,
+    /// Languages the person speaks.
     pub language_ids: Vec<Uuid>,
+    /// `pending` (moderation) → `awaiting` (approved, waiting for the person) → `confirmed` / `claimed` (linked to an account), or `declined`. Only confirmed/claimed are public.
     pub status: String,
+    /// Present only when confirmed/claimed and `show_email` is on.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub email: Option<String>,
+    /// Present only when confirmed/claimed and `show_whatsapp` is on.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub whatsapp: Option<String>,
+    /// Whether reviews of this person are accepted. Default true.
     pub allow_reviews: bool,
+    /// Average review rating (1–5); null without reviews. Recomputed on every review create/delete.
     pub rating_avg: Option<f64>,
+    /// Number of reviews.
     pub reviews_count: i64,
+    /// Number of users who vouched for this person.
     pub vouches: i64,
+    /// Recommendation time (UTC, no timezone).
     pub created_at: NaiveDateTime,
 }
 
@@ -74,7 +89,9 @@ impl PersonContent {
 
 #[derive(Deserialize, Serialize, ToSchema)]
 pub struct MultiplePeopleResponse {
+    /// Public (confirmed/claimed) people on this page.
     pub items: Vec<PersonContent>,
+    /// Number of items returned.
     pub total: i64,
 }
 
@@ -83,8 +100,11 @@ pub struct MultiplePeopleResponse {
 #[derive(Deserialize, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct PersonCreatedContent {
+    /// The created recommendation (status `pending`).
     pub person: PersonContent,
+    /// Relative claim link `/claim/{token}` for the recommender to send; valid 30 days.
     pub claim_url: String,
+    /// How the recommender sends the claim link: `email` or `whatsapp`.
     pub send_via: Option<String>,
 }
 
@@ -93,16 +113,27 @@ pub struct PersonCreatedContent {
 #[derive(Deserialize, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ClaimPreviewContent {
+    /// Display name, e.g. "Daria K.".
     pub name: String,
+    /// Short free-text bio.
     pub bio: Option<String>,
+    /// City as entered by the recommender.
     pub city: Option<String>,
+    /// What they help with, free-text tags, e.g. ["Relocation", "Housing"].
     pub skills: Vec<String>,
+    /// `pending` (moderation) → `awaiting` (approved, waiting for the person) → `confirmed` / `claimed` (linked to an account), or `declined`. Only confirmed/claimed are public.
     pub status: String,
+    /// Email the recommender entered (shown to the person being claimed only).
     pub email: Option<String>,
+    /// WhatsApp the recommender entered (shown to the person being claimed only).
     pub whatsapp: Option<String>,
+    /// Privacy toggle: publish WhatsApp once confirmed. Default false.
     pub show_whatsapp: bool,
+    /// Privacy toggle: publish email once confirmed. Default false.
     pub show_email: bool,
+    /// Privacy toggle: publish the city. Default true.
     pub show_city: bool,
+    /// Whether reviews of this person are accepted. Default true.
     pub allow_reviews: bool,
 }
 

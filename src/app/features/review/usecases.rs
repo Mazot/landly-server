@@ -122,11 +122,17 @@ impl ReviewUsecase {
 }
 
 pub struct CreateReviewUsecaseInput {
+    /// Author (from the JWT).
     pub author_id: Uuid,
+    /// Reviewed organisation; exactly one of `organisation_id` / `person_id` is set.
     pub organisation_id: Option<Uuid>,
+    /// Reviewed person; exactly one of `organisation_id` / `person_id` is set.
     pub person_id: Option<Uuid>,
+    /// Rating from 1 to 5.
     pub rating: i32,
+    /// Optional topic tag, e.g. "Anmeldung help".
     pub topic: Option<String>,
+    /// Review text.
     pub text: Option<String>,
 }
 

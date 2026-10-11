@@ -8,9 +8,13 @@ use uuid::Uuid;
 /// together with the person and review features.
 #[derive(Debug, Clone, Default)]
 pub struct ProfileStats {
+    /// Organisations this user submitted (any moderation status).
     pub places_added: i64,
+    /// Not computed yet — always 0.
     pub people_recommended: i64,
+    /// Not computed yet — always 0.
     pub people_helped: i64,
+    /// Not computed yet — always null.
     pub rating: Option<f64>,
 }
 

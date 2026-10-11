@@ -4,34 +4,53 @@ use uuid::Uuid;
 
 #[derive(Deserialize, Serialize, Debug, ToSchema)]
 pub struct SignInRequest {
+    /// Login email (case-insensitive).
     pub email: String,
+    /// Password.
     pub password: String,
 }
 
 #[derive(Deserialize, Serialize, Debug, ToSchema)]
 pub struct SignUpRequest {
+    /// Unique username, 3–50 characters, no whitespace.
     pub username: String,
+    /// Login email, stored trimmed and lowercased; unique case-insensitively.
     pub email: String,
+    /// Plain password, 8 characters to 72 bytes (bcrypt limit); only its hash is stored.
     pub password: String,
     // Signup v2 (design: signup-fast.jsx + signup-corridor.jsx) — all optional
     // so the legacy one-step signup keeps working.
+    /// Display name (max 100 characters).
     pub name: Option<String>,
+    /// UI language: `en`, `ru` or `uk` (default `en`).
     pub locale: Option<String>,
+    /// Why the user is on Landly: `newcomer`, `helping` or `exploring`.
     pub here_as: Option<String>,
+    /// Country the user comes from.
     pub home_country_id: Option<Uuid>,
+    /// Avatar background colour, e.g. a hex string (max 32 characters).
     pub avatar_color: Option<String>,
+    /// Optional default corridor: home country. Give both corridor ids or neither.
     pub corridor_from_country_id: Option<Uuid>,
+    /// Optional default corridor: destination country. Created with the user in one transaction.
     pub corridor_to_country_id: Option<Uuid>,
 }
 
 #[derive(Deserialize, Serialize, Debug, ToSchema)]
 pub struct UpdateProfileRequest {
+    /// Display name (max 100 characters); omit to keep the current value.
     pub name: Option<String>,
+    /// Free-text bio (max 1000 characters); omit to keep the current value.
     pub bio: Option<String>,
+    /// Current city (max 100 characters); omit to keep the current value.
     pub city: Option<String>,
+    /// Country the user comes from; omit to keep the current value.
     pub home_country_id: Option<Uuid>,
+    /// Avatar background colour, e.g. a hex string (max 32 characters); omit to keep the current value.
     pub avatar_color: Option<String>,
+    /// UI language: `en`, `ru` or `uk`; omit to keep the current value.
     pub locale: Option<String>,
+    /// Why the user is on Landly: `newcomer`, `helping` or `exploring`; omit to keep the current value.
     pub here_as: Option<String>,
 }
 
@@ -43,11 +62,13 @@ pub struct UpdateNotificationSettingsRequest {
 
 #[derive(Deserialize, Serialize, Debug, ToSchema)]
 pub struct AddLanguagesRequest {
+    /// Languages to add to the caller's profile.
     pub languages_ids: Vec<Uuid>,
 }
 
 #[derive(Deserialize, Serialize, Debug, ToSchema, IntoParams)]
 pub struct DeleteLanguageRequest {
+    /// Language to remove from the caller's profile.
     pub language_id: Uuid,
 }
 
@@ -60,8 +81,11 @@ pub struct OAuthExchangeRequest {
 
 #[derive(Deserialize, ToSchema, IntoParams)]
 pub struct OAuthCallbackParams {
+    /// Authorization code from Google.
     pub code: String,
+    /// OAuth state; must match the HttpOnly state cookie set by /login.
     pub state: String,
+    /// Scopes Google granted (informational).
     pub scope: Option<String>,
 }
 

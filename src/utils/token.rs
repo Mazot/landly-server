@@ -7,8 +7,11 @@ use uuid::Uuid;
 // https://auth0.com/docs/secure/tokens/json-web-tokens/json-web-token-claims
 #[derive(Debug, Serialize, Deserialize)]
 pub struct JwtClaims {
+    /// Authenticated user ID; the auth middleware puts it into the request extensions.
     pub sub: Uuid,
+    /// Expiry (Unix seconds): issue time + `JWT_EXPIRATION`.
     exp: usize,
+    /// Issue time (Unix seconds).
     iat: usize,
 }
 

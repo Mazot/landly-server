@@ -127,15 +127,22 @@ pub async fn create_organisation_type(
 
 #[derive(Deserialize, ToSchema)]
 pub struct CreateOrganisationTypeRequest {
+    /// Type key, e.g. "embassy".
     pub org_type: String,
+    /// Hex colour for map pins and badges, e.g. "#4A6D8C".
     pub color: String,
+    /// Human-readable name, e.g. "Embassy".
     pub title: String,
+    /// Optional stable key for filters/stats; must be unique.
     pub slug: Option<String>,
 }
 
 #[derive(Deserialize, ToSchema, IntoParams)]
 pub struct CountriesListQueryParams {
+    /// Page size (default 20, max 250).
     pub limit: Option<i64>,
+    /// Rows to skip (default 0, max 150).
     pub offset: Option<i64>,
+    /// Case-insensitive substring filter on the country name.
     pub name: Option<String>,
 }

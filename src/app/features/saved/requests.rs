@@ -6,9 +6,11 @@ use uuid::Uuid;
 pub struct CreateSavedRequest {
     /// "org" | "person" | "country" | "corridor"
     pub kind: String,
+    /// ID of the saved item (no FK — polymorphic). Each item can be saved once per user.
     pub target_id: Uuid,
     /// Private note, visible only to the owner
     pub note: Option<String>,
+    /// Optional user-defined list the item belongs to, e.g. "Moving checklist".
     pub list_name: Option<String>,
 }
 

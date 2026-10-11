@@ -91,15 +91,22 @@ impl CommonUsecase {
 }
 
 pub struct FetchAllCountriesUsecaseInput {
+    /// Page size (already clamped by the controller).
     pub limit: i64,
+    /// Rows to skip.
     pub offset: i64,
+    /// Case-insensitive substring filter on the name.
     pub name: Option<String>,
 }
 
 pub struct CreateOrganisationTypeUsecaseInput {
+    /// Type key.
     pub org_type: String,
+    /// Hex colour.
     pub color: String,
+    /// Human-readable name.
     pub title: String,
+    /// Optional unique slug.
     pub slug: Option<String>,
 }
 

@@ -44,18 +44,31 @@ use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct DiContainer {
+    /// Business logic of the `organisation` feature.
     pub organisation_usecase: OrganisationUsecase,
+    /// Business logic of the `common` feature.
     pub common_usecase: CommonUsecase,
+    /// Business logic of the `corridor` feature.
     pub corridor_usecase: CorridorUsecase,
+    /// Business logic of the `country_connection` feature.
     pub country_connection_usecase: CountryConnectionUsecase,
+    /// Business logic of the `user` feature.
     pub user_usecase: UserUsecase,
+    /// Business logic of the `images` feature.
     pub image_usecase: ImageUsecase,
+    /// Business logic of the `person` feature.
     pub person_usecase: PersonUsecase,
+    /// Business logic of the `review` feature.
     pub review_usecase: ReviewUsecase,
+    /// Business logic of the `saved` feature.
     pub saved_usecase: SavedUsecase,
+    /// Business logic of the `report` feature.
     pub report_usecase: ReportUsecase,
+    /// Business logic of the `moderation` feature.
     pub moderation_usecase: ModerationUsecase,
+    /// Shared cache: Redis when `REDIS_URL` is set, otherwise a no-op that never returns hits.
     pub redis_cache_service: TypedCache<Arc<dyn CacheService>>,
+    /// Object storage: S3/R2/MinIO when the `S3_*` variables are set, otherwise a no-op that fails uploads/deletes.
     pub storage_service: Arc<dyn StorageService>,
     /// None when GOOGLE_* env vars are absent — OAuth endpoints answer 503.
     pub oauth_google: Option<OAuthGoogle>,

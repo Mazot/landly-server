@@ -14,13 +14,21 @@ pub trait ReviewPresenter: Send + Sync + 'static {
 #[derive(Deserialize, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ReviewContent {
+    /// Review ID.
     pub id: Uuid,
+    /// User who wrote the review (one review per author and target).
     pub author_id: Uuid,
+    /// Reviewed organisation; exactly one of `organisation_id` / `person_id` is set.
     pub organisation_id: Option<Uuid>,
+    /// Reviewed person; exactly one of `organisation_id` / `person_id` is set.
     pub person_id: Option<Uuid>,
+    /// Rating from 1 to 5.
     pub rating: i32,
+    /// Optional topic tag, e.g. "Anmeldung help".
     pub topic: Option<String>,
+    /// Review text.
     pub text: Option<String>,
+    /// Publication time (UTC, no timezone).
     pub created_at: NaiveDateTime,
 }
 
@@ -41,7 +49,9 @@ impl From<Review> for ReviewContent {
 
 #[derive(Deserialize, Serialize, ToSchema)]
 pub struct MultipleReviewsResponse {
+    /// Reviews of the target, newest first.
     pub items: Vec<ReviewContent>,
+    /// Number of items returned.
     pub total: i64,
 }
 
