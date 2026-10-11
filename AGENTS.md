@@ -170,6 +170,8 @@ Repo-specific sub-agents live in `.claude/agents/` and can be invoked via the Ag
 - **`feature-scaffolder`** — scaffolds a new `src/app/features/<name>/` module and wires all five shared files (features/mod.rs, di.rs, main.rs OpenAPI, AUTH_REQUIRED_ROUTES, migrations). Use for "add a new entity/API area".
 - **`db-migrator`** — creates Diesel migrations, verifies `run`/`redo` reversibility on the docker Postgres, checks the regenerated `schema.rs` against Rust struct field order, and rebuilds `scripts/crates`. Use for any schema change.
 - **`api-smoke-tester`** — read-only agent that boots the real stack (docker + `cargo run`) and exercises endpoints with curl: auth gates, moderation visibility, ownership/RBAC, image upload to MinIO, `/scalar` docs. Use after a feature lands or to reproduce API bugs.
+- **`security-reviewer`** — read-only review of a diff/branch/PR against the invariants from the security audit (#1–#11): `AUTH_REQUIRED_ROUTES` coverage, caller id from JWT only, RBAC before side effects, gated data, DB-error leaks, OAuth/JWT-in-URL, credential rules, rate limiting, uploads, docker secrets. Outputs severity-ranked findings with a concrete attack and fix. Use before merging changes to routes, auth, usecases, migrations or docker files.
+- **`usecase-test-writer`** — writes DB-free tests inside `#[cfg(test)]` only, using the stub-repository pattern from `review/usecases.rs`: happy path, each RBAC/status/validation gate with "the rejected call never reached the repository", enum round-trips, presenter leak checks. Never changes production code; a test that exposes a bug is left failing and reported. `corridor/usecases.rs` currently has no tests.
 
 Keep these definitions in sync when conventions change (routes, env vars, RBAC rules).
 
