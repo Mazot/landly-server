@@ -1,6 +1,6 @@
 ---
 name: sync-docs
-description: Bring landly-server's documentation back in line with the code — README.md, AGENTS.md, .github/copilot-instructions.md, .claude/agents/*.md, .claude/skills/*/SKILL.md and the per-feature OpenAPI ApiDocs. Use when asked to "update/sync/check the docs", "обнови MD файлы", after a batch of feature or security work, before a release, or when a doc claim looks wrong.
+description: Bring landly-server's documentation back in line with the code — README.md, AGENTS.md, docs/*.md, .github/copilot-instructions.md, .claude/agents/*.md, .claude/skills/*/SKILL.md and the per-feature OpenAPI ApiDocs. Use when asked to "update/sync/check the docs", "обнови MD файлы", after a batch of feature or security work, before a release, or when a doc claim looks wrong.
 ---
 
 # Sync docs with the code
@@ -21,9 +21,9 @@ It is read-only and exits 1 on any mismatch. It covers:
 | Routes | every `.route(...)` in `src/app/features/*/config.rs` (+ healthcheck in `main.rs`) ↔ `METHOD /api/...` mentions in README.md |
 | OpenAPI | each route has a `#[utoipa::path]` with the same method+path; each annotated handler is in its feature `ApiDoc` `paths(...)`; each feature `ApiDoc` is merged in `build_openapi()` |
 | Auth | every `AUTH_REQUIRED_ROUTES` pattern matches a real route; every non-GET route is protected or listed in `INTENTIONALLY_PUBLIC_MUTATING_ROUTES` (auth.rs tests) |
-| Env vars | every `env::var(...)` the non-test code reads ↔ AGENTS.md |
+| Env vars | every `env::var(...)` the non-test code reads ↔ docs/environment.md |
 | Features | `src/app/features/*` ↔ "Current features:" in AGENTS.md and copilot-instructions.md |
-| Authorship | every `// [authorship] AI-generated` handler ↔ the AI-generated line of the AGENTS.md authorship map |
+| Authorship | every `// [authorship] AI-generated` handler ↔ the AI-generated line of docs/authorship.md |
 
 Fix what it reports, rerun until it is clean. If a report is a false positive
 caused by the script's parsing (not by the docs), fix the **script** in the same
@@ -57,9 +57,11 @@ verify each item below against the code — open the file, don't trust memory:
 - Match each file's existing style and density; don't rewrite sections that are
   still correct.
 - README is for API consumers and operators; AGENTS.md for agents changing the
-  code; copilot-instructions.md is a condensed AGENTS.md. Put a fact where its
+  code (kept lean: rarely needed reference lives in `docs/` — operations,
+  environment, authorship — with a pointer in AGENTS.md); copilot-instructions.md
+  is a condensed AGENTS.md. Put a fact where its
   reader looks, and keep the copies consistent.
-- Keep the AGENTS.md authorship map and `// [authorship]` comments consistent;
+- Keep docs/authorship.md and `// [authorship]` comments consistent;
   never invent authorship — derive it from the comments / commit history.
 - If you changed a parser in `check_docs.py`, explain why. Never add a route to
   `INTENTIONALLY_PUBLIC_MUTATING_ROUTES` to silence a report — that is a security decision for the user.

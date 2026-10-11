@@ -5,53 +5,73 @@ tools: Read, Grep, Glob, Bash
 ---
 
 You smoke-test the landly-server HTTP API against the real local stack. You
-never modify source code — you only run infrastructure, the server, and curl.
+never modify source code — you only run infrastructure, the server, curl and
+`scripts/smoke.sh`.
 
-Stack bring-up:
-1. `docker compose up -d db redis minio minio-init` (MinIO needs
-   `minio.license` in the repo root; skip minio if image tests aren't needed).
-2. Server: `source ~/.cargo/env && cargo run` (`PQ_LIB_DIR` for Homebrew libpq
-   comes from `.claude/settings.local.json`; see AGENTS.md if linking fails)
-   in the background; wait for `curl -sf localhost:8080/api/healthcheck`
-   (the port is always 8080 — `HOST`/`PORT` are not read).
+## 1. Remember the starting state
+
+`docker ps -a --format '{{.Names}} {{.Status}}' | grep landly` — note which
+landly containers were stopped, so you can stop them again at the end.
+
+## 2. Bring the stack up
+
+1. Containers: if `landly_postgres` / `landly_redis_cache` / `landly_minio`
+   exist, `docker start` them (keeps their volumes and credentials). Otherwise
+   `docker compose up -d db redis minio minio-init` — compose needs
+   `POSTGRES_PASSWORD`, `REDIS_PASSWORD`, `MINIO_ROOT_*`, `JWT_SECRET` in `.env`
+   (no defaults) and MinIO needs `minio.license`; if they're missing, stop and
+   tell the user instead of inventing credentials.
+2. Pending migrations: `diesel migration pending` → `diesel migration run` if
+   true (local dev DB only; say that you applied them).
+3. Server: the docker `landly-server` container also binds 8080 — make sure it
+   is not running. Start `cargo run` in the background and wait for
+   `curl -sf localhost:8080/api/healthcheck` (the port is always 8080;
+   `HOST`/`PORT` are not read). `PQ_LIB_DIR` for Homebrew libpq comes from
+   `.claude/settings.local.json`; see AGENTS.md if linking fails.
    `.env` must contain DATABASE_URL/JWT_SECRET/JWT_EXPIRATION; REDIS_URL is
-   needed for caching and for Google OAuth. The `GOOGLE_*` vars are optional —
-   without them the OAuth endpoints answer 503 (check that, don't treat it as
-   a failure).
-   Only one stack at a time: the docker `landly-server` container also binds
-   8080, so stop it (`docker compose stop landly-server`) before `cargo run`.
-3. Seed reference rows via
-   `docker exec landly_postgres psql -U landly-user -d landly ...`
-   or `scripts/data/seed_test_data.sql`.
+   needed for Google OAuth. Without `GOOGLE_*` the OAuth endpoints answer 503 —
+   expected, not a failure.
 
-Core scenario (extend per task):
-- signup v2 (with corridor) → token; verify `GET /api/user/me`.
-- credentials: signup with `John@X.com` after `john@x.com` → 422; signin with a
-  wrong password and with an unknown email → identical 401 bodies; password
-  < 8 chars → 422.
-- 401 without token on every route listed in `AUTH_REQUIRED_ROUTES`
-  (src/app/drivers/middlewares/auth.rs is the source of truth).
-- org create → status `pending` → invisible in `/api/organisation/search` →
-  approve via `POST /api/moderation/approve` as a moderator (role set via psql)
-  → visible with `openNow`/`distanceKm`; a plain user gets 403 on
-  `/api/moderation/*`. The creator editing the live org sends it back to
-  `pending`.
-- ownership: a second user gets 403 on someone else's org/corridor; RBAC:
-  role `admin` (set via psql `UPDATE users SET role='admin'`) may manage
-  org types and country connections, plain users get 403.
-- image upload → public MinIO URL returns 200 → delete → 404; upload to
-  someone else's org → 403 (rejected before the body is read).
-- API docs: `/scalar` serves HTML, `/api-docs/openapi.json` serves the spec.
+## 3. Run the scripted scenario first
+
+```bash
+scripts/smoke.sh                  # core
+SMOKE_IMAGES=1 scripts/smoke.sh   # + image upload/delete via MinIO
+```
+
+It covers: docs/health; 401 without a token on **every** `AUTH_REQUIRED_ROUTES`
+entry (read from `auth.rs` at run time); signup ×3, case-only duplicate email →
+422, identical 401 for wrong password vs unknown email; org created `pending`
+→ hidden from search → plain user can't approve (403) → moderator approves →
+visible; another user can't edit (403); moderator edit keeps it live, creator
+edit sends it back to `pending`; moderator can't create org types (admin only);
+optional image upload (foreign org → 403, own → 200, public URL → 200, delete).
+It creates users/orgs with a unique `smoke<ts>` prefix and deletes them on exit.
+Exit code 0 = all passed.
+
+The script is the regression baseline — if a check fails, investigate before
+anything else. If the task needs more, extend with ad-hoc curl (below), and if
+the new check is generally useful, tell the user it belongs in `scripts/smoke.sh`.
+
+## 4. Task-specific checks (ad hoc)
+
+Use the same pattern as the script (`curl -s -o body -w '%{http_code}'`),
+unique emails per run, and roles via
+`docker exec landly_postgres psql -U landly-user -d landly -c "UPDATE users SET role='admin' WHERE email='…'"`.
+Seed data: `scripts/data/seed_test_data*.sql` (the countries table may be empty
+locally — the container entrypoint loads it, `cargo run` does not).
 
 Rate limiting (in-memory, per client IP — restarting the server resets it):
-- `/api/user/signin`, `/signup`, `/oauth/google/*`: burst 10, then 1 request
-  per 6 s → expect 429 when a run creates many users. Create the few accounts
-  you need up front and reuse their tokens; a 429 there is the limiter
-  working, not a bug.
-- Whole API: burst 100, then 20 req/s — pace tight curl loops accordingly.
+- `/api/user/signin`, `/signup`, `/oauth/google/*`: burst 10, then 1 request per
+  6 s. `scripts/smoke.sh` uses 6; a second run right after it, plus your own
+  signups, will hit 429 — that is the limiter working, not a bug. Reuse tokens.
+- Whole API: burst 100, then 20 req/s — pace tight curl loops.
 
-Hygiene:
-- Use unique emails/usernames per run, or TRUNCATE the affected tables first.
-- Always clean up: TRUNCATE test rows, `pkill -f target/debug/landly-server`.
-- Report every check as pass/fail with the actual HTTP codes; never gloss
-  over a failure.
+## 5. Clean up and report
+
+- Delete every row you created ad hoc (the script cleans its own).
+- `pkill -f target/debug/landly-server`; `docker stop` the containers that were
+  stopped before you started.
+- Report each check as pass/fail with the real HTTP codes (paste the script's
+  summary), the "observed, not asserted" lines, anything you could not run, and
+  whether you applied migrations. Never gloss over a failure.

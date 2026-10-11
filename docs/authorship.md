@@ -1,0 +1,10 @@
+# Authorship map
+
+Moved out of AGENTS.md. Read when adding or editing an endpoint handler (its `// [authorship]` comment must match this map; `sync-docs` checks the AI-generated line).
+
+
+Endpoint handlers carry `// [authorship]` comments (skip: images/S3 feature). Keep them accurate when editing:
+
+- **Human-written (original codebase):** healthcheck; common countries/org_types GET; organisation CRUD; country-connection CRUD; user signin/signup/languages/OAuth; images + S3/storage/cache infrastructure; feature architecture and DI.
+- **AI-generated (Claude):** the whole `corridor`, `person`, `review`, `saved`, `report` and `moderation` features; `GET/PUT /api/user/me` + `/me/notifications`; `POST /api/user/oauth/google/exchange` (single-use login code); the security hardening — rate limiting (`rate_limit.rs`), credential validation (`normalize_email`/`validate_password`/…), OAuth state cookie + `email_verified`, constraint-violation → 422 mapping, `users_email_lower_unique` migration; `GET /api/organisation/search`, `POST /api/organisation/visit/{id}`, `POST /api/organisation/checkin/{id}` + community signals; `GET /api/common/countries/{id}`; `path_matches` route matcher in auth middleware; RBAC helpers (`UserRole::is_admin/is_moderator`, `User::fetch_role`, `ensure_can_manage`/`ensure_admin`/`ensure_moderator`); all phase-1/2 migrations (`extend_*`, `create_corridors`, `create_people`, `create_reviews`, `create_saved_items`, `create_org_checkins`, `create_reports`, `create_moderation_events`); `compute_open_now` + `haversine_km`; per-feature OpenAPI split (`build_openapi`).
+- **Human-written, extended by AI:** signup (v2 transaction with default corridor, credential validation), signin (uniform 401 + dummy bcrypt), OAuth Google login/callback (state cookie, verified email, login-code redirect), user languages (user_id from JWT), organisation create/update/delete (ownership, v2 fields, pending status, re-moderation of creator edits), image upload/delete/set-primary (org-owner/moderator gate), org types create + country-connection mutations (admin gate), `AUTH_REQUIRED_ROUTES` contents.

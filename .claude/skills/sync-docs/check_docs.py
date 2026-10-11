@@ -16,6 +16,8 @@ FEATURES = ROOT / "src/app/features"
 AUTH_RS = ROOT / "src/app/drivers/middlewares/auth.rs"
 README = (ROOT / "README.md").read_text()
 AGENTS = (ROOT / "AGENTS.md").read_text()
+ENV_DOC = (ROOT / "docs/environment.md").read_text()
+AUTHORSHIP_DOC = (ROOT / "docs/authorship.md").read_text()
 COPILOT_PATH = ROOT / ".github/copilot-instructions.md"
 COPILOT = COPILOT_PATH.read_text() if COPILOT_PATH.exists() else ""
 
@@ -189,13 +191,13 @@ for key, (feature, raw) in sorted(routes.items()):
 if problems == before:
     ok(f"{len(auth)} protected patterns all match real routes; no unexpected public mutating route")
 
-section("Env vars: code vs AGENTS.md")
+section("Env vars: code vs docs/environment.md")
 before = problems
-documented = set(re.findall(r"`([A-Z][A-Z0-9_]*\*?)`", AGENTS))
+documented = set(re.findall(r"`([A-Z][A-Z0-9_]*\*?)`", ENV_DOC))
 wildcards = [d[:-1] for d in documented if d.endswith("*")]
 for var in sorted(code_env_vars()):
     if var not in documented and not any(var.startswith(w) for w in wildcards):
-        bad(f"{var} is read by the code but not mentioned in AGENTS.md")
+        bad(f"{var} is read by the code but not listed in docs/environment.md")
 if problems == before:
     ok("every env var the code reads is documented")
 
@@ -213,9 +215,9 @@ for doc_name, doc in (("AGENTS.md", AGENTS), ("copilot-instructions.md", COPILOT
 if problems == before:
     ok(f"{len(features)} features listed consistently")
 
-section("Authorship: AI-generated handlers vs AGENTS.md authorship map")
+section("Authorship: AI-generated handlers vs docs/authorship.md")
 before = problems
-ai_line = next((l for l in AGENTS.splitlines() if l.startswith("- **AI-generated (Claude):**")), "")
+ai_line = next((l for l in AUTHORSHIP_DOC.splitlines() if l.startswith("- **AI-generated (Claude):**")), "")
 for feature, fn, method, path, comment in handlers:
     if "[authorship] AI-generated" not in comment:
         continue
@@ -227,9 +229,9 @@ for feature, fn, method, path, comment in handlers:
     tails += [re.sub(r"/\{id\}.*", "", t) for t in tails]
     mentioned = any(len(t.split("/")) > 2 and t in ai_line for t in tails)
     if not (whole_feature or mentioned):
-        bad(f"{method} {path} ({feature}::{fn}) is AI-generated but not in the AGENTS.md authorship map")
+        bad(f"{method} {path} ({feature}::{fn}) is AI-generated but not in docs/authorship.md")
 if not ai_line:
-    bad("AGENTS.md has no '- **AI-generated (Claude):**' line")
+    bad("docs/authorship.md has no '- **AI-generated (Claude):**' line")
 if problems == before:
     ok("every AI-generated handler is covered by the authorship map")
 

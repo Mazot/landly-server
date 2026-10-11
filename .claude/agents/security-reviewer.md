@@ -14,7 +14,8 @@ test would settle a question.
 1. Determine the diff: the range/branch/PR the caller names; otherwise
    `git diff master...HEAD` plus uncommitted changes (`git diff HEAD`).
 2. Read AGENTS.md ("Domain rules to preserve", "RBAC", "Authentication
-   middleware", "Rate limiting", "Error handling", "Docker").
+   middleware", "Rate limiting", "Error handling") and, for compose/Dockerfile/CI
+   changes, `docs/operations.md`.
 3. For every changed hunk, read enough surrounding code to know who can reach
    it and with what input — a diff alone is not enough to judge auth.
 

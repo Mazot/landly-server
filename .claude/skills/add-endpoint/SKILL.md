@@ -127,7 +127,9 @@ Copy the `StubRepo` + `Mutex<Vec<_>>` pattern from `review/usecases.rs`.
 ## 8. Docs
 
 - `README.md`: add the route to its feature's ```http block with a short comment (`# auth; ...`, `# admin`, `# public`); update the "Roles & Permissions" table if a new permission rule appeared.
-- `AGENTS.md`: RBAC table (new rule), "Domain rules to preserve" (new invariant), authorship map (new AI-generated endpoint).
+- `AGENTS.md`: RBAC table (new rule), "Domain rules to preserve" (new invariant).
+- `docs/authorship.md`: new AI-generated endpoint (or a human-written one you extended).
+- `docs/environment.md`: any new env var.
 - `.github/copilot-instructions.md` only if a convention changed.
 
 ## 9. Verify
@@ -164,6 +166,6 @@ End with this checklist, each line ✓ / ✗ / n/a with a reason for n/a:
 - rate limit
 - ApiDoc paths + schemas
 - tests (happy path + every gate)
-- README / AGENTS.md
+- README / AGENTS.md / docs/*.md
 - fmt / clippy / test results
 ```

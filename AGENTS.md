@@ -168,76 +168,16 @@ The OpenAPI doc is split per feature: **every** feature declares its own `#[deri
 
 > **RULE** (enforced by the OpenAPI guard tests in `main.rs`): When adding, removing, or updating routes (controllers), you MUST also update the corresponding per-feature `ApiDoc` in `<feature>/mod.rs` — add/remove paths and schemas so Scalar stays accurate, and register a brand-new feature's `ApiDoc` in `build_openapi()`. Do NOT add paths or schemas to the root `#[openapi(...)]` macro in `main.rs`.
 
-## Sub-agents
+## Sub-agents & skills
 
-Repo-specific sub-agents live in `.claude/agents/` and can be invoked via the Agent tool (or `@agent-<name>`):
+Definitions live in `.claude/agents/*.md` and `.claude/skills/*/SKILL.md` (their front-matter descriptions say when to use them); keep them in sync when conventions change (routes, env vars, RBAC rules).
 
-- **`feature-scaffolder`** — scaffolds a new `src/app/features/<name>/` module and wires all five shared files (features/mod.rs, di.rs, main.rs OpenAPI, AUTH_REQUIRED_ROUTES, migrations). Use for "add a new entity/API area".
-- **`db-migrator`** — creates Diesel migrations, verifies `run`/`redo` reversibility on the docker Postgres, checks the regenerated `schema.rs` against Rust struct field order, and rebuilds `scripts/crates`. Use for any schema change.
-- **`api-smoke-tester`** — read-only agent that boots the real stack (docker + `cargo run`) and exercises endpoints with curl: auth gates, moderation visibility, ownership/RBAC, image upload to MinIO, `/scalar` docs. Use after a feature lands or to reproduce API bugs.
-- **`security-reviewer`** — read-only review of a diff/branch/PR against the invariants from the security audit (#1–#11): `AUTH_REQUIRED_ROUTES` coverage, caller id from JWT only, RBAC before side effects, gated data, DB-error leaks, OAuth/JWT-in-URL, credential rules, rate limiting, uploads, docker secrets. Outputs severity-ranked findings with a concrete attack and fix. Use before merging changes to routes, auth, usecases, migrations or docker files.
-- **`usecase-test-writer`** — writes DB-free tests inside `#[cfg(test)]` only, using the stub-repository pattern from `review/usecases.rs`: happy path, each RBAC/status/validation gate with "the rejected call never reached the repository", enum round-trips, presenter leak checks. Never changes production code; a test that exposes a bug is left failing and reported. `corridor/usecases.rs` currently has no tests.
+- Agents: `feature-scaffolder` (new feature module), `db-migrator` (schema changes), `api-smoke-tester` (real stack via `scripts/smoke.sh`), `security-reviewer` (read-only audit-invariant review of a diff), `usecase-test-writer` (DB-free stub-repo tests; `corridor/usecases.rs` has none yet).
+- Skills: `add-endpoint` (route checklist ending in a ✓/✗ report), `sync-docs` (docs ↔ code, starts with `.claude/skills/sync-docs/check_docs.py`).
+- End-to-end baseline: `scripts/smoke.sh` (needs the running stack; `SMOKE_IMAGES=1` adds MinIO uploads).
 
-Keep these definitions in sync when conventions change (routes, env vars, RBAC rules).
+## Reference docs (read when relevant)
 
-Repo skills live in `.claude/skills/` (invoked automatically by description or as `/<name>`):
-
-- **`add-endpoint`** — step-by-step checklist for adding/changing/removing a route in an existing feature: DTO → controller + `#[utoipa::path]` + `[authorship]` → usecase validation/RBAC → cache invalidation → `config.rs` → `AUTH_REQUIRED_ROUTES` + count test → rate limit → `ApiDoc` → stub-repo tests → README/AGENTS.md → fmt/clippy/test, ending with a ✓/✗ report. Update it together with this file when a convention changes.
-- **`sync-docs`** — brings README/AGENTS/copilot/agent/skill docs and per-feature `ApiDoc`s back in line with the code. Starts with `python3 .claude/skills/sync-docs/check_docs.py` (routes ↔ README, `#[utoipa::path]` ↔ `ApiDoc`, `AUTH_REQUIRED_ROUTES` ↔ real routes + unexpected public mutating routes, env vars, feature list, authorship map; exits 1 on mismatch), then a manual checklist for what the script cannot parse. Fixes docs only and reports code issues separately.
-
-## CI (.github/workflows)
-
-- `rust.yml` — fmt check, build, tests, **plus a separate `scripts-workspace` job** (the scripts crates are not covered by the root build); coverage via tarpaulin → Codecov. All jobs use `Swatinem/rust-cache`.
-- `clippy.yml` — `cargo clippy --all-targets --all-features -- -D warnings`.
-- `audit.yml` — `cargo audit` for both lockfiles (root + scripts/crates), on dependency changes and weekly. Ignored advisories live in `.cargo/audit.toml`, each with a reason and an exit condition (currently `RUSTSEC-2026-0258`, h2 0.3 via actix-http — unreachable because the server is HTTP/1.x only; drop the ignore if HTTP/2 is ever enabled).
-- `dependencies.yml` — weekly `cargo update` PR for both workspaces.
-- `release.yml` — builds and attaches the linux binary on `v*` tags.
-
-## Scripts workspace
-
-`scripts/crates` is a **separate Cargo workspace** (`country_parser`, `country_loader`) that depends on the main crate as a library (`landly-server = { path = "../.." }`). It is NOT built by `cargo build`/`cargo test` at the repo root — after changing structs it consumes (notably `Country`/`CreateCountry` in `src/data/models.rs`), verify it still compiles: `cd scripts/crates && cargo build`. The Docker image builds it and `start.sh` runs `country_loader` on first boot when the `countries` table is empty. Seed SQL for manual testing lives in `scripts/data/seed_test_data*.sql`.
-
-## Docker
-
-- The server container healthcheck must target `/api/healthcheck` (there is no `/health` route); `curl` is installed in the runtime image for this. It is a liveness probe only — it does not touch Postgres or Redis.
-- The server listens on the hardcoded `constants::BIND` (`0.0.0.0:8080`); `HOST`/`PORT` are exported by `start.sh` and compose but not read by the binary, so leave `PORT` at 8080 (compose maps `${BIND_ADDRESS:-127.0.0.1}:${EXTERNAL_PORT:-8080}` → `${PORT}`).
-- `JWT_EXPIRATION` is required by `utils/token.rs` and is passed through docker-compose (default 3600). The old docs mentioned a nonexistent `JWT_EXP_SECS`.
-- Service credentials (`POSTGRES_PASSWORD`, `REDIS_PASSWORD`, `MINIO_ROOT_USER`/`MINIO_ROOT_PASSWORD`, `JWT_SECRET`) are required via `${VAR:?}` — never reintroduce hardcoded defaults. db/redis/minio ports bind to `SERVICES_BIND_ADDRESS` (default `127.0.0.1`), and the bucket is `mc anonymous set download` (read-only; `public` would allow anonymous uploads).
-- The redis healthcheck uses an authenticated `PING` as `REDIS_USER` — plain `redis-cli incr ping` always exits 0 even on NOAUTH and mutates a key. Redis auth comes from the ACL file only (`--requirepass` is ignored with `--aclfile`), which must keep `user default off`.
-- Shell snippets in compose (`redis` command, `minio-init` entrypoint) read credentials from the container environment as quoted `"$$VAR"` — never interpolate `${VAR}` secrets into shell text. Postgres/Redis passwords must be URL-safe (they are embedded in `DATABASE_URL`/`REDIS_URL`).
-- `docker/docker-compose-{postgre,redis,minio}.yml` are standalone single-service files for local experiments (the MinIO one uses the `minioadmin` defaults); the root `docker-compose.yml` is the real stack and the one the rules above apply to.
-
-## Authorship map
-
-Endpoint handlers carry `// [authorship]` comments (skip: images/S3 feature). Keep them accurate when editing:
-
-- **Human-written (original codebase):** healthcheck; common countries/org_types GET; organisation CRUD; country-connection CRUD; user signin/signup/languages/OAuth; images + S3/storage/cache infrastructure; feature architecture and DI.
-- **AI-generated (Claude):** the whole `corridor`, `person`, `review`, `saved`, `report` and `moderation` features; `GET/PUT /api/user/me` + `/me/notifications`; `POST /api/user/oauth/google/exchange` (single-use login code); the security hardening — rate limiting (`rate_limit.rs`), credential validation (`normalize_email`/`validate_password`/…), OAuth state cookie + `email_verified`, constraint-violation → 422 mapping, `users_email_lower_unique` migration; `GET /api/organisation/search`, `POST /api/organisation/visit/{id}`, `POST /api/organisation/checkin/{id}` + community signals; `GET /api/common/countries/{id}`; `path_matches` route matcher in auth middleware; RBAC helpers (`UserRole::is_admin/is_moderator`, `User::fetch_role`, `ensure_can_manage`/`ensure_admin`/`ensure_moderator`); all phase-1/2 migrations (`extend_*`, `create_corridors`, `create_people`, `create_reviews`, `create_saved_items`, `create_org_checkins`, `create_reports`, `create_moderation_events`); `compute_open_now` + `haversine_km`; per-feature OpenAPI split (`build_openapi`).
-- **Human-written, extended by AI:** signup (v2 transaction with default corridor, credential validation), signin (uniform 401 + dummy bcrypt), OAuth Google login/callback (state cookie, verified email, login-code redirect), user languages (user_id from JWT), organisation create/update/delete (ownership, v2 fields, pending status, re-moderation of creator edits), image upload/delete/set-primary (org-owner/moderator gate), org types create + country-connection mutations (admin gate), `AUTH_REQUIRED_ROUTES` contents.
-
-## Environment Variables
-
-| Variable | Required | Description |
-|---|---|---|
-| `DATABASE_URL` | yes | PostgreSQL connection string |
-| `REDIS_URL` | no | Redis connection string; cache disabled if absent |
-| `JWT_SECRET` | yes | JWT signing secret |
-| `JWT_EXPIRATION` | yes | JWT expiry in seconds |
-| `GOOGLE_CLIENT_ID` | no | OAuth Google client ID |
-| `GOOGLE_CLIENT_SECRET` | no | OAuth Google client secret |
-| `OAUTH_GOOGLE_REDIRECT_URL` | no | Google OAuth callback URL |
-| `S3_ENDPOINT_URL` | no | S3/R2 endpoint; storage disabled if absent |
-| `S3_ACCESS_KEY_ID` | no | S3/R2 access key |
-| `S3_SECRET_ACCESS_KEY` | no | S3/R2 secret key |
-| `S3_BUCKET` | no | S3/R2 bucket name |
-| `S3_REGION` | no | Region (defaults to `"auto"`) |
-| `S3_PUBLIC_URL` | no | Public base URL for object access |
-| `FRONTEND_ORIGIN` | no | Allowed CORS origin (default `*`) and the OAuth redirect target (default `http://localhost:5173`) |
-| `TRUST_PROXY_HEADERS` | no | `true` = rate limiter keys clients by `Forwarded`/`X-Forwarded-For` (only behind a proxy that overwrites them); default: TCP peer IP |
-| `DB_POOL_MAX_SIZE`, `DB_POOL_MIN_IDLE`, `DB_POOL_MAX_LIFETIME_SECS`, `DB_POOL_IDLE_TIMEOUT_SECS`, `DB_POOL_CONNECTION_TIMEOUT_SECS` | no | r2d2 Postgres pool tuning (`utils/db.rs`) |
-| `REDIS_POOL_*` (same five suffixes) | no | r2d2 Redis pool tuning (`utils/redis.rs`) |
-| `RUST_LOG` | no | `env_logger` filter (compose default `info`) |
-| `REDIS_TEST_URL` | no | Enables the real-Redis GETDEL test in `utils/cache.rs` (a no-op without it) |
-| `HOST`, `PORT` | — | Set by compose/`start.sh` but **not read** by the binary — it binds `constants::BIND` (`0.0.0.0:8080`) |
-
-Compose-only (consumed by `docker-compose.yml`, not by the binary): `POSTGRES_USER`/`POSTGRES_PASSWORD`/`POSTGRES_DB`, `REDIS_USER`/`REDIS_PASSWORD`, `MINIO_ROOT_USER`/`MINIO_ROOT_PASSWORD`, `SERVICES_BIND_ADDRESS`, `BIND_ADDRESS`, `EXTERNAL_PORT`, `*_PORT` overrides, `MINIO_LICENSE_PATH`. `start.sh` additionally reads `DB_HOST`/`DB_PORT`/`DB_USER`/`DB_WAIT_TIMEOUT`.
+- `docs/operations.md` — CI workflows, `.cargo/audit.toml` ignores, the separate `scripts/crates` workspace, Docker/compose security rules. **Read before editing any of those.** Two rules worth keeping in mind everywhere: after changing structs used by `scripts/crates` (`Country`/`CreateCountry`) run `cd scripts/crates && cargo build`; compose secrets are `${VAR:?}` only and reach shell snippets as `"$$VAR"`.
+- `docs/environment.md` — every env var (required/optional/defaults, compose-only vars). Required at runtime: `DATABASE_URL`, `JWT_SECRET`, `JWT_EXPIRATION`; the server always binds `0.0.0.0:8080`.
+- `docs/authorship.md` — which endpoints are human-written vs AI-generated; `// [authorship]` comments on handlers must agree with it.

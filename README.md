@@ -448,6 +448,22 @@ Tests are inline `#[cfg(test)] mod tests` modules next to the code and run witho
 or Redis: usecases are exercised against hand-written stub repositories, presenters and
 domain enums directly. Anything that needs the real stack belongs in a smoke test, not here.
 
+Guard tests also parse every feature `config.rs` and fail when a route is missing from the
+OpenAPI spec or a mutating route is not behind authentication.
+
+### Smoke Test (real stack)
+
+With Postgres (+ Redis, MinIO) and `cargo run` up:
+
+```bash
+scripts/smoke.sh                  # auth gates, credentials, moderation flow, RBAC
+SMOKE_IMAGES=1 scripts/smoke.sh   # + image upload/delete through MinIO
+```
+
+It creates throw-away users/organisations with a unique prefix and removes them on exit;
+roles and cleanup go through `docker exec landly_postgres psql`. It uses 6 of the 10
+credential requests the rate limiter allows per burst, so don't loop it.
+
 ### Database Migrations
 
 ```bash
@@ -527,25 +543,7 @@ For production deployment, consider:
 
 ## ✍️ Authorship
 
-Endpoints in the codebase carry `// [authorship]` comments above their handlers. Summary (images/S3 feature intentionally unmarked):
-
-**Human-written (original codebase):**
-
-- Healthcheck; countries list; org types list; user signin, OAuth Google (login/callback), fetch user languages
-- Organisation CRUD (`list/fetch/create/update/delete`) and country-connection CRUD — original endpoints
-- Core infrastructure: feature layout, `DiContainer`, cache/storage abstractions, error handling, images/S3 feature
-
-**AI-generated (Claude, as part of the design-handoff v2 rework):**
-
-- Corridor feature — entire module (`create/list/set-default/delete/stats`)
-- OAuth login-code exchange `POST /api/user/oauth/google/exchange`; security hardening (rate limiting, credential validation, OAuth state cookie + verified email, 422 mapping of constraint violations, case-insensitive email uniqueness)
-- Profile: `GET/PUT /api/user/me`, `PUT /api/user/me/notifications`
-- Geo search `GET /api/organisation/search`, visit counter `POST /api/organisation/visit/{id}`, check-ins `POST /api/organisation/checkin/{id}`
-- Country detail `GET /api/common/countries/{id}`
-- Phase 2 — entire modules: `person` (recommend + claim flow), `review`, `saved`, `report`, `moderation`
-- Migrations `extend_users`, `extend_organisations`, `extend_countries`, `create_corridors`, `create_people`, `create_reviews`, `create_saved_items`, `create_org_checkins`, `create_reports`, `create_moderation_events`
-
-**Human-written, extended by AI:** signup (v2: profile + default corridor in one transaction, credential validation), signin (uniform 401), OAuth Google login/callback (state cookie, verified email, login-code redirect), user languages (`user_id` from JWT), organisation CRUD (ownership/RBAC, v2 fields, moderation statuses, `pending` on create and on creator edits), image upload/delete/set-primary (ownership gate), org types create and country-connection mutations (admin-only), auth middleware (fixed `{id}` route matching).
+Endpoint handlers carry `// [authorship]` comments: the original codebase is human-written, and the design-handoff v2 rework (corridors, people, reviews, saved items, reports, moderation, geo search, profile) plus the 2026 security hardening were written with Claude. The full per-endpoint map is in [docs/authorship.md](docs/authorship.md).
 
 ## 🤝 Contributing
 
