@@ -173,6 +173,10 @@ Repo-specific sub-agents live in `.claude/agents/` and can be invoked via the Ag
 
 Keep these definitions in sync when conventions change (routes, env vars, RBAC rules).
 
+Repo skills live in `.claude/skills/` (invoked automatically by description or as `/<name>`):
+
+- **`add-endpoint`** — step-by-step checklist for adding/changing/removing a route in an existing feature: DTO → controller + `#[utoipa::path]` + `[authorship]` → usecase validation/RBAC → cache invalidation → `config.rs` → `AUTH_REQUIRED_ROUTES` + count test → rate limit → `ApiDoc` → stub-repo tests → README/AGENTS.md → fmt/clippy/test, ending with a ✓/✗ report. Update it together with this file when a convention changes.
+
 ## CI (.github/workflows)
 
 - `rust.yml` — fmt check, build, tests, **plus a separate `scripts-workspace` job** (the scripts crates are not covered by the root build); coverage via tarpaulin → Codecov. All jobs use `Swatinem/rust-cache`.
