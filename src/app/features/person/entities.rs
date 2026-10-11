@@ -112,6 +112,48 @@ impl Person {
     pub fn status_enum(&self) -> PersonStatus {
         PersonStatus::try_from(self.status.as_str()).unwrap_or(PersonStatus::Pending)
     }
+
+    /// Guards the public claim endpoints. The recommender receives the claim
+    /// token at creation time, so the token alone does not prove the caller
+    /// is the recommended person:
+    /// - confirming is only possible after moderation approved the entry
+    ///   (`awaiting`), never straight from `pending`;
+    /// - the recommender can never claim the profile as their own account.
+    ///
+    /// Declining stays possible from `pending` too — a person can always
+    /// refuse to be listed.
+    pub fn ensure_claimable(&self, outcome: &ClaimOutcome) -> Result<(), AppError> {
+        let status = self.status_enum();
+
+        match outcome {
+            ClaimOutcome::Decline => {
+                if !matches!(status, PersonStatus::Pending | PersonStatus::Awaiting) {
+                    return Err(AppError::UnprocessableEntity(json!({
+                        "error": format!("Person is already {}", self.status)
+                    })));
+                }
+            }
+            ClaimOutcome::Confirm { claimed_by, .. } => {
+                if status == PersonStatus::Pending {
+                    return Err(AppError::UnprocessableEntity(json!({
+                        "error": "This recommendation is still being reviewed by a moderator"
+                    })));
+                }
+                if status != PersonStatus::Awaiting {
+                    return Err(AppError::UnprocessableEntity(json!({
+                        "error": format!("Person is already {}", self.status)
+                    })));
+                }
+                if claimed_by.is_some() && *claimed_by == self.recommended_by {
+                    return Err(AppError::Forbidden(json!({
+                        "error": "The recommender cannot claim this profile"
+                    })));
+                }
+            }
+        }
+
+        Ok(())
+    }
 }
 
 #[derive(Insertable, Clone)]
@@ -329,12 +371,7 @@ impl Person {
         conn.transaction::<Person, AppError, _>(|conn| {
             let (person, claim) = Self::find_by_claim_token(conn, token)?;
 
-            let status = person.status_enum();
-            if !matches!(status, PersonStatus::Pending | PersonStatus::Awaiting) {
-                return Err(AppError::UnprocessableEntity(json!({
-                    "error": format!("Person is already {}", person.status)
-                })));
-            }
+            person.ensure_claimable(&outcome)?;
 
             diesel::update(person_claim_tokens::table.find(claim.id))
                 .set(person_claim_tokens::used_at.eq(chrono::Utc::now().naive_utc()))
@@ -509,6 +546,73 @@ mod tests {
             reviews_count: 0,
             created_at: chrono::Utc::now().naive_utc(),
             updated_at: chrono::Utc::now().naive_utc(),
+        }
+    }
+
+    fn confirm(claimed_by: Option<Uuid>) -> ClaimOutcome {
+        ClaimOutcome::Confirm {
+            claimed_by,
+            show_whatsapp: Some(true),
+            show_email: Some(true),
+            show_city: None,
+            allow_reviews: None,
+        }
+    }
+
+    /// Regression: the recommender got the claim token in the create
+    /// response and could confirm a still-pending person, skipping moderation.
+    #[test]
+    fn test_confirm_requires_moderation_approval() {
+        match test_person("pending").ensure_claimable(&confirm(None)) {
+            Err(AppError::UnprocessableEntity(_)) => (),
+            other => panic!("expected UnprocessableEntity, got {:?}", other),
+        }
+
+        assert!(
+            test_person("awaiting")
+                .ensure_claimable(&confirm(None))
+                .is_ok()
+        );
+    }
+
+    #[test]
+    fn test_recommender_cannot_claim_the_profile() {
+        let recommender = Uuid::new_v4();
+        let mut person = test_person("awaiting");
+        person.recommended_by = Some(recommender);
+
+        match person.ensure_claimable(&confirm(Some(recommender))) {
+            Err(AppError::Forbidden(_)) => (),
+            other => panic!("expected Forbidden, got {:?}", other),
+        }
+
+        assert!(
+            person
+                .ensure_claimable(&confirm(Some(Uuid::new_v4())))
+                .is_ok()
+        );
+    }
+
+    #[test]
+    fn test_decline_allowed_before_confirmation_only() {
+        for status in ["pending", "awaiting"] {
+            assert!(
+                test_person(status)
+                    .ensure_claimable(&ClaimOutcome::Decline)
+                    .is_ok()
+            );
+        }
+        for status in ["confirmed", "claimed", "declined"] {
+            assert!(
+                test_person(status)
+                    .ensure_claimable(&ClaimOutcome::Decline)
+                    .is_err()
+            );
+            assert!(
+                test_person(status)
+                    .ensure_claimable(&confirm(None))
+                    .is_err()
+            );
         }
     }
 

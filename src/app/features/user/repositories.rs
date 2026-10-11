@@ -1,5 +1,6 @@
 use super::entities::{SignUpV2Input, UpdateUserProfile, User, UserToLanguage};
 use crate::{error::AppError, utils::db::DbPool};
+use serde_json::json;
 use uuid::Uuid;
 
 /// Computed profile stats for the account screen (design: account.jsx).
@@ -133,19 +134,22 @@ impl UserRepository for UserRepositoryImpl {
             return Ok((user, token));
         }
 
-        let maybe_user = User::find_by_email(conn, &email)?;
+        // Never link a provider identity to an existing account by email:
+        // signup does not verify emails, so whoever registered the address
+        // first (possibly an attacker pre-registering the victim's email)
+        // would share the account. Linking needs an explicit, authenticated
+        // flow instead.
+        if User::find_by_email(conn, &email)?.is_some() {
+            return Err(AppError::Forbidden(json!({
+                "error": "An account with this email already exists. Sign in with your password."
+            })));
+        }
 
-        let (user, token) = if let Some(user) = maybe_user {
-            let token = user.generate_token()?;
-            (user, token)
-        } else {
-            // Создаем нового пользователя через signup
-            let base_username = email.split('@').next().unwrap_or("user").to_string();
-            let uniq_username = format!("{}-{}", base_username, &Uuid::new_v4().to_string()[..8]);
-            let password_stub = Uuid::new_v4().to_string();
+        let base_username = email.split('@').next().unwrap_or("user").to_string();
+        let uniq_username = format!("{}-{}", base_username, &Uuid::new_v4().to_string()[..8]);
+        let password_stub = Uuid::new_v4().to_string();
 
-            User::signup(conn, uniq_username, email.clone(), password_stub)?
-        };
+        let (user, token) = User::signup(conn, uniq_username, email.clone(), password_stub)?;
 
         User::create_user_provider(conn, user.id, &provider, &provider_user_id, &email)?;
 

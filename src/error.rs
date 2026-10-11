@@ -69,15 +69,31 @@ impl From<DieselError> for AppError {
             // Constraint violations are caused by invalid client input
             // (bad FK reference, CHECK-constrained enum value, missing
             // required field), so they must surface as 422 — not 500.
+            //
+            // Postgres' message/details echo column names and the offending
+            // values (`Key (email)=(a@b.c) already exists.`), which would let
+            // anyone probe stored data, so only a generic message plus the
+            // constraint name (no user data) is returned.
             DieselError::DatabaseError(
-                DatabaseErrorKind::UniqueViolation
+                kind @ (DatabaseErrorKind::UniqueViolation
                 | DatabaseErrorKind::ForeignKeyViolation
                 | DatabaseErrorKind::CheckViolation
-                | DatabaseErrorKind::NotNullViolation,
+                | DatabaseErrorKind::NotNullViolation),
                 info,
             ) => {
-                let message = info.details().unwrap_or_else(|| info.message()).to_string();
-                AppError::UnprocessableEntity(json!({ "error": message }))
+                let message = match kind {
+                    DatabaseErrorKind::UniqueViolation => {
+                        "A record with these values already exists"
+                    }
+                    DatabaseErrorKind::ForeignKeyViolation => "A referenced record does not exist",
+                    DatabaseErrorKind::CheckViolation => "A field has an unsupported value",
+                    _ => "A required field is missing",
+                };
+                let mut body = json!({ "error": message });
+                if let Some(constraint) = info.constraint_name() {
+                    body["constraint"] = json!(constraint);
+                }
+                AppError::UnprocessableEntity(body)
             }
             DieselError::DatabaseError(..) => AppError::InternalServerError,
             DieselError::NotFound => {
@@ -262,36 +278,25 @@ mod tests {
         }
     }
 
+    /// Regression: Postgres details (`Key (email)=(...) already exists.`)
+    /// were returned verbatim, leaking column names and stored values.
     #[test]
-    fn test_constraint_violation_prefers_details_over_message() {
+    fn test_constraint_violation_hides_database_details() {
         let app_error: AppError = db_error(
             DatabaseErrorKind::UniqueViolation,
-            "duplicate key value violates unique constraint",
+            "duplicate key value violates unique constraint \"users_email_key\"",
             Some("Key (email)=(a@b.c) already exists."),
         )
         .into();
 
         match app_error {
             AppError::UnprocessableEntity(json) => {
+                let body = json.to_string();
+                assert!(!body.contains("a@b.c"), "leaked value: {}", body);
+                assert!(!body.contains("Key (email)"), "leaked details: {}", body);
                 assert_eq!(
                     json.get("error").and_then(|v| v.as_str()),
-                    Some("Key (email)=(a@b.c) already exists.")
-                );
-            }
-            other => panic!("expected UnprocessableEntity, got {:?}", other),
-        }
-    }
-
-    #[test]
-    fn test_constraint_violation_falls_back_to_message() {
-        let app_error: AppError =
-            db_error(DatabaseErrorKind::CheckViolation, "check failed", None).into();
-
-        match app_error {
-            AppError::UnprocessableEntity(json) => {
-                assert_eq!(
-                    json.get("error").and_then(|v| v.as_str()),
-                    Some("check failed")
+                    Some("A record with these values already exists")
                 );
             }
             other => panic!("expected UnprocessableEntity, got {:?}", other),

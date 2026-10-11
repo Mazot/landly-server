@@ -46,18 +46,20 @@ impl OrganisationUsecase {
     }
 
     /// Update/delete are allowed for the creator or a moderator/admin.
+    /// Returns which of the two granted access; the role wins, so a
+    /// moderator editing their own organisation counts as a moderator.
     fn ensure_can_manage(
         &self,
         organisation: &Organisation,
         caller_user_id: Uuid,
-    ) -> Result<(), AppError> {
-        if organisation.created_by == Some(caller_user_id) {
-            return Ok(());
-        }
-
+    ) -> Result<ManagedBy, AppError> {
         let role = self.organisation_repo.fetch_user_role(caller_user_id)?;
         if role.is_moderator() {
-            return Ok(());
+            return Ok(ManagedBy::Moderator);
+        }
+
+        if organisation.created_by == Some(caller_user_id) {
+            return Ok(ManagedBy::Creator);
         }
 
         Err(AppError::Forbidden(
@@ -148,7 +150,13 @@ impl OrganisationUsecase {
         }
 
         let existing = self.organisation_repo.fetch_organisation(id)?;
-        self.ensure_can_manage(&existing, caller_user_id)?;
+        let managed_by = self.ensure_can_manage(&existing, caller_user_id)?;
+
+        // A creator's edit of an already approved organisation must not go
+        // live unreviewed — otherwise approval of a harmless entry could be
+        // turned into publishing anything. It returns to the queue instead.
+        let back_to_moderation = managed_by == ManagedBy::Creator
+            && existing.status == OrganisationStatus::Live.as_str();
 
         let updated_organisation = self.organisation_repo.update_organisation(
             id,
@@ -172,8 +180,19 @@ impl OrganisationUsecase {
                 opening_hours: params.opening_hours,
                 timezone: params.timezone,
                 cost: params.cost,
+                status: back_to_moderation
+                    .then(|| OrganisationStatus::Pending.as_str().to_string()),
             },
         )?;
+
+        if back_to_moderation {
+            let _ = self.moderation_repo.record_submitted(SubmittedEventInput {
+                target_kind: TargetKind::Org,
+                target_id: updated_organisation.id,
+                flags: json!({ "editedAfterApproval": true }),
+            });
+        }
+
         let response = self
             .organisation_presenter
             .to_single_json(updated_organisation);
@@ -317,6 +336,13 @@ impl OrganisationUsecase {
     }
 }
 
+/// Who passed `ensure_can_manage`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ManagedBy {
+    Creator,
+    Moderator,
+}
+
 pub struct UpdateOrganisationUsecaseInput {
     pub name: Option<String>,
     pub tel: Option<String>,
@@ -406,6 +432,7 @@ mod tests {
     struct StubRepo {
         organisation: Organisation,
         caller_role: UserRole,
+        updated_status: std::sync::Mutex<Vec<Option<String>>>,
     }
 
     impl OrganisationRepository for StubRepo {
@@ -445,9 +472,19 @@ mod tests {
         fn update_organisation(
             &self,
             _id: Uuid,
-            _params: UpdateOrganisationRepositoryInput,
+            params: UpdateOrganisationRepositoryInput,
         ) -> Result<Organisation, AppError> {
-            unimplemented!()
+            self.updated_status
+                .lock()
+                .unwrap()
+                .push(params.status.clone());
+
+            let mut organisation = self.organisation.clone();
+            if let Some(status) = params.status {
+                organisation.status = status;
+            }
+
+            Ok(organisation)
         }
 
         fn increment_visits(&self, _id: Uuid) -> Result<i64, AppError> {
@@ -532,7 +569,7 @@ mod tests {
             &self,
             _input: crate::app::features::moderation::repositories::SubmittedEventInput,
         ) -> Result<(), AppError> {
-            unreachable!()
+            Ok(())
         }
         fn fetch_queue(
             &self,
@@ -556,14 +593,103 @@ mod tests {
     }
 
     fn usecase_with(organisation: Organisation, caller_role: UserRole) -> OrganisationUsecase {
+        usecase_with_repo(stub_repo(organisation, caller_role))
+    }
+
+    fn usecase_with_repo(repo: Arc<StubRepo>) -> OrganisationUsecase {
         OrganisationUsecase::new(
-            Arc::new(StubRepo {
-                organisation,
-                caller_role,
-            }),
+            repo,
             Arc::new(OrganisationPresenterImpl::new()),
             Arc::new(UnreachableModerationRepo),
         )
+    }
+
+    fn empty_update() -> UpdateOrganisationUsecaseInput {
+        UpdateOrganisationUsecaseInput {
+            name: Some("Renamed".to_string()),
+            tel: None,
+            email: None,
+            address: None,
+            description: None,
+            location_country_id: None,
+            organisation_type_id: None,
+            latitude: None,
+            longitude: None,
+            founder_country_id: None,
+            city: None,
+            website: None,
+            telegram: None,
+            whatsapp: None,
+            services: None,
+            languages: None,
+            opening_hours: None,
+            timezone: None,
+            cost: None,
+        }
+    }
+
+    fn stub_repo(organisation: Organisation, caller_role: UserRole) -> Arc<StubRepo> {
+        Arc::new(StubRepo {
+            organisation,
+            caller_role,
+            updated_status: std::sync::Mutex::new(vec![]),
+        })
+    }
+
+    /// Regression: after approval the creator could rewrite a live
+    /// organisation and the change was published without moderation.
+    #[test]
+    fn test_creator_edit_of_live_org_returns_to_moderation() {
+        let owner = Uuid::new_v4();
+        let repo = stub_repo(test_organisation(Some(owner)), UserRole::User);
+
+        usecase_with_repo(repo.clone())
+            .update_organisation(Uuid::new_v4(), owner, empty_update())
+            .unwrap();
+
+        assert_eq!(
+            *repo.updated_status.lock().unwrap(),
+            vec![Some(OrganisationStatus::Pending.as_str().to_string())]
+        );
+    }
+
+    /// Review regression: a moderator who created the organisation was
+    /// classified as a plain creator and their edit sent it back to pending.
+    #[test]
+    fn test_moderator_editing_own_org_keeps_it_live() {
+        let moderator = Uuid::new_v4();
+        let repo = stub_repo(test_organisation(Some(moderator)), UserRole::Moderator);
+
+        usecase_with_repo(repo.clone())
+            .update_organisation(Uuid::new_v4(), moderator, empty_update())
+            .unwrap();
+
+        assert_eq!(*repo.updated_status.lock().unwrap(), vec![None]);
+    }
+
+    #[test]
+    fn test_moderator_edit_keeps_org_live() {
+        let repo = stub_repo(test_organisation(Some(Uuid::new_v4())), UserRole::Moderator);
+
+        usecase_with_repo(repo.clone())
+            .update_organisation(Uuid::new_v4(), Uuid::new_v4(), empty_update())
+            .unwrap();
+
+        assert_eq!(*repo.updated_status.lock().unwrap(), vec![None]);
+    }
+
+    #[test]
+    fn test_creator_edit_of_pending_org_keeps_status() {
+        let owner = Uuid::new_v4();
+        let mut org = test_organisation(Some(owner));
+        org.status = OrganisationStatus::Pending.as_str().to_string();
+        let repo = stub_repo(org, UserRole::User);
+
+        usecase_with_repo(repo.clone())
+            .update_organisation(Uuid::new_v4(), owner, empty_update())
+            .unwrap();
+
+        assert_eq!(*repo.updated_status.lock().unwrap(), vec![None]);
     }
 
     #[test]

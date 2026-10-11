@@ -1,0 +1,12 @@
+-- Emails are compared case-insensitively since the signup/signin hardening
+-- (lookups use lower(email), new emails are stored lowercased), but the
+-- original `email UNIQUE` constraint is case-sensitive: an old `A@x.com`
+-- row would still let someone register `a@x.com`, and signin would then
+-- match two accounts. Enforce uniqueness on lower(email); the index also
+-- serves the lower(email) lookups.
+--
+-- If this fails with "could not create unique index", case-only duplicate
+-- accounts already exist. Find them with
+--   SELECT lower(email), array_agg(id) FROM users GROUP BY 1 HAVING count(*) > 1;
+-- and merge or rename them before re-running the migration.
+CREATE UNIQUE INDEX users_email_lower_key ON users (lower(email));

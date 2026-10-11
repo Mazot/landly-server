@@ -7,8 +7,8 @@ services:
       MINIO_ROOT_USER: minioadmin
       MINIO_ROOT_PASSWORD: minioadmin
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
     volumes:
       - minio_data:/data
       - ../minio.license:/minio.license:ro
@@ -31,7 +31,7 @@ services:
       /bin/sh -c "
         mc alias set local http://minio:9000 minioadmin minioadmin &&
         mc mb --ignore-existing local/landly-images &&
-        mc anonymous set public local/landly-images &&
+        mc anonymous set download local/landly-images &&
         echo 'AIStor bucket landly-images ready.'
       "
     networks:

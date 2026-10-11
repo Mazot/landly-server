@@ -21,6 +21,7 @@ use utoipa::OpenApi;
         controllers::add_languages,
         controllers::delete_language,
         controllers::fetch_languages,
+        controllers::oauth_google_exchange,
     ),
     components(schemas(
         requests::SignInRequest,
@@ -29,6 +30,7 @@ use utoipa::OpenApi;
         requests::UpdateNotificationSettingsRequest,
         requests::AddLanguagesRequest,
         requests::DeleteLanguageRequest,
+        requests::OAuthExchangeRequest,
         presenters::AuthUserContent,
         presenters::UserProfileContent,
         presenters::UserProfileStatsContent,

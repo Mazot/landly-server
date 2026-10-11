@@ -19,6 +19,7 @@ use uuid::Uuid;
     ),
     responses(
         (status = 200, description = "Image uploaded successfully", body = super::presenters::ImageContent),
+        (status = 403, description = "Caller is neither the organisation creator nor a moderator", body = AppError),
         (status = 400, description = "Bad request", body = AppError),
         (status = 422, description = "Unprocessable entity (invalid file type / size)", body = AppError),
         (status = 500, description = "Internal server error", body = AppError)
@@ -36,6 +37,13 @@ pub async fn upload_image(
         .get::<Uuid>()
         .ok_or_else(|| AppError::Unauthorized(json!({ "error": "Missing authenticated user" })))?;
     let organisation_id = org_id.into_inner();
+
+    // Reject callers who may not manage this organisation before reading
+    // (and buffering) the upload body.
+    state
+        .di_container
+        .image_usecase
+        .authorize_upload(organisation_id, caller_user_id)?;
 
     let mut file_bytes: Option<Vec<u8>> = None;
     let mut file_name: Option<String> = None;
@@ -137,6 +145,7 @@ pub async fn upload_image(
     ),
     responses(
         (status = 200, description = "Image deleted successfully"),
+        (status = 403, description = "Caller is neither the uploader, the organisation creator nor a moderator", body = AppError),
         (status = 404, description = "Image not found", body = AppError),
         (status = 500, description = "Internal server error", body = AppError)
     ),
@@ -217,6 +226,7 @@ pub async fn fetch_image(state: Data<AppState>, id: Path<Uuid>) -> Result<HttpRe
     ),
     responses(
         (status = 200, description = "Primary image updated", body = super::presenters::ImageContent),
+        (status = 403, description = "Caller is neither the organisation creator nor a moderator", body = AppError),
         (status = 404, description = "Image not found", body = AppError),
         (status = 500, description = "Internal server error", body = AppError)
     ),

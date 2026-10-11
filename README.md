@@ -70,12 +70,10 @@ Edit `.env` with your configuration:
 
 ```env
 # Database
-DATABASE_URL=postgres://landly-user:landly-password@localhost:5432/landly
+DATABASE_URL=postgres://landly-user:change-me-postgres@localhost:5432/landly
 
 # Redis
-REDIS_URL=redis://redis:redis-pass@localhost:6379/
-REDIS_USER=redis
-REDIS_PASSWORD=redis-pass
+REDIS_URL=redis://redis:change-me-redis@localhost:6379/
 
 # JWT
 JWT_SECRET=your-super-secret-jwt-key
@@ -88,8 +86,8 @@ OAUTH_GOOGLE_REDIRECT_URL=http://localhost:8080/api/user/oauth/google/callback
 
 # Object storage (S3 / Cloudflare R2 / MinIO) - optional, uploads are disabled without it
 S3_ENDPOINT_URL=http://localhost:9000
-S3_ACCESS_KEY_ID=minioadmin
-S3_SECRET_ACCESS_KEY=minioadmin
+S3_ACCESS_KEY_ID=change-me-minio-user
+S3_SECRET_ACCESS_KEY=change-me-minio-password
 S3_BUCKET=landly-images
 S3_REGION=auto
 S3_PUBLIC_URL=http://localhost:9000/landly-images
@@ -104,6 +102,14 @@ PORT=8080
 else degrades gracefully: without `REDIS_URL` the cache is a no-op, without the `S3_*` block
 image upload/delete fail at runtime, and without the `GOOGLE_*` block the OAuth endpoints
 answer `503 Service Unavailable`.
+
+`docker compose` additionally requires the service credentials `POSTGRES_PASSWORD`,
+`REDIS_PASSWORD`, `MINIO_ROOT_USER`, `MINIO_ROOT_PASSWORD` and `JWT_SECRET` (see
+`.env.example`) — there are no built-in defaults, and it refuses to start without them.
+Generate them URL-safe (e.g. `openssl rand -hex 32`): the Postgres and Redis passwords are
+embedded into the `DATABASE_URL`/`REDIS_URL` the server container receives.
+Postgres, Redis and MinIO are published on `127.0.0.1` only (override with
+`SERVICES_BIND_ADDRESS`); the image bucket is anonymously readable, never writable.
 
 ### 3. Run with Docker (Recommended)
 

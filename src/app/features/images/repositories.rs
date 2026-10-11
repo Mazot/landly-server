@@ -1,4 +1,5 @@
 use super::entities::{CreateImage, Image};
+use crate::app::features::user::entities::{User, UserRole};
 use crate::{
     error::AppError,
     utils::{
@@ -21,6 +22,11 @@ pub trait ImageRepository: Send + Sync + 'static {
     fn fetch_images_by_organisation(&self, org_id: Uuid) -> Result<Vec<Image>, AppError>;
 
     fn set_primary(&self, image_id: Uuid, org_id: Uuid) -> Result<Image, AppError>;
+
+    /// `created_by` of the organisation (404 when it does not exist).
+    fn fetch_organisation_creator(&self, org_id: Uuid) -> Result<Option<Uuid>, AppError>;
+
+    fn fetch_user_role(&self, user_id: Uuid) -> Result<UserRole, AppError>;
 }
 
 // ---------------------------------------------------------------------------
@@ -134,6 +140,25 @@ impl ImageRepository for ImageRepositoryImpl {
             .set::<Image>(&CacheKeys::image_by_id(&image.id), &image, None);
 
         Ok(image)
+    }
+
+    fn fetch_organisation_creator(&self, org_id: Uuid) -> Result<Option<Uuid>, AppError> {
+        use crate::data::schema::organisations;
+        use diesel::prelude::*;
+
+        let conn = &mut self.pool.get()?;
+        let created_by = organisations::table
+            .find(org_id)
+            .select(organisations::created_by)
+            .first::<Option<Uuid>>(conn)?;
+
+        Ok(created_by)
+    }
+
+    fn fetch_user_role(&self, user_id: Uuid) -> Result<UserRole, AppError> {
+        let conn = &mut self.pool.get()?;
+
+        User::fetch_role(conn, user_id)
     }
 }
 

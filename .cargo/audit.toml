@@ -1,0 +1,14 @@
+# cargo-audit configuration (read by `cargo audit` in .github/workflows/audit.yml).
+# Every ignore needs a reason and an exit condition.
+
+[advisories]
+ignore = [
+    # RUSTSEC-2026-0258 — h2 0.3: unbounded empty DATA frames (HTTP/2 DoS).
+    # h2 0.3 is a hard dependency of actix-http 3.x (latest 3.18.12) and no
+    # patched 0.3 release exists. The vulnerable code is the HTTP/2 *server*
+    # path, which is unreachable here: main.rs serves via `HttpServer::bind()`,
+    # i.e. `HttpService::tcp()` — HTTP/1.x only (no TLS/ALPN, no h2c).
+    # Remove once actix-http depends on h2 >= 0.4.16, or immediately if the
+    # server ever enables HTTP/2 (bind_rustls/bind_openssl/bind_auto_h2c).
+    "RUSTSEC-2026-0258",
+]

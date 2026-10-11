@@ -118,6 +118,112 @@ impl TryFrom<&str> for Locale {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Credential / profile input rules
+// ---------------------------------------------------------------------------
+
+pub const PASSWORD_MIN_CHARS: usize = 8;
+/// bcrypt only hashes the first 72 bytes; longer passwords would be silently
+/// truncated, so they are rejected instead.
+pub const PASSWORD_MAX_BYTES: usize = 72;
+const EMAIL_MAX_CHARS: usize = 254;
+const USERNAME_MIN_CHARS: usize = 3;
+const USERNAME_MAX_CHARS: usize = 50;
+pub const NAME_MAX_CHARS: usize = 100;
+pub const CITY_MAX_CHARS: usize = 100;
+pub const BIO_MAX_CHARS: usize = 1000;
+pub const AVATAR_COLOR_MAX_CHARS: usize = 32;
+
+fn unprocessable(message: impl Into<String>) -> AppError {
+    AppError::UnprocessableEntity(json!({ "error": message.into() }))
+}
+
+/// Emails are stored and compared trimmed + lowercased, so `A@x.com` and
+/// `a@x.com` can never become two accounts. Only a structural sanity check —
+/// ownership would need an email confirmation flow (no mailer yet).
+pub fn normalize_email(raw: &str) -> Result<String, AppError> {
+    let email = raw.trim().to_lowercase();
+    let well_formed = email.chars().count() <= EMAIL_MAX_CHARS
+        && !email.chars().any(|c| c.is_whitespace() || c.is_control())
+        && match email.split_once('@') {
+            Some((local, domain)) => {
+                !local.is_empty()
+                    && !domain.contains('@')
+                    && domain.contains('.')
+                    && !domain.starts_with('.')
+                    && !domain.ends_with('.')
+            }
+            None => false,
+        };
+
+    if !well_formed {
+        return Err(unprocessable("Invalid email address"));
+    }
+
+    Ok(email)
+}
+
+/// Lowercases an email for lookups without rejecting it (signin must answer
+/// with the generic credentials error, not a validation error).
+pub fn email_lookup_key(raw: &str) -> String {
+    raw.trim().to_lowercase()
+}
+
+pub fn validate_password(password: &str) -> Result<(), AppError> {
+    if password.chars().count() < PASSWORD_MIN_CHARS {
+        return Err(unprocessable(format!(
+            "Password must be at least {} characters",
+            PASSWORD_MIN_CHARS
+        )));
+    }
+    if password.len() > PASSWORD_MAX_BYTES {
+        return Err(unprocessable(format!(
+            "Password must be at most {} bytes",
+            PASSWORD_MAX_BYTES
+        )));
+    }
+
+    Ok(())
+}
+
+pub fn normalize_username(raw: &str) -> Result<String, AppError> {
+    let username = raw.trim().to_string();
+    let len = username.chars().count();
+
+    if !(USERNAME_MIN_CHARS..=USERNAME_MAX_CHARS).contains(&len) {
+        return Err(unprocessable(format!(
+            "Username must be {}-{} characters",
+            USERNAME_MIN_CHARS, USERNAME_MAX_CHARS
+        )));
+    }
+    if username
+        .chars()
+        .any(|c| c.is_whitespace() || c.is_control())
+    {
+        return Err(unprocessable(
+            "Username must not contain whitespace or control characters",
+        ));
+    }
+
+    Ok(username)
+}
+
+/// Upper bound for free-text profile fields.
+pub fn validate_max_chars(field: &str, value: Option<&str>, max: usize) -> Result<(), AppError> {
+    match value {
+        Some(v) if v.chars().count() > max => Err(unprocessable(format!(
+            "{} must be at most {} characters",
+            field, max
+        ))),
+        _ => Ok(()),
+    }
+}
+
+diesel::define_sql_function! {
+    /// SQL `lower()` — lookups match emails stored before normalization too.
+    fn lower(x: diesel::sql_types::Text) -> diesel::sql_types::Text;
+}
+
 #[derive(Debug, Serialize, Deserialize, Queryable, Insertable, Selectable, Clone)]
 #[diesel(table_name = users)]
 pub struct User {
@@ -267,10 +373,19 @@ impl User {
         password: String,
     ) -> Result<(Self, String), AppError> {
         let user_by_email = users::table
-            .filter(users::email.eq(email))
-            .first::<User>(conn)?;
+            .filter(lower(users::email).eq(email_lookup_key(&email)))
+            .first::<User>(conn)
+            .optional()?;
 
-        hash::verify(password, &user_by_email.password_hash)?;
+        // An unknown email must look exactly like a wrong password: same 401
+        // and (via a dummy bcrypt check) roughly the same response time, so
+        // signin cannot be used to discover registered emails.
+        let Some(user_by_email) = user_by_email else {
+            let _ = hash::verify(&password, hash::dummy_hash());
+            return Err(hash::invalid_credentials());
+        };
+
+        hash::ensure_password_matches(&password, &user_by_email.password_hash)?;
         let token = user_by_email.generate_token()?;
 
         Ok((user_by_email, token))
@@ -367,7 +482,7 @@ impl User {
 
     pub fn find_by_email(conn: &mut PgConnection, email: &str) -> Result<Option<User>, AppError> {
         let user = users::table
-            .filter(users::email.eq(email))
+            .filter(lower(users::email).eq(email_lookup_key(email)))
             .first::<User>(conn)
             .optional()?;
 
@@ -493,6 +608,55 @@ pub struct UserProvider {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_normalize_email_lowercases_and_trims() {
+        assert_eq!(
+            normalize_email("  Ann@Example.COM ").unwrap(),
+            "ann@example.com"
+        );
+    }
+
+    #[test]
+    fn test_normalize_email_rejects_malformed() {
+        for bad in [
+            "",
+            "ann",
+            "@example.com",
+            "ann@",
+            "ann@example",
+            "a b@example.com",
+            "a@b@c.com",
+            "ann@.com",
+        ] {
+            assert!(normalize_email(bad).is_err(), "{:?} must be rejected", bad);
+        }
+    }
+
+    #[test]
+    fn test_validate_password_enforces_length() {
+        assert!(validate_password(&"a".repeat(0)).is_err());
+        assert!(validate_password(&"a".repeat(7)).is_err());
+        assert!(validate_password(&"a".repeat(8)).is_ok());
+        assert!(validate_password(&"a".repeat(72)).is_ok());
+        // bcrypt would silently ignore everything past 72 bytes.
+        assert!(validate_password(&"a".repeat(73)).is_err());
+    }
+
+    #[test]
+    fn test_normalize_username() {
+        assert_eq!(normalize_username("  ann_k ").unwrap(), "ann_k");
+        assert!(normalize_username("ab").is_err());
+        assert!(normalize_username(&"a".repeat(51)).is_err());
+        assert!(normalize_username("ann k").is_err());
+    }
+
+    #[test]
+    fn test_validate_max_chars() {
+        assert!(validate_max_chars("bio", None, 3).is_ok());
+        assert!(validate_max_chars("bio", Some("abc"), 3).is_ok());
+        assert!(validate_max_chars("bio", Some("abcd"), 3).is_err());
+    }
 
     #[test]
     fn test_user_role_try_from() {
