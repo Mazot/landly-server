@@ -39,6 +39,7 @@ On macOS with Homebrew `libpq` (keg-only), linking needs `PQ_LIB_DIR=/opt/homebr
 
 - **PreToolUse** `.claude/hooks/guard-edits.sh` denies Write/Edit on `src/data/schema.rs` and on any migration directory except the newest (new migration directories are allowed). Shell commands are not blocked — `diesel migration run` must still regenerate `schema.rs`.
 - **PostToolUse** `.claude/hooks/rustfmt-edited.sh` runs `rustfmt` (edition 2024; 2021 under `scripts/crates`) on every edited `.rs` file; it never blocks, so a file that does not parse yet is left as is.
+- **SessionStart** `.claude/hooks/stack-status.sh` (read-only, <1 s) reports the local stack to the agent: state of `landly_postgres` / `landly_redis_cache` / `landly_minio` (and a docker `landly_server` holding 8080), pending migrations via `diesel migration list`, whether port 8080 is taken, and whether the `landly-postgres` / `landly-redis` MCP servers can work (they connect at session start). The user sees a one-line summary. It never starts containers or runs migrations — ask the user first.
 - Pre-approved commands: `cargo build/test/fmt/clippy`, `diesel migration *`, `docker compose ps/logs`.
 
 ## Architecture
