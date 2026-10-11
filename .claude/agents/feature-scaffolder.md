@@ -35,8 +35,14 @@ Rules that must hold:
   `entities.rs` — `repositories.rs` holds only the trait, its impl and the
   `*RepositoryInput` structs.
 - RBAC checks live in usecases (`UserRole` via a repo `fetch_user_role`).
-- Cache keys go through `CacheKeys` in `src/utils/cache.rs`; invalidate the
-  feature pattern on every write.
+- Cache keys go through `CacheKeys` in `src/utils/cache.rs` with a new,
+  disjoint namespace (extend `test_feature_patterns_are_distinct`); invalidate
+  the feature pattern on every write.
+- Credential-like or abuse-prone public endpoints get the shared
+  `auth_rate_limit()` config passed in from `main` (see `user/config.rs`) —
+  never build a limiter inside the feature.
+- Database constraint violations already map to 422 in `src/error.rs`; do not
+  pre-check uniqueness with a racy SELECT, let the constraint decide.
 - If the feature is moderated, the create usecase records a `submitted` event
   through `ModerationRepository::record_submitted` (best-effort — a failure
   there must never fail the create).

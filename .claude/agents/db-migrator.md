@@ -30,6 +30,9 @@ Workflow for every migration:
    after changing `Country`/`CreateCountry` or other structs it uses, run
    `cd scripts/crates && cargo build` — root `cargo test` does NOT cover it.
 7. Remove the stray `migrations/.diesel_lock` file if the CLI leaves one.
+8. If `up.sql` can fail on existing data (e.g. a new unique index), say so in
+   a comment at the top of `up.sql` together with the query that finds the
+   offending rows — see `2026-10-11-120000-0000_users_email_lower_unique`.
 
 Finish with `cargo build` + `cargo test` at the root and report the diesel
 run/redo output honestly, including failures.

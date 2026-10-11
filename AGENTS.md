@@ -8,7 +8,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 # Build
 cargo build
 
-# Run dev server (requires .env with DATABASE_URL, REDIS_URL, JWT_SECRET)
+# Run dev server (requires .env with DATABASE_URL, JWT_SECRET, JWT_EXPIRATION;
+# REDIS_URL/S3_*/GOOGLE_* are optional). Always listens on 0.0.0.0:8080.
 cargo run
 
 # Run all tests
@@ -31,6 +32,8 @@ diesel migration generate <name>
 diesel migration run
 diesel migration revert
 ```
+
+On macOS with Homebrew `libpq`, cargo needs `RUSTFLAGS="-L /opt/homebrew/opt/libpq/lib"` and the diesel CLI `PQ_LIB_DIR`/`DYLD_LIBRARY_PATH=/opt/homebrew/opt/libpq/lib`. The locked dependencies need Rust ≥ 1.94 (`aws-sdk-s3`); the crate uses edition 2024.
 
 ## Architecture
 
@@ -82,6 +85,9 @@ Roles live in `users.role` (`user` < `moderator` < `admin`), Rust side is `UserR
 | Update/delete organisation | — | only own (`created_by`) | any | any |
 | Upload / set-primary organisation image | — | only own org (`created_by`) | any | any |
 | Delete organisation image | — | own upload or own org | any | any |
+| Create person / review / saved item / report, vouch, check-in | — | ✓ | ✓ | ✓ |
+| Delete review | — | only own | any | any |
+| Moderation queue / approve / request-changes / reject | — | — | ✓ | ✓ |
 | System reference tables (`POST /common/org_types`, country-connection create/update/delete) | — | — | — | ✓ |
 
 When adding a mutating endpoint: put it in `AUTH_REQUIRED_ROUTES`, then decide in the usecase whether it needs ownership (`ensure_can_manage` pattern) or a role gate (`ensure_admin` pattern in `country_connection/usecases.rs`).
@@ -92,10 +98,11 @@ When adding a mutating endpoint: put it in `AUTH_REQUIRED_ROUTES`, then decide i
 - Organisation `update`/`delete` are allowed only for `created_by` or a user whose `users.role` is `moderator`/`admin` (checked in `OrganisationUsecase::ensure_can_manage`). When the **creator** (not a moderator) edits a `live` organisation, it goes back to `pending` and a `submitted` event with `editedAfterApproval` is recorded — approved content must never change unreviewed.
 - `openNow` is always computed at response time from `opening_hours` (JSONB `{"mon": [["09:00","13:00"]], ...}`) + `timezone` (IANA name) via `compute_open_now` in `organisation/presenters.rs`; it is never stored.
 - Geo search (`GET /api/organisation/search`) is PostGIS-free: bbox filtering on the `(latitude, longitude)` index in SQL, Haversine distance + `nearest` sorting in Rust (`haversine_km` in `organisation/repositories.rs`, scan capped at 500 rows).
-- Google OAuth: `/oauth/google/login` sets an HttpOnly state cookie that the callback must match (login-CSRF guard); the callback requires `email_verified`, never links to an existing account by email, and redirects to `{FRONTEND_ORIGIN}/auth/google/callback?code=…` with a single-use 60 s code — the frontend trades it for the session via `POST /api/user/oauth/google/exchange`. Never put the JWT in a URL.
+- Google OAuth: `/oauth/google/login` sets an HttpOnly state cookie that the callback must match (login-CSRF guard); the callback requires `email_verified`, never links to an existing account by email, and redirects to `{FRONTEND_ORIGIN}/auth/google/callback?code=…` (fallback `http://localhost:5173` when `FRONTEND_ORIGIN` is unset) with a single-use 60 s code — the frontend trades it for the session via `POST /api/user/oauth/google/exchange`. Never put the JWT in a URL. The PKCE verifier (5 min) and the login code live in the cache and are consumed atomically with `TypedCache::take` (GETDEL), so OAuth effectively **requires Redis**: with the NoOp cache every callback fails with 401.
+- Images: `POST /api/images/upload/{organisation_id}` authorizes the caller (`ImageUsecase::authorize_upload`) **before** reading the multipart body, and the body is capped at 10 MB while streaming; allowed types are jpeg/png/webp/gif.
 - Credentials: emails are trimmed+lowercased (`normalize_email`) and looked up with SQL `lower(email)`, backed by the unique index `users_email_lower_key` (case-only duplicates are rejected); passwords are 8 chars to 72 bytes (bcrypt limit, `validate_password`); username 3–50 chars without whitespace; profile free text is length-capped (`validate_max_chars`). There is no email confirmation yet (no mailer).
 - Signup v2 creates the user and an optional default corridor in one transaction (`User::signup_v2`). A user has at most one default corridor (partial unique index).
-- Controllers must take the authenticated user id from `req.extensions()` (helper `caller_user_id`), never from the request body.
+- Controllers must take the authenticated user id from `req.extensions()` (each controller module has its own private `caller_user_id` helper), never from the request body.
 - Person status flow: `pending` (moderation) → `awaiting` (approved) → `confirmed`/`claimed` or `declined`. Hidden contacts are gated in ONE place — `PersonContent::from_gated` — and never serialized before confirmed/claimed + the matching privacy toggle. The `/api/person/claim/{token}` endpoints are deliberately public (the token is the credential) and must never be added to `AUTH_REQUIRED_ROUTES` (guard test exists). Because the recommender receives the claim token at creation, `Person::ensure_claimable` only lets a claim be **confirmed** from `awaiting` (never straight from `pending`) and never by the recommender's own account; declining stays possible from `pending`.
 - Reviews: exactly one target (DB CHECK `num_nonnulls=1`), unique per author-target (partial unique indexes); create/delete refresh the target's `rating_avg`/`reviews_count` from AVG/COUNT in the same transaction — never patch counters incrementally.
 - Moderation: role check in `ModerationUsecase::ensure_moderator`; approve flips org→live / person→awaiting; request-changes requires a note and keeps the item pending. Submit-time auto-checks (duplicate nearby, phone format, creator trust) are written as a `submitted` event into `moderation_events.flags` by the org/person create usecases.
@@ -128,7 +135,7 @@ Route patterns are matched by `path_matches`: a `{param}` segment matches exactl
 - If `REDIS_URL` is set → `RedisCacheService`
 - Otherwise → `NoOpCacheService` (silently ignores all cache operations)
 
-Cache keys follow the `CacheKeys` namespace helper in the same file (`org:*`, `cc:*`, `img:*`, `cor:*`, `per:*`, `common:*`); the namespaces must stay disjoint (guarded by `test_feature_patterns_are_distinct`). Repositories invalidate their pattern on every create/update/delete; the `GET /common/*` responses cached by the request-reply middleware (`common:*` prefixes) are invalidated from `CommonRepositoryImpl` on writes. Visit-counter increments drop only the per-id `org:id:*` key to avoid nuking list caches.
+Cache keys follow the `CacheKeys` namespace helper in the same file (`org:*`, `cc:*`, `img:*`, `cor:*`, `per:*`, `common:*`); the namespaces must stay disjoint (guarded by `test_feature_patterns_are_distinct`). Repositories invalidate their pattern on every create/update/delete; the `GET /common/*` responses cached by the request-reply middleware (`common:*` prefixes) are invalidated from `CommonRepositoryImpl` on writes. Visit-counter increments drop only the per-id `org:id:*` key to avoid nuking list caches. The `CacheInvalidationMiddleware` (`middlewares/cache.rs`, wrapped around the `organisation`, `country-connection` and `images` scopes) only acts on `DELETE` — repository-side invalidation is what keeps the cache correct. Keys outside `CacheKeys` exist only for OAuth (`oauth:google:pkce:*`, `oauth:google:login-code:*`).
 
 ### Storage abstraction
 
@@ -164,7 +171,7 @@ Keep these definitions in sync when conventions change (routes, env vars, RBAC r
 
 - `rust.yml` — fmt check, build, tests, **plus a separate `scripts-workspace` job** (the scripts crates are not covered by the root build); coverage via tarpaulin → Codecov. All jobs use `Swatinem/rust-cache`.
 - `clippy.yml` — `cargo clippy --all-targets --all-features -- -D warnings`.
-- `audit.yml` — `cargo audit` for both lockfiles (root + scripts/crates), on dependency changes and weekly.
+- `audit.yml` — `cargo audit` for both lockfiles (root + scripts/crates), on dependency changes and weekly. Ignored advisories live in `.cargo/audit.toml`, each with a reason and an exit condition (currently `RUSTSEC-2026-0258`, h2 0.3 via actix-http — unreachable because the server is HTTP/1.x only; drop the ignore if HTTP/2 is ever enabled).
 - `dependencies.yml` — weekly `cargo update` PR for both workspaces.
 - `release.yml` — builds and attaches the linux binary on `v*` tags.
 
@@ -174,19 +181,21 @@ Keep these definitions in sync when conventions change (routes, env vars, RBAC r
 
 ## Docker
 
-- The server container healthcheck must target `/api/healthcheck` (there is no `/health` route); `curl` is installed in the runtime image for this.
+- The server container healthcheck must target `/api/healthcheck` (there is no `/health` route); `curl` is installed in the runtime image for this. It is a liveness probe only — it does not touch Postgres or Redis.
+- The server listens on the hardcoded `constants::BIND` (`0.0.0.0:8080`); `HOST`/`PORT` are exported by `start.sh` and compose but not read by the binary, so leave `PORT` at 8080 (compose maps `${BIND_ADDRESS:-127.0.0.1}:${EXTERNAL_PORT:-8080}` → `${PORT}`).
 - `JWT_EXPIRATION` is required by `utils/token.rs` and is passed through docker-compose (default 3600). The old docs mentioned a nonexistent `JWT_EXP_SECS`.
 - Service credentials (`POSTGRES_PASSWORD`, `REDIS_PASSWORD`, `MINIO_ROOT_USER`/`MINIO_ROOT_PASSWORD`, `JWT_SECRET`) are required via `${VAR:?}` — never reintroduce hardcoded defaults. db/redis/minio ports bind to `SERVICES_BIND_ADDRESS` (default `127.0.0.1`), and the bucket is `mc anonymous set download` (read-only; `public` would allow anonymous uploads).
 - The redis healthcheck uses an authenticated `PING` as `REDIS_USER` — plain `redis-cli incr ping` always exits 0 even on NOAUTH and mutates a key. Redis auth comes from the ACL file only (`--requirepass` is ignored with `--aclfile`), which must keep `user default off`.
 - Shell snippets in compose (`redis` command, `minio-init` entrypoint) read credentials from the container environment as quoted `"$$VAR"` — never interpolate `${VAR}` secrets into shell text. Postgres/Redis passwords must be URL-safe (they are embedded in `DATABASE_URL`/`REDIS_URL`).
+- `docker/docker-compose-{postgre,redis,minio}.yml` are standalone single-service files for local experiments (the MinIO one uses the `minioadmin` defaults); the root `docker-compose.yml` is the real stack and the one the rules above apply to.
 
 ## Authorship map
 
 Endpoint handlers carry `// [authorship]` comments (skip: images/S3 feature). Keep them accurate when editing:
 
 - **Human-written (original codebase):** healthcheck; common countries/org_types GET; organisation CRUD; country-connection CRUD; user signin/signup/languages/OAuth; images + S3/storage/cache infrastructure; feature architecture and DI.
-- **AI-generated (Claude):** the whole `corridor`, `person`, `review`, `saved`, `report` and `moderation` features; `GET/PUT /api/user/me` + `/me/notifications`; `GET /api/organisation/search`, `POST /api/organisation/visit/{id}`, `POST /api/organisation/checkin/{id}` + community signals; `GET /api/common/countries/{id}`; `path_matches` route matcher in auth middleware; RBAC helpers (`UserRole::is_admin/is_moderator`, `User::fetch_role`, `ensure_can_manage`/`ensure_admin`/`ensure_moderator`); all phase-1/2 migrations (`extend_*`, `create_corridors`, `create_people`, `create_reviews`, `create_saved_items`, `create_org_checkins`, `create_reports`, `create_moderation_events`); `compute_open_now` + `haversine_km`; per-feature OpenAPI split (`build_openapi`).
-- **Human-written, extended by AI:** signup (v2 transaction with default corridor), user languages (user_id from JWT), organisation create/update/delete (ownership, v2 fields, pending status), org types create + country-connection mutations (admin gate), `AUTH_REQUIRED_ROUTES` contents.
+- **AI-generated (Claude):** the whole `corridor`, `person`, `review`, `saved`, `report` and `moderation` features; `GET/PUT /api/user/me` + `/me/notifications`; `POST /api/user/oauth/google/exchange` (single-use login code); the security hardening — rate limiting (`rate_limit.rs`), credential validation (`normalize_email`/`validate_password`/…), OAuth state cookie + `email_verified`, constraint-violation → 422 mapping, `users_email_lower_unique` migration; `GET /api/organisation/search`, `POST /api/organisation/visit/{id}`, `POST /api/organisation/checkin/{id}` + community signals; `GET /api/common/countries/{id}`; `path_matches` route matcher in auth middleware; RBAC helpers (`UserRole::is_admin/is_moderator`, `User::fetch_role`, `ensure_can_manage`/`ensure_admin`/`ensure_moderator`); all phase-1/2 migrations (`extend_*`, `create_corridors`, `create_people`, `create_reviews`, `create_saved_items`, `create_org_checkins`, `create_reports`, `create_moderation_events`); `compute_open_now` + `haversine_km`; per-feature OpenAPI split (`build_openapi`).
+- **Human-written, extended by AI:** signup (v2 transaction with default corridor, credential validation), signin (uniform 401 + dummy bcrypt), OAuth Google login/callback (state cookie, verified email, login-code redirect), user languages (user_id from JWT), organisation create/update/delete (ownership, v2 fields, pending status, re-moderation of creator edits), image upload/delete/set-primary (org-owner/moderator gate), org types create + country-connection mutations (admin gate), `AUTH_REQUIRED_ROUTES` contents.
 
 ## Environment Variables
 
@@ -205,6 +214,12 @@ Endpoint handlers carry `// [authorship]` comments (skip: images/S3 feature). Ke
 | `S3_BUCKET` | no | S3/R2 bucket name |
 | `S3_REGION` | no | Region (defaults to `"auto"`) |
 | `S3_PUBLIC_URL` | no | Public base URL for object access |
+| `FRONTEND_ORIGIN` | no | Allowed CORS origin (default `*`) and the OAuth redirect target (default `http://localhost:5173`) |
 | `TRUST_PROXY_HEADERS` | no | `true` = rate limiter keys clients by `Forwarded`/`X-Forwarded-For` (only behind a proxy that overwrites them); default: TCP peer IP |
-| `HOST` | yes | Server bind host |
-| `PORT` | yes | Server bind port |
+| `DB_POOL_MAX_SIZE`, `DB_POOL_MIN_IDLE`, `DB_POOL_MAX_LIFETIME_SECS`, `DB_POOL_IDLE_TIMEOUT_SECS`, `DB_POOL_CONNECTION_TIMEOUT_SECS` | no | r2d2 Postgres pool tuning (`utils/db.rs`) |
+| `REDIS_POOL_*` (same five suffixes) | no | r2d2 Redis pool tuning (`utils/redis.rs`) |
+| `RUST_LOG` | no | `env_logger` filter (compose default `info`) |
+| `REDIS_TEST_URL` | no | Enables the real-Redis GETDEL test in `utils/cache.rs` (a no-op without it) |
+| `HOST`, `PORT` | — | Set by compose/`start.sh` but **not read** by the binary — it binds `constants::BIND` (`0.0.0.0:8080`) |
+
+Compose-only (consumed by `docker-compose.yml`, not by the binary): `POSTGRES_USER`/`POSTGRES_PASSWORD`/`POSTGRES_DB`, `REDIS_USER`/`REDIS_PASSWORD`, `MINIO_ROOT_USER`/`MINIO_ROOT_PASSWORD`, `SERVICES_BIND_ADDRESS`, `BIND_ADDRESS`, `EXTERNAL_PORT`, `*_PORT` overrides, `MINIO_LICENSE_PATH`. `start.sh` additionally reads `DB_HOST`/`DB_PORT`/`DB_USER`/`DB_WAIT_TIMEOUT`.

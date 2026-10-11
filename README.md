@@ -1,6 +1,6 @@
 # 🌍 Landly APP Server
 
-[![Rust](https://img.shields.io/badge/rust-1.87+-orange.svg)](https://www.rust-lang.org)
+[![Rust](https://img.shields.io/badge/rust-1.94+-orange.svg)](https://www.rust-lang.org)
 [![Docker](https://img.shields.io/badge/docker-ready-blue.svg)](https://www.docker.com)
 [![PostgreSQL](https://img.shields.io/badge/postgresql-17-blue.svg)](https://www.postgresql.org)
 [![Redis](https://img.shields.io/badge/redis-7-red.svg)](https://redis.io)
@@ -36,6 +36,12 @@ Landly is a backend server for an application that helps people find businesses,
 - **[jsonwebtoken](https://crates.io/crates/jsonwebtoken)** - JWT implementation
 - **[oauth2](https://crates.io/crates/oauth2)** - OAuth 2.0 client library
 - **[bcrypt](https://crates.io/crates/bcrypt)** - Password hashing
+- **[actix-governor](https://crates.io/crates/actix-governor)** - Per-client rate limiting
+
+### Storage & API docs
+
+- **[aws-sdk-s3](https://crates.io/crates/aws-sdk-s3)** - Image storage on S3 / Cloudflare R2 (MinIO locally)
+- **[utoipa](https://crates.io/crates/utoipa)** + **[utoipa-scalar](https://crates.io/crates/utoipa-scalar)** - OpenAPI 3.1 spec and the Scalar docs UI
 
 ### Development & Deployment
 
@@ -44,7 +50,7 @@ Landly is a backend server for an application that helps people find businesses,
 
 ## 📋 Prerequisites
 
-- **Rust 1.87+** - [Install Rust](https://rustup.rs/)
+- **Rust 1.94+** (edition 2024; the locked `aws-sdk-s3` needs 1.94) - [Install Rust](https://rustup.rs/)
 - **Docker & Docker Compose** - [Install Docker](https://docs.docker.com/get-docker/)
 - **PostgreSQL 17** (if running locally)
 - **Redis 7** (if running locally)
@@ -93,15 +99,20 @@ S3_REGION=auto
 S3_PUBLIC_URL=http://localhost:9000/landly-images
 
 # Server
-FRONTEND_ORIGIN=http://localhost:8080
-HOST=0.0.0.0
-PORT=8080
+FRONTEND_ORIGIN=http://localhost:5173   # CORS origin + OAuth redirect target
+TRUST_PROXY_HEADERS=false               # true only behind a proxy that overwrites X-Forwarded-For
 ```
 
-`DATABASE_URL`, `JWT_SECRET`, `JWT_EXPIRATION`, `HOST` and `PORT` are required. Everything
-else degrades gracefully: without `REDIS_URL` the cache is a no-op, without the `S3_*` block
-image upload/delete fail at runtime, and without the `GOOGLE_*` block the OAuth endpoints
-answer `503 Service Unavailable`.
+Only `DATABASE_URL`, `JWT_SECRET` and `JWT_EXPIRATION` are required. Everything else degrades
+gracefully: without `REDIS_URL` the cache is a no-op (and Google OAuth cannot complete — it
+keeps its PKCE verifier and login code in Redis), without the `S3_*` block image
+upload/delete fail at runtime, and without the `GOOGLE_*` block the OAuth endpoints answer
+`503 Service Unavailable`. Without `FRONTEND_ORIGIN`, CORS allows `*` and the OAuth callback
+redirects to `http://localhost:5173`. Connection pools are tuned with the optional
+`DB_POOL_*` / `REDIS_POOL_*` variables (see `.env.example`).
+
+The server always listens on `0.0.0.0:8080` (`constants::BIND`); the `HOST`/`PORT` variables
+that compose and `scripts/start.sh` export are currently not read by the binary.
 
 `docker compose` additionally requires the service credentials `POSTGRES_PASSWORD`,
 `REDIS_PASSWORD`, `MINIO_ROOT_USER`, `MINIO_ROOT_PASSWORD` and `JWT_SECRET` (see
@@ -109,7 +120,8 @@ answer `503 Service Unavailable`.
 Generate them URL-safe (e.g. `openssl rand -hex 32`): the Postgres and Redis passwords are
 embedded into the `DATABASE_URL`/`REDIS_URL` the server container receives.
 Postgres, Redis and MinIO are published on `127.0.0.1` only (override with
-`SERVICES_BIND_ADDRESS`); the image bucket is anonymously readable, never writable.
+`SERVICES_BIND_ADDRESS`), and so is the API itself (`BIND_ADDRESS`, port `EXTERNAL_PORT`,
+default `8080`); the image bucket is anonymously readable, never writable.
 
 ### 3. Run with Docker (Recommended)
 
@@ -186,19 +198,41 @@ Content-Type: application/json
 }
 ```
 
+Both return `{ "id", "username", "email", "token" }`; send the token as `Authorization: Bearer <token>`.
+
 Signup v2 additionally accepts optional profile fields (`name`, `locale`, `here_as`, `home_country_id`, `avatar_color`) and a default corridor (`corridor_from_country_id`, `corridor_to_country_id`) — the user and the corridor are created in one transaction.
+
+Credential rules:
+
+- Emails are trimmed and lowercased; uniqueness is case-insensitive (`users_email_lower_key`).
+- Passwords: 8 characters to 72 bytes (bcrypt limit). Usernames: 3–50 characters, no whitespace.
+- Profile free text (name, city, bio, …) is length-capped.
+- Signin answers the same `401 Invalid email or password` for an unknown email and a wrong password.
+- There is no email confirmation yet.
 
 #### OAuth 2.0 (Google)
 
 ```http
-# Initiate OAuth flow
+# 1. Start: sets an HttpOnly state cookie and redirects to Google (PKCE)
 GET /api/user/oauth/google/login
 
-# OAuth callback (handled automatically)
+# 2. Callback from Google: checks the state against the cookie, requires a verified
+#    Google email, then redirects to
+#    {FRONTEND_ORIGIN}/auth/google/callback?code=<single-use code, valid 60 s>
 GET /api/user/oauth/google/callback?code=...&state=...
+
+# 3. The frontend trades the code for the session ({ id, username, email, token })
+POST /api/user/oauth/google/exchange
+Content-Type: application/json
+
+{ "code": "<code from the redirect>" }
 ```
 
-Both endpoints answer `503 Service Unavailable` when the `GOOGLE_*` environment variables are not configured.
+The JWT never appears in a URL, and a Google login never links to an existing password account by email. All three endpoints answer `503 Service Unavailable` when the `GOOGLE_*` variables are not configured; the flow also needs Redis.
+
+#### Rate limiting
+
+Every client IP gets a burst of 100 requests, then 20 req/s across the whole API. The credential endpoints (`signin`, `signup`, `oauth/google/*`) are additionally limited to a burst of 10, then one request per 6 s. Over the limit the server answers `429 Too Many Requests`. Behind a reverse proxy set `TRUST_PROXY_HEADERS=true` (only if the proxy overwrites `X-Forwarded-For`/`Forwarded`), otherwise all clients share the proxy's IP.
 
 ### Profile
 
@@ -261,6 +295,8 @@ DELETE /api/organisation/delete/{id}
 POST /api/organisation/visit/{id}
 ```
 
+When the creator (not a moderator) edits a `live` organisation, it goes back to `pending` and re-enters the moderation queue — approved content never changes unreviewed.
+
 ### Images
 
 Organisation photos live in S3/R2 (MinIO locally); the API stores only the metadata.
@@ -273,7 +309,7 @@ PUT    /api/images/set-primary/{id}           # auth
 DELETE /api/images/delete/{id}                # auth
 ```
 
-Upload and delete return `500` while object storage is unconfigured (`S3_*` unset).
+Uploads accept JPEG, PNG, WebP and GIF up to 10 MB; permissions are checked before the body is read. Only the organisation's creator or a moderator/admin may upload or set the primary image; an image can be deleted by its uploader, the organisation's creator or a moderator/admin. Upload and delete return `500` while object storage is unconfigured (`S3_*` unset).
 
 ### Countries
 
@@ -283,6 +319,19 @@ GET /api/common/countries
 
 # Country page payload: country + live-place breakdown by org type
 GET /api/common/countries/{id}
+```
+
+### Organisation types & Country connections
+
+```http
+GET  /api/common/org_types                    # public
+POST /api/common/org_types                    # admin; { org_type, color, title, slug? }
+
+GET    /api/country-connection/list           # filters: embassy_org_id, consulate_org_id, location_country_id
+GET    /api/country-connection/fetch/{id}
+POST   /api/country-connection/create         # admin
+PUT    /api/country-connection/update/{id}    # admin
+DELETE /api/country-connection/delete/{id}    # admin
 ```
 
 ### People / Helpers
@@ -348,16 +397,21 @@ Every user has a role (`users.role`): `user` (default), `moderator`, or `admin`.
 | Own profile, languages, corridors | — | ✓ | ✓ | ✓ |
 | Add organisation (goes to moderation as `pending`) | — | ✓ | ✓ | ✓ |
 | Edit/delete organisation | — | own only | any | any |
+| Upload / set-primary organisation image | — | own organisation only | any | any |
+| Delete organisation image | — | own upload or own organisation | any | any |
+| Recommend people, vouch, review, save, report, check in | — | ✓ | ✓ | ✓ |
+| Delete review | — | own only | any | any |
+| Moderation queue and decisions | — | — | ✓ | ✓ |
 | Manage system tables (organisation types, country connections) | — | — | — | ✓ |
 
-Violations return `401 Unauthorized` (no/invalid token) or `403 Forbidden` (insufficient role/ownership).
+Violations return `401 Unauthorized` (no/invalid token) or `403 Forbidden` (insufficient role/ownership). Invalid input — including database constraint violations such as a duplicate email — is `422 Unprocessable Entity`, with a generic message and the constraint name but never raw database details.
 
 ## 🗄️ Database Schema
 
 ### Core Tables
 
-- **chats** - Some chats links
-- **users** - User accounts, authentication and profile (name, bio, city, home country, locale `en/ru/uk`, `here_as`, RBAC `role`, notification settings)
+- **chats** - Chat links (legacy table, no API yet)
+- **users** - User accounts (email unique case-insensitively), authentication and profile (name, bio, city, home country, locale `en/ru/uk`, `here_as`, RBAC `role`, notification settings)
 - **user_providers** - OAuth provider linkages
 - **corridors** - User corridors (from country → to country, one default per user)
 - **organisations** - Organization entities (v2: moderation `status`, `created_by` ownership, `verified`, contacts, `services[]`/`languages[]`, `opening_hours` JSONB + `timezone`, `cost`, Google import fields, visit/rating counters)
@@ -416,9 +470,11 @@ cargo fmt
 # Lint code
 cargo clippy
 
-# Check for security vulnerabilities
+# Check for security vulnerabilities (ignores with reasons live in .cargo/audit.toml)
 cargo audit
 ```
+
+CI runs `cargo fmt -- --check`, build and tests (plus a separate build of `scripts/crates`), `cargo clippy --all-targets --all-features -- -D warnings`, `cargo audit` for both lockfiles, and tarpaulin coverage uploaded to Codecov.
 
 ## 📊 Monitoring & Health Checks
 
@@ -428,13 +484,13 @@ cargo audit
 GET /api/healthcheck
 ```
 
-### Service Health Checks
+This is a liveness probe: it answers `200` whenever the process is serving requests and does
+not query Postgres or Redis.
 
-The application includes health checks for:
+### Container Health Checks
 
-- Database connectivity
-- Redis connectivity  
-- Application readiness
+`docker compose` adds its own checks: `pg_isready` for Postgres, an authenticated `PING` for
+Redis, MinIO's `/minio/health/live`, and `curl /api/healthcheck` for the server.
 
 ## 📜 Scripts
 
@@ -455,7 +511,9 @@ The `scripts/` folder holds tooling used at container start and for seeding:
 - **landly-server**: Main application container (healthcheck hits `/api/healthcheck`)
 - **db**: PostgreSQL 17 database
 - **redis**: Redis 7 cache server (healthcheck is an authenticated `PING`)
-- **minio** + **minio-init**: local S3-compatible object storage; the init sidecar creates the public `landly-images` bucket (requires `minio.license` in the repo root)
+- **minio** + **minio-init**: local S3-compatible object storage; the init sidecar creates the `landly-images` bucket with anonymous read-only access (requires `minio.license` in the repo root)
+
+`docker/` additionally holds standalone single-service compose files (`docker-compose-postgre.yml`, `-redis.yml`, `-minio.yml`) for quick local experiments; they use development defaults and are not meant for anything shared.
 
 ### Production Deployment
 
@@ -480,13 +538,14 @@ Endpoints in the codebase carry `// [authorship]` comments above their handlers.
 **AI-generated (Claude, as part of the design-handoff v2 rework):**
 
 - Corridor feature — entire module (`create/list/set-default/delete/stats`)
+- OAuth login-code exchange `POST /api/user/oauth/google/exchange`; security hardening (rate limiting, credential validation, OAuth state cookie + verified email, 422 mapping of constraint violations, case-insensitive email uniqueness)
 - Profile: `GET/PUT /api/user/me`, `PUT /api/user/me/notifications`
 - Geo search `GET /api/organisation/search`, visit counter `POST /api/organisation/visit/{id}`, check-ins `POST /api/organisation/checkin/{id}`
 - Country detail `GET /api/common/countries/{id}`
 - Phase 2 — entire modules: `person` (recommend + claim flow), `review`, `saved`, `report`, `moderation`
 - Migrations `extend_users`, `extend_organisations`, `extend_countries`, `create_corridors`, `create_people`, `create_reviews`, `create_saved_items`, `create_org_checkins`, `create_reports`, `create_moderation_events`
 
-**Human-written, extended by AI:** signup (v2: profile + default corridor in one transaction), user languages (`user_id` from JWT), organisation CRUD (ownership/RBAC, v2 fields, moderation statuses, `pending` on create), org types create and country-connection mutations (admin-only), auth middleware (fixed `{id}` route matching).
+**Human-written, extended by AI:** signup (v2: profile + default corridor in one transaction, credential validation), signin (uniform 401), OAuth Google login/callback (state cookie, verified email, login-code redirect), user languages (`user_id` from JWT), organisation CRUD (ownership/RBAC, v2 fields, moderation statuses, `pending` on create and on creator edits), image upload/delete/set-primary (ownership gate), org types create and country-connection mutations (admin-only), auth middleware (fixed `{id}` route matching).
 
 ## 🤝 Contributing
 

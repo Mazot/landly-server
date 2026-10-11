@@ -40,6 +40,9 @@ requests.rs     - request DTOs
 config.rs       - routing configuration (plain fn, or a closure when the feature needs the cache middleware)
 ```
 
+Exceptions: `healthcheck` (controllers + `mod.rs` only) and `common`, which predates the split
+and keeps its request structs in `controllers.rs` and its models in `src/data/models.rs`.
+
 **Example**: See `src/app/features/organisation/` for the canonical implementation, or
 `src/app/features/corridor/` for the smallest complete one.
 
@@ -87,8 +90,15 @@ impl OrganisationRepositoryImpl {
 
 Every key goes through the `CacheKeys` namespace helper: `org:*`, `cc:*`, `img:*`,
 `cor:*`, `per:*`, `common:*`. Namespaces must stay disjoint, and repositories invalidate
-their own pattern on every create/update/delete. Cache invalidation on mutating routes is
-additionally wired through the middleware in `src/app/drivers/middlewares/cache.rs`.
+their own pattern on every create/update/delete — that is what keeps the cache correct.
+The middleware in `src/app/drivers/middlewares/cache.rs` only reacts to `DELETE` requests.
+`GET /common/countries` and `GET /common/org_types` are cached by the request-reply
+middleware (`make_common_get_request_cache`, `common:*` prefixes), invalidated from
+`CommonRepositoryImpl` on writes.
+
+The only keys outside `CacheKeys` are Google OAuth's (`oauth:google:pkce:*`,
+`oauth:google:login-code:*`), consumed atomically with `TypedCache::take` (GETDEL). The
+NoOp cache never returns them, so OAuth needs Redis.
 
 ### 4. Routing Configuration
 Features that need the cache-invalidation middleware expose a **closure-based config
@@ -109,8 +119,10 @@ pub fn create_configure_services_closure(
 }
 ```
 
-All other features expose a plain `pub fn configure_services(cfg: &mut ServiceConfig)`.
-Both are registered in `main.rs` inside the `/api` scope.
+`user` also uses a closure, but it receives the shared `RateLimitConfig` for the credential
+routes instead of the cache. All other features expose a plain
+`pub fn configure_services(cfg: &mut ServiceConfig)`. Both are registered in `main.rs`
+inside the `/api` scope.
 
 ### 5. Error Handling
 **AppError** (`src/error.rs`) uses thiserror and implements ResponseError:
@@ -129,13 +141,18 @@ pub enum AppError {
 **From implementations** handle conversion from library errors (Diesel, Redis, JWT, bcrypt,
 UUID). Controllers just use `?`. Two rules worth remembering:
 - Diesel constraint violations (unique / FK / CHECK / NOT NULL) become **422** — they are
-  caused by client input. Every other `DatabaseError` stays a 500.
+  caused by client input — with a generic per-kind message plus the `constraint` name, never
+  Postgres' message/details. Every other `DatabaseError` stays a 500 without DB details.
+- Signin answers the same 401 `Invalid email or password` for an unknown email and a wrong
+  password (with a dummy bcrypt check for timing) — keep it that way.
 - **503 `ServiceUnavailable`** means an integration is not configured (Google OAuth without
   the `GOOGLE_*` vars).
 
 ### 6. Authentication & RBAC
 `src/app/drivers/middlewares/auth.rs` holds `AUTH_REQUIRED_ROUTES` (the single source of
-truth for protected routes) and `SKIP_AUTH_ROUTES` (docs + healthcheck). The middleware
+truth for protected routes). Auth is opt-in: every path not listed there is public.
+`SKIP_AUTH_ROUTES` (docs + healthcheck) only documents intent — `is_skip_auth_route` is
+never called, so do not rely on it to open a route. The middleware
 validates the JWT and inserts the `Uuid` into request extensions; controllers read it via
 the `caller_user_id` helper, **never** from the request body.
 
@@ -146,8 +163,17 @@ guards against that.
 
 Roles live in `users.role` (`user` < `moderator` < `admin`) and are read through
 `User::fetch_role`, exposed per feature as `fetch_user_role`. All checks happen in usecases:
-`ensure_can_manage` (ownership), `ensure_admin` (system reference tables),
-`ensure_moderator` (moderation queue).
+`ensure_can_manage` (organisation ownership; `ensure_can_manage_organisation` for images),
+`ensure_admin` (system reference tables), `ensure_moderator` (moderation queue).
+
+### 6a. Rate Limiting
+`src/app/drivers/middlewares/rate_limit.rs` (actix-governor, keyed by client IP through
+`ClientIpKeyExtractor`): the whole app gets `api_rate_limit()` (burst 100, 20 req/s) and the
+credential routes (`/user/signin`, `/user/signup`, `/user/oauth/google/*`) additionally get
+`auth_rate_limit()` (burst 10, then 1 per 6 s). Configs are built once in `main` and cloned
+into workers — never build a limiter inside the `HttpServer::new` closure, or each worker
+counts separately. `TRUST_PROXY_HEADERS=true` keys by `Forwarded`/`X-Forwarded-For` (only
+behind a proxy that overwrites them).
 
 ### 7. Enum Convention
 No SQL enums. Enum-like columns are `TEXT` + `CHECK (col IN (...))` in the migration, plus a
@@ -164,8 +190,8 @@ Use `utoipa` macros everywhere:
   `#[openapi(...)]` macro only carries `info` + `servers` — never add paths to it.
 
 Docs UI is **Scalar** at `/scalar`; the raw spec is at `/api-docs/openapi.json`, and
-`/swagger-ui` 307-redirects to `/scalar`. New public doc routes also need an entry in
-`SKIP_AUTH_ROUTES`.
+`/swagger-ui` 307-redirects to `/scalar`. They are public simply because they are not in
+`AUTH_REQUIRED_ROUTES`.
 
 ## Development Workflows
 
@@ -197,15 +223,20 @@ docker compose logs -f landly-server
 ```
 
 **Environment variables**: Copy `.env.example` to `.env` and configure:
-- `DATABASE_URL`, `REDIS_URL`, `REDIS_USER`, `REDIS_PASSWORD`
-- OAuth: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `OAUTH_GOOGLE_REDIRECT_URL`
-- JWT: `JWT_SECRET`, `JWT_EXPIRATION` (seconds; both are required)
+- Required: `DATABASE_URL`, `JWT_SECRET`, `JWT_EXPIRATION` (seconds)
+- Cache: `REDIS_URL` (optional; NoOp cache without it)
+- OAuth: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `OAUTH_GOOGLE_REDIRECT_URL` (optional; 503 without them)
 - Storage: `S3_ENDPOINT_URL`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_BUCKET`,
   optional `S3_REGION` / `S3_PUBLIC_URL`
-- Server: `HOST`, `PORT`
+- `FRONTEND_ORIGIN` (CORS origin, default `*`; OAuth redirect target, default
+  `http://localhost:5173`), `TRUST_PROXY_HEADERS` (rate limiter)
 - Connection pools: `DB_POOL_*`, `REDIS_POOL_*` settings
+- Compose-only: `POSTGRES_*`, `REDIS_USER`/`REDIS_PASSWORD`, `MINIO_ROOT_*`,
+  `SERVICES_BIND_ADDRESS` — required via `${VAR:?}`, no hardcoded defaults
 
-The container healthcheck targets `/api/healthcheck` — there is no `/health` route.
+The server binds the hardcoded `constants::BIND` (`0.0.0.0:8080`); `HOST`/`PORT` are exported
+by compose and `start.sh` but not read by the binary. The container healthcheck targets
+`/api/healthcheck` (liveness only — there is no `/health` route).
 
 ### Scripts Workspace
 `scripts/crates` (`country_parser`, `country_loader`) is a **separate Cargo workspace** that
@@ -237,16 +268,23 @@ Always run `cargo fmt` before committing to pass CI checks.
 
 **Traditional Auth**: JWT-based with bcrypt password hashing
 - Signup/Signin: `POST /api/user/signup`, `/api/user/signin`
-- Returns: `{ "user": {...}, "token": "..." }`
+- Returns: `{ "id": "...", "username": "...", "email": "...", "token": "..." }` (`AuthUserContent`)
+- Emails are trimmed + lowercased (`normalize_email`) and unique case-insensitively
+  (`users_email_lower_key`); passwords 8 chars to 72 bytes (`validate_password`); username
+  3–50 chars without whitespace; profile free text capped (`validate_max_chars`)
 - Use: `Authorization: Bearer <token>` header
 - Signup v2 also accepts optional profile fields and a default corridor, created in one
   transaction (`User::signup_v2`)
 
-**OAuth 2.0 (Google)**: PKCE + state stored in Redis
-- Start: `GET /api/user/oauth/google/login` → redirects to Google
-- Callback: `GET /api/user/oauth/google/callback?code=...&state=...`
-- Links to `user_providers` table for multi-provider support
-- Code: `src/app/features/user/oauth/google.rs`; returns 503 when unconfigured
+**OAuth 2.0 (Google)**: PKCE verifier stored in Redis, state bound to the browser by a cookie
+- Start: `GET /api/user/oauth/google/login` → sets the HttpOnly state cookie, redirects to Google
+- Callback: `GET /api/user/oauth/google/callback?code=...&state=...` → state must match the
+  cookie, Google email must be verified (never links to an existing account by email), then
+  redirects to `{FRONTEND_ORIGIN}/auth/google/callback?code=…` with a single-use 60 s code
+- Exchange: `POST /api/user/oauth/google/exchange` `{ "code": "..." }` → the session.
+  **Never put the JWT in a URL.**
+- Provider identities live in `user_providers`
+- Code: `src/app/features/user/oauth/google.rs`; returns 503 when unconfigured, needs Redis
 
 ## Common Pitfalls
 
@@ -269,13 +307,14 @@ Always run `cargo fmt` before committing to pass CI checks.
 - `src/utils/cache.rs` - Cache abstraction (TypedCache, CacheService trait, CacheKeys)
 - `src/utils/storage.rs`, `src/utils/s3.rs` - Object storage abstraction (S3/R2 or NoOp)
 - `src/error.rs` - Error handling and HTTP status mapping
-- `src/app/drivers/middlewares/` - Auth, CORS, cache invalidation
+- `src/app/drivers/middlewares/` - Auth, CORS, cache invalidation, rate limiting, `AppState`
 - `src/app/features/{feature}/` - Feature modules following standard structure
 - `docker-compose.yml` - Development environment (Postgres 17, Redis 7, MinIO)
 
 ## Database Schema Highlights
 
-- **users** - profile + RBAC `role`, with `user_providers` for OAuth linking
+- **users** - profile + RBAC `role` (email unique on `lower(email)`), with `user_providers`
+  for OAuth identities
 - **corridors** - user "from country → to country" pairs, one default per user
 - **organisations** - moderation `status`, `created_by` ownership, opening hours + timezone,
   visit/rating counters; **organisation_types** carries a stable `slug`
