@@ -175,6 +175,7 @@ Definitions live in `.claude/agents/*.md` and `.claude/skills/*/SKILL.md` (their
 - Agents: `feature-scaffolder` (new feature module), `db-migrator` (schema changes), `api-smoke-tester` (real stack via `scripts/smoke.sh`), `security-reviewer` (read-only audit-invariant review of a diff), `usecase-test-writer` (DB-free stub-repo tests; `corridor/usecases.rs` has none yet).
 - Skills: `add-endpoint` (route checklist ending in a ✓/✗ report), `sync-docs` (docs ↔ code, starts with `.claude/skills/sync-docs/check_docs.py`).
 - End-to-end baseline: `scripts/smoke.sh` (needs the running stack; `SMOKE_IMAGES=1` adds MinIO uploads).
+- Data inspection: project MCP servers in `.mcp.json` — `landly-postgres` (read-only role, no password hashes / claim tokens) and `landly-redis` (read-only ACL user, cache namespaces only, no `oauth:*`); prefer them over `docker exec psql` / `redis-cli` for reads. No MinIO MCP (none maintained). Setup and limits in `docs/operations.md`. GitHub: use the authenticated `gh` CLI (no GitHub MCP needed).
 
 ## Reference docs (read when relevant)
 

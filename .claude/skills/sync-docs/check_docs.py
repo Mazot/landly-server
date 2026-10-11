@@ -235,6 +235,23 @@ if not ai_line:
 if problems == before:
     ok("every AI-generated handler is covered by the authorship map")
 
+section("Redis MCP: read-only ACL namespaces vs CacheKeys")
+before = problems
+redis_setup = ROOT / "scripts/dev/setup-readonly-redis.sh"
+if redis_setup.exists():
+    cache_rs = read(ROOT / "src/utils/cache.rs")
+    # top-level namespaces of every *_pattern() helper ("common:countries:*" -> "common")
+    namespaces = {p.split(":")[0] for p in re.findall(r'"([a-z_]+(?::[a-z_]+)*):\*"', cache_rs)}
+    allowed = set(re.findall(r"'~([a-z_]+):\*'", read(redis_setup)))
+    for ns in sorted(namespaces - allowed):
+        bad(f"CacheKeys namespace `{ns}:*` is not readable by the MCP ACL user — add '~{ns}:*' to CACHE_NAMESPACES in {redis_setup.relative_to(ROOT)}")
+    for ns in sorted(allowed - namespaces):
+        bad(f"{redis_setup.relative_to(ROOT)} grants '~{ns}:*', which is not a CacheKeys namespace")
+    if "oauth" in allowed:
+        bad("the read-only Redis user must never read `oauth:*` (PKCE verifiers, login codes)")
+    if problems == before:
+        ok(f"ACL covers exactly the cache namespaces {sorted(namespaces)}")
+
 section("Summary")
 print(f"  {problems} mismatch(es)" if problems else "  docs are in sync with the code (for what this script can check)")
 sys.exit(1 if problems else 0)

@@ -24,6 +24,7 @@ It is read-only and exits 1 on any mismatch. It covers:
 | Env vars | every `env::var(...)` the non-test code reads ↔ docs/environment.md |
 | Features | `src/app/features/*` ↔ "Current features:" in AGENTS.md and copilot-instructions.md |
 | Authorship | every `// [authorship] AI-generated` handler ↔ the AI-generated line of docs/authorship.md |
+| Redis MCP ACL | `CacheKeys` namespaces ↔ `CACHE_NAMESPACES` in `scripts/dev/setup-readonly-redis.sh` (and never `oauth:*`) |
 
 Fix what it reports, rerun until it is clean. If a report is a false positive
 caused by the script's parsing (not by the docs), fix the **script** in the same

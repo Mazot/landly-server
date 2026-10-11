@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "landly-postgres": {
+      "type": "stdio",
+      "command": "./scripts/dev/mcp-postgres.sh",
+      "args": []
+    },
+    "landly-redis": {
+      "type": "stdio",
+      "command": "./scripts/dev/mcp-redis.sh",
+      "args": []
+    }
+  }
+}

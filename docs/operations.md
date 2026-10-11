@@ -23,3 +23,28 @@ Moved out of AGENTS.md. Read before touching `.github/workflows/`, `scripts/`, `
 - The redis healthcheck uses an authenticated `PING` as `REDIS_USER` — plain `redis-cli incr ping` always exits 0 even on NOAUTH and mutates a key. Redis auth comes from the ACL file only (`--requirepass` is ignored with `--aclfile`), which must keep `user default off`.
 - Shell snippets in compose (`redis` command, `minio-init` entrypoint) read credentials from the container environment as quoted `"$$VAR"` — never interpolate `${VAR}` secrets into shell text. Postgres/Redis passwords must be URL-safe (they are embedded in `DATABASE_URL`/`REDIS_URL`).
 - `docker/docker-compose-{postgre,redis,minio}.yml` are standalone single-service files for local experiments (the MinIO one uses the `minioadmin` defaults); the root `docker-compose.yml` is the real stack and the one the rules above apply to.
+
+## Local data inspection (MCP servers)
+
+### Postgres — `landly-postgres`
+
+`.mcp.json` registers the project MCP servers (Claude Code asks once to approve them). **`landly-postgres`** It is [Postgres MCP Pro](https://github.com/crystaldba/postgres-mcp) started by `scripts/dev/mcp-postgres.sh`:
+
+- pinned `postgres-mcp==0.3.0` via `uvx` on Python 3.12 with `mcp<2` (0.3.0 breaks on Python 3.14 builds of `pglast` and on mcp 2.x);
+- `--access-mode=restricted`: queries run in read-only transactions and are validated before execution;
+- connects as the **`landly_readonly`** role through `MCP_DATABASE_URL` in `.env`, and refuses non-local hosts. The role (created by `scripts/dev/setup-readonly-db.sh` → `scripts/dev/create-readonly-role.sql`) has `SELECT` only, `default_transaction_read_only = on`, a 30 s statement timeout, and **no access to `users.password_hash` or `person_claim_tokens.token`**.
+
+Setup on a new machine: `docker start landly_postgres` (or `docker compose up -d db`), then `scripts/dev/setup-readonly-db.sh` — it generates the role password once and appends `MCP_DATABASE_URL` to `.env`. Re-run it after a migration adds a table or column holding secrets (new tables are readable automatically via default privileges; hide secret columns in the SQL file). Tools: `list_schemas`, `list_objects`, `get_object_details`, `explain_query`, `analyze_query_indexes`, `analyze_workload_indexes`, `analyze_db_health`, `get_top_queries`, `execute_sql`.
+
+### Redis — `landly-redis`
+
+The official [redis/mcp-redis](https://github.com/redis/mcp-redis) server, started by `scripts/dev/mcp-redis.sh`: pinned `redis-mcp-server==0.5.1` via `uvx` on Python 3.12, connecting with `--url` from `MCP_REDIS_URL` (`--url` wins over the `REDIS_*` variables the server would read through dotenv, so the admin `REDIS_URL` is never used; non-local hosts are refused).
+
+The server has **no read-only mode** — its `set`/`delete`/`expire`/`hset`/`publish`… tools are blocked by the ACL user **`landly_readonly`** that `scripts/dev/setup-readonly-redis.sh` creates: `-@all +@read -keys` plus `info`/`ping`/`hello`/`auth`/`select` and the harmless `client` subcommands, keys limited to the cache namespaces `org:* cc:* img:* cor:* per:* common:*`, no pub/sub channels. `oauth:*` (PKCE verifiers, single-use login codes) is not readable; key **names** are still visible through `SCAN`, so an in-flight local OAuth login code (60 s) can show up by name.
+
+The compose Redis regenerates its ACL file on every container start, so the user is lost on restart: the launcher re-runs the setup script before every start (needs the container running; otherwise the server starts and its tools fail until Redis is up and the session restarts). When a new `CacheKeys` namespace appears, add it to `CACHE_NAMESPACES` in the setup script — `sync-docs` checks this.
+
+### MinIO / S3 — no MCP on purpose
+
+The official MinIO MCP server (`minio/mcp-server-aistor`) was archived in May 2025, and the remaining MinIO/S3 MCP servers are small unmaintained projects — not worth handing storage credentials to. Inspect objects with the MinIO console (`http://localhost:9001`) or `mc` from the `minio/mc` image instead; `scripts/smoke.sh` with `SMOKE_IMAGES=1` covers upload → public read → delete.
+

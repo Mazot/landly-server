@@ -26,4 +26,6 @@ Moved out of AGENTS.md. Read before adding/renaming an `env::var`, changing `.en
 | `REDIS_TEST_URL` | no | Enables the real-Redis GETDEL test in `utils/cache.rs` (a no-op without it) |
 | `HOST`, `PORT` | — | Set by compose/`start.sh` but **not read** by the binary — it binds `constants::BIND` (`0.0.0.0:8080`) |
 
+Tooling-only (not read by the binary): `MCP_DATABASE_URL` / `MCP_REDIS_URL` — read-only connection strings for the `landly-postgres` / `landly-redis` MCP servers, written to `.env` by `scripts/dev/setup-readonly-db.sh` / `scripts/dev/setup-readonly-redis.sh` (see docs/operations.md).
+
 Compose-only (consumed by `docker-compose.yml`, not by the binary): `POSTGRES_USER`/`POSTGRES_PASSWORD`/`POSTGRES_DB`, `REDIS_USER`/`REDIS_PASSWORD`, `MINIO_ROOT_USER`/`MINIO_ROOT_PASSWORD`, `SERVICES_BIND_ADDRESS`, `BIND_ADDRESS`, `EXTERNAL_PORT`, `*_PORT` overrides, `MINIO_LICENSE_PATH`. `start.sh` additionally reads `DB_HOST`/`DB_PORT`/`DB_USER`/`DB_WAIT_TIMEOUT`.
