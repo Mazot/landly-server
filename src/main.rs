@@ -3,6 +3,8 @@ mod app;
 mod constants;
 pub mod data;
 mod error;
+#[cfg(test)]
+mod test_support;
 pub mod utils;
 
 use crate::app::drivers::middlewares::{auth::Authentication, cors::cors, rate_limit};
@@ -10,6 +12,8 @@ use actix_governor::Governor;
 use actix_web::middleware::Logger;
 use actix_web::{App, HttpResponse, HttpServer, web};
 use dotenv::dotenv;
+use std::sync::Arc;
+use utils::cache::{CacheService, TypedCache};
 use utoipa::OpenApi;
 use utoipa_scalar::{Scalar, Servable};
 
@@ -48,6 +52,41 @@ pub fn build_openapi() -> utoipa::openapi::OpenApi {
     openapi
 }
 
+/// Every feature route under `/api`. Shared by `main` and the HTTP tests so
+/// they exercise exactly the routing (and per-route middleware) that ships.
+pub(crate) fn configure_api(
+    cfg: &mut web::ServiceConfig,
+    cache: TypedCache<Arc<dyn CacheService>>,
+    auth_limit: rate_limit::RateLimitConfig,
+    redis_url: Option<String>,
+) {
+    use app::features;
+
+    cfg.service(
+        web::scope("/healthcheck")
+            .route("", web::get().to(features::healthcheck::controllers::index)),
+    )
+    .configure(features::common::config::create_configure_services_closure(
+        redis_url,
+    ))
+    .configure(features::user::config::create_configure_services_closure(
+        auth_limit,
+    ))
+    .configure(features::corridor::config::configure_services)
+    .configure(features::person::config::configure_services)
+    .configure(features::review::config::configure_services)
+    .configure(features::saved::config::configure_services)
+    .configure(features::report::config::configure_services)
+    .configure(features::moderation::config::configure_services)
+    .configure(features::organisation::config::create_configure_services_closure(cache.clone()))
+    .configure(
+        features::country_connection::config::create_configure_services_closure(cache.clone()),
+    )
+    .configure(features::images::config::create_configure_services_closure(
+        cache,
+    ));
+}
+
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     dotenv().ok();
@@ -71,22 +110,13 @@ async fn main() -> std::io::Result<()> {
     // built once here and only cloned into each worker's App.
     let api_rate_limit = rate_limit::api_rate_limit();
     let auth_rate_limit = rate_limit::auth_rate_limit();
+    // Optional: without it the GET /common/* response cache is simply off.
+    let redis_url = std::env::var(constants::env_key::REDIS_URL).ok();
 
     HttpServer::new(move || {
-        let country_connection_configure_services =
-            app::features::country_connection::config::create_configure_services_closure(
-                app_state.di_container.redis_cache_service.clone(),
-            );
-        let organisation_configure_services =
-            app::features::organisation::config::create_configure_services_closure(
-                app_state.di_container.redis_cache_service.clone(),
-            );
-        let user_configure_services =
-            app::features::user::config::create_configure_services_closure(auth_rate_limit.clone());
-        let images_configure_services =
-            app::features::images::config::create_configure_services_closure(
-                app_state.di_container.redis_cache_service.clone(),
-            );
+        let cache = app_state.di_container.redis_cache_service.clone();
+        let auth_limit = auth_rate_limit.clone();
+        let redis_url = redis_url.clone();
 
         App::new()
             .app_data(web::Data::new(app_state.clone()))
@@ -112,21 +142,7 @@ async fn main() -> std::io::Result<()> {
             .service(web::redirect("/swagger-ui/", "/scalar"))
             .service(
                 web::scope("/api")
-                    .service(web::scope("/healthcheck").route(
-                        "",
-                        web::get().to(app::features::healthcheck::controllers::index),
-                    ))
-                    .configure(app::features::common::config::configure_services)
-                    .configure(user_configure_services)
-                    .configure(app::features::corridor::config::configure_services)
-                    .configure(app::features::person::config::configure_services)
-                    .configure(app::features::review::config::configure_services)
-                    .configure(app::features::saved::config::configure_services)
-                    .configure(app::features::report::config::configure_services)
-                    .configure(app::features::moderation::config::configure_services)
-                    .configure(organisation_configure_services)
-                    .configure(country_connection_configure_services)
-                    .configure(images_configure_services),
+                    .configure(|cfg| configure_api(cfg, cache, auth_limit, redis_url)),
             )
     })
     .bind(constants::BIND)?

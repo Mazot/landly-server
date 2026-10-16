@@ -344,3 +344,282 @@ pub async fn oauth_google_exchange(
 
     Ok(HttpResponse::Ok().json(oauth.redeem_login_code(&form.code)?))
 }
+
+/// DB-backed HTTP tests (skipped without TEST_DATABASE_URL, see test_support).
+#[cfg(test)]
+mod http_tests {
+    use crate::data::schema::languages;
+    use crate::test_support::{self as ts, call, require_db, test_app};
+    use actix_web::http::{Method, StatusCode};
+    use diesel::prelude::*;
+    use serde_json::json;
+    use serial_test::serial;
+    use uuid::Uuid;
+
+    #[actix_web::test]
+    #[serial(jwt_env)]
+    async fn test_signup_signin_and_credential_rules() {
+        let pool = require_db!();
+        let app = test_app!(pool);
+        let (home, dest) = (ts::country(&pool), ts::country(&pool));
+        let u = ts::unique();
+        let email = format!("Mixed.{u}@Example.TEST");
+
+        let (status, auth) = call(
+            &app,
+            Method::POST,
+            "/api/user/signup",
+            None,
+            Some(json!({
+                "username": format!("new{u}"), "email": email, "password": "correct-horse",
+                "name": "Daria", "locale": "ru", "here_as": "newcomer",
+                "corridor_from_country_id": home.id, "corridor_to_country_id": dest.id,
+            })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{auth}");
+        assert_eq!(
+            auth["email"],
+            email.to_lowercase(),
+            "emails are stored normalized"
+        );
+        let token = auth["token"].as_str().unwrap().to_string();
+
+        let (_, corridors) =
+            call(&app, Method::GET, "/api/corridor/list", Some(&token), None).await;
+        assert_eq!(
+            corridors["total"], 1,
+            "signup v2 creates the default corridor"
+        );
+        assert_eq!(corridors["items"][0]["isDefault"], true);
+
+        let (status, again) = call(&app, Method::POST, "/api/user/signup", None, Some(json!({
+            "username": format!("dup{u}"), "email": email.to_uppercase(), "password": "correct-horse",
+        }))).await;
+        assert_eq!(
+            status,
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "case-only duplicate email: {again}"
+        );
+
+        let (status, signed_in) = call(
+            &app,
+            Method::POST,
+            "/api/user/signin",
+            None,
+            Some(json!({ "email": email.to_uppercase(), "password": "correct-horse" })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(signed_in["id"], auth["id"]);
+
+        let (wrong_status, wrong_body) = call(
+            &app,
+            Method::POST,
+            "/api/user/signin",
+            None,
+            Some(json!({ "email": email, "password": "wrong-password" })),
+        )
+        .await;
+        let (unknown_status, unknown_body) = call(
+            &app,
+            Method::POST,
+            "/api/user/signin",
+            None,
+            Some(
+                json!({ "email": format!("nobody{u}@example.test"), "password": "wrong-password" }),
+            ),
+        )
+        .await;
+        assert_eq!(wrong_status, StatusCode::UNAUTHORIZED);
+        assert_eq!(
+            (unknown_status, unknown_body),
+            (wrong_status, wrong_body),
+            "no account enumeration"
+        );
+    }
+
+    #[actix_web::test]
+    #[serial(jwt_env)]
+    async fn test_signup_rejects_invalid_input() {
+        let pool = require_db!();
+        let app = test_app!(pool);
+        let u = ts::unique();
+        let (home, _) = (ts::country(&pool), ());
+        for body in [
+            json!({ "username": format!("a{u}"), "email": "not-an-email", "password": "long-enough" }),
+            json!({ "username": format!("b{u}"), "email": format!("b{u}@example.test"), "password": "short" }),
+            json!({ "username": "x y", "email": format!("c{u}@example.test"), "password": "long-enough" }),
+            json!({ "username": format!("d{u}"), "email": format!("d{u}@example.test"), "password": "long-enough", "locale": "fr" }),
+            json!({ "username": format!("e{u}"), "email": format!("e{u}@example.test"), "password": "long-enough", "corridor_from_country_id": home.id }),
+        ] {
+            let (status, resp) = call(
+                &app,
+                Method::POST,
+                "/api/user/signup",
+                None,
+                Some(body.clone()),
+            )
+            .await;
+            assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body} -> {resp}");
+        }
+    }
+
+    #[actix_web::test]
+    #[serial(jwt_env)]
+    async fn test_profile_read_and_update() {
+        let pool = require_db!();
+        let app = test_app!(pool);
+        let me = ts::user(&pool, "user");
+        let home = ts::country(&pool);
+        crate::test_support::org(
+            &pool,
+            crate::test_support::OrgSpec {
+                created_by: Some(me.id),
+                ..Default::default()
+            },
+        );
+
+        let (status, profile) =
+            call(&app, Method::GET, "/api/user/me", Some(&me.token), None).await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(profile["email"], me.email);
+        assert_eq!(profile["role"], "user");
+        assert_eq!(profile["stats"]["placesAdded"], 1);
+        assert!(profile.get("passwordHash").is_none());
+
+        let (status, updated) = call(
+            &app,
+            Method::PUT,
+            "/api/user/me",
+            Some(&me.token),
+            Some(json!({
+                "name": "Ivan", "bio": "Hi", "city": "Berlin", "home_country_id": home.id,
+                "avatar_color": "#ff8800", "locale": "uk", "here_as": "helping",
+            })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{updated}");
+        assert_eq!(
+            (
+                updated["name"].as_str(),
+                updated["locale"].as_str(),
+                updated["hereAs"].as_str()
+            ),
+            (Some("Ivan"), Some("uk"), Some("helping"))
+        );
+
+        for bad in [
+            json!({ "locale": "de" }),
+            json!({ "here_as": "tourist" }),
+            json!({ "bio": "x".repeat(1001) }),
+        ] {
+            let (status, _) = call(
+                &app,
+                Method::PUT,
+                "/api/user/me",
+                Some(&me.token),
+                Some(bad.clone()),
+            )
+            .await;
+            assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{bad}");
+        }
+
+        let settings = json!({ "newPlaces": true, "digest": "weekly" });
+        let (status, body) = call(
+            &app,
+            Method::PUT,
+            "/api/user/me/notifications",
+            Some(&me.token),
+            Some(json!({ "notification_settings": settings })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(body["notificationSettings"], settings);
+
+        let (status, _) = call(&app, Method::GET, "/api/user/me", None, None).await;
+        assert_eq!(status, StatusCode::UNAUTHORIZED);
+    }
+
+    #[actix_web::test]
+    #[serial(jwt_env)]
+    async fn test_spoken_languages() {
+        let pool = require_db!();
+        let app = test_app!(pool);
+        let me = ts::user(&pool, "user");
+        let conn = &mut pool.get().unwrap();
+        let ids: Vec<Uuid> = (0..2)
+            .map(|i| {
+                diesel::insert_into(languages::table)
+                    .values((
+                        languages::name.eq(format!("Lang{i} {}", ts::unique())),
+                        languages::symbol.eq("xx"),
+                    ))
+                    .returning(languages::id)
+                    .get_result(conn)
+                    .unwrap()
+            })
+            .collect();
+
+        let (status, body) = call(
+            &app,
+            Method::POST,
+            "/api/user/languages",
+            Some(&me.token),
+            Some(json!({ "languages_ids": ids })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+
+        let path = format!("/api/user/{}/languages", me.id);
+        let (status, body) = call(&app, Method::GET, &path, None, None).await;
+        assert_eq!(status, StatusCode::OK, "languages are public");
+        assert_eq!(body["languageIds"].as_array().unwrap().len(), 2);
+
+        let (status, _) = call(
+            &app,
+            Method::DELETE,
+            "/api/user/languages",
+            Some(&me.token),
+            Some(json!({ "language_id": ids[0] })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        let (_, body) = call(&app, Method::GET, &path, None, None).await;
+        assert_eq!(body["languageIds"], json!([ids[1]]));
+
+        let (status, _) = call(
+            &app,
+            Method::POST,
+            "/api/user/languages",
+            None,
+            Some(json!({ "languages_ids": ids })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::UNAUTHORIZED);
+    }
+
+    /// Without the GOOGLE_* env vars every OAuth endpoint answers 503.
+    #[actix_web::test]
+    #[serial(jwt_env)]
+    async fn test_oauth_endpoints_without_configuration() {
+        let pool = require_db!();
+        let app = test_app!(pool);
+        for (method, path, body) in [
+            (Method::GET, "/api/user/oauth/google/login", None),
+            (
+                Method::GET,
+                "/api/user/oauth/google/callback?code=c&state=s",
+                None,
+            ),
+            (
+                Method::POST,
+                "/api/user/oauth/google/exchange",
+                Some(json!({ "code": "c" })),
+            ),
+        ] {
+            let (status, resp) = call(&app, method, path, None, body).await;
+            assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE, "{path}: {resp}");
+        }
+    }
+}

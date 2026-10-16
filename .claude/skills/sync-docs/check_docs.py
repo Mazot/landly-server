@@ -73,7 +73,7 @@ def code_routes():
         scope = re.search(r'web::scope\(\s*"([^"]+)"', text)
         if not scope:
             continue
-        for m in re.finditer(r'\.route\(\s*"([^"]*)"\s*,\s*web::(get|post|put|delete|patch)\(\)', text, re.S):
+        for m in re.finditer(r'\.route\(\s*"([^"]*)"\s*,\s*(?:\w+\(\s*)?web::(get|post|put|delete|patch)\(\)', text, re.S):
             raw = "/api" + scope.group(1) + m.group(1)
             routes[(m.group(2).upper(), norm(raw))] = (cfg.parent.name, raw)
     # healthcheck is registered directly in main.rs

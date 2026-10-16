@@ -115,9 +115,16 @@ Wrap the single route with the shared limiter passed from `main`, like `user/con
 
 Add the handler to `paths(...)` and every new request/response type to `components(schemas(...))` of the feature's `ApiDoc`. Never touch the root `#[openapi]` in `main.rs`. Removing/renaming a route → remove/rename it here too. `test_every_registered_route_is_in_the_openapi_spec` / `test_every_openapi_operation_is_a_registered_route` (main.rs) fail if the route and its `#[utoipa::path]` method/path or `ApiDoc` entry disagree.
 
-## 7. Tests (inline `#[cfg(test)]`, no database)
+## 7. Tests
 
-Minimum for a new endpoint:
+**HTTP test** (DB-backed) in the feature's `controllers.rs` → `mod http_tests`, using
+`src/test_support.rs`: `let pool = require_db!(); let app = test_app!(pool);`, factories
+(`ts::user(&pool, "moderator")` …) and `call(&app, Method::POST, "/api/…", Some(&token), Some(json!({…})))`.
+Cover the happy path, 401 without a token (if protected), 403 for the wrong user/role and
+422 for invalid input — and check the stored effect (follow-up GET or a Diesel query).
+Mark it `#[serial(jwt_env)]`; use unique data, never assume an empty table.
+
+**Unit tests** (inline `#[cfg(test)]`, no database) — minimum for a new endpoint:
 - happy path through the usecase with the stub repo (assert the write was recorded);
 - each gate: wrong owner / insufficient role → `Forbidden`, invalid input → `UnprocessableEntity`, and assert the stub repo recorded **no** write;
 - new enum values: round-trip `as_str`/`TryFrom` + unknown value;

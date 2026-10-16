@@ -114,6 +114,7 @@ impl OrganisationUsecase {
         let duplicate_nearby = self
             .organisation_repo
             .has_duplicate_nearby(
+                new_organisation.id,
                 &new_organisation.name,
                 new_organisation.latitude.as_ref(),
                 new_organisation.longitude.as_ref(),
@@ -574,6 +575,7 @@ mod tests {
 
         fn has_duplicate_nearby(
             &self,
+            _exclude_id: Uuid,
             _name: &str,
             _latitude: Option<&BigDecimal>,
             _longitude: Option<&BigDecimal>,

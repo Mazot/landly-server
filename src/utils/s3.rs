@@ -213,3 +213,128 @@ impl Clone for S3ClientWrapper {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serial_test::serial;
+
+    const VARS: [&str; 6] = [
+        "S3_ENDPOINT_URL",
+        "S3_ACCESS_KEY_ID",
+        "S3_SECRET_ACCESS_KEY",
+        "S3_BUCKET",
+        "S3_REGION",
+        "S3_PUBLIC_URL",
+    ];
+
+    /// Sets the S3_* vars (None = unset). These tests hold the `jwt_env` lock
+    /// because `DiContainer::new` in the DB-backed tests reads the same vars.
+    fn s3_env(values: [Option<&str>; 6]) {
+        for (key, value) in VARS.iter().zip(values) {
+            // SAFETY: serialized by #[serial(jwt_env)].
+            unsafe {
+                match value {
+                    Some(v) => env::set_var(key, v),
+                    None => env::remove_var(key),
+                }
+            }
+        }
+    }
+
+    fn unreachable_storage(public_url: Option<&str>) -> S3ClientWrapper {
+        // Port 1 refuses connections immediately: no real network traffic.
+        s3_env([
+            Some("http://127.0.0.1:1"),
+            Some("key"),
+            Some("secret"),
+            Some("photos"),
+            None,
+            public_url,
+        ]);
+        let storage = S3ClientWrapper::new().expect("all required vars are set");
+        s3_env([None; 6]);
+        storage
+    }
+
+    #[test]
+    #[serial(jwt_env)]
+    fn test_new_requires_every_mandatory_var() {
+        for missing in 0..4 {
+            let mut values = [
+                Some("http://127.0.0.1:1"),
+                Some("key"),
+                Some("secret"),
+                Some("photos"),
+                None,
+                None,
+            ];
+            values[missing] = None;
+            s3_env(values);
+            assert!(S3ClientWrapper::new().is_err(), "{} missing", VARS[missing]);
+        }
+        s3_env([None; 6]);
+    }
+
+    #[test]
+    #[serial(jwt_env)]
+    fn test_public_url_defaults_to_endpoint_and_bucket() {
+        let storage = unreachable_storage(None);
+        assert_eq!(storage.get_bucket(), "photos");
+        assert_eq!(
+            storage.get_public_url("images/a.png"),
+            "http://127.0.0.1:1/photos/images/a.png"
+        );
+        assert_eq!(
+            storage.clone().get_public_url("x"),
+            storage.get_public_url("x")
+        );
+    }
+
+    #[test]
+    #[serial(jwt_env)]
+    fn test_public_url_override() {
+        let storage = unreachable_storage(Some("https://cdn.example.test/media/"));
+        assert_eq!(
+            storage.get_public_url("images/a.png"),
+            "https://cdn.example.test/media/images/a.png"
+        );
+    }
+
+    /// Presigning is computed locally (no request is sent).
+    #[actix_web::test]
+    #[serial(jwt_env)]
+    async fn test_presigned_url_is_signed_for_the_key() {
+        let storage = unreachable_storage(None);
+        let url = storage
+            .get_presigned_url("images/a.png", 300)
+            .await
+            .unwrap();
+        assert!(
+            url.starts_with("http://127.0.0.1:1/photos/images/a.png?"),
+            "{url}"
+        );
+        assert!(
+            url.contains("X-Amz-Signature=") && url.contains("X-Amz-Expires=300"),
+            "{url}"
+        );
+    }
+
+    #[actix_web::test]
+    #[serial(jwt_env)]
+    async fn test_network_failures_become_internal_server_errors() {
+        let storage = unreachable_storage(None);
+        assert!(matches!(
+            storage.upload("k", b"data".to_vec(), "image/png").await,
+            Err(AppError::InternalServerError)
+        ));
+        assert!(matches!(
+            storage.delete("k").await,
+            Err(AppError::InternalServerError)
+        ));
+        assert!(matches!(
+            storage.download("k").await,
+            Err(AppError::InternalServerError)
+        ));
+    }
+}

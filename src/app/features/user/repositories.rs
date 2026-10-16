@@ -160,3 +160,60 @@ impl UserRepository for UserRepositoryImpl {
         Ok((user, token))
     }
 }
+
+/// DB-backed tests of the Google OAuth account rules (no Google involved:
+/// they start after the verified email + `sub` have been obtained).
+#[cfg(test)]
+mod db_tests {
+    use super::{UserRepository, UserRepositoryImpl};
+    use crate::data::schema::user_providers;
+    use crate::error::AppError;
+    use crate::test_support::{self as ts, require_db};
+    use diesel::prelude::*;
+    use serial_test::serial;
+
+    #[test]
+    #[serial(jwt_env)]
+    fn test_oauth_creates_the_account_once_and_links_the_provider() {
+        let pool = require_db!();
+        ts::jwt_env();
+        let repo = UserRepositoryImpl::new(pool.clone());
+        let (email, sub) = (format!("g{}@example.test", ts::unique()), ts::unique());
+
+        let (first, token) = repo
+            .upsert_oauth_user("google".into(), sub.clone(), email.clone())
+            .unwrap();
+        assert_eq!(first.email, email);
+        assert!(!token.is_empty());
+        let (again, _) = repo
+            .upsert_oauth_user("google".into(), sub.clone(), email)
+            .unwrap();
+        assert_eq!(
+            again.id, first.id,
+            "the same Google account signs in to the same user"
+        );
+
+        let links: i64 = user_providers::table
+            .filter(user_providers::provider_user_id.eq(&sub))
+            .count()
+            .get_result(&mut pool.get().unwrap())
+            .unwrap();
+        assert_eq!(links, 1);
+    }
+
+    /// Audit #2: an attacker controlling a Google account with a victim's
+    /// email must not take over the victim's password account.
+    #[test]
+    #[serial(jwt_env)]
+    fn test_oauth_never_links_to_an_existing_account_by_email() {
+        let pool = require_db!();
+        ts::jwt_env();
+        let existing = ts::user(&pool, "user");
+        let repo = UserRepositoryImpl::new(pool.clone());
+
+        match repo.upsert_oauth_user("google".into(), ts::unique(), existing.email.clone()) {
+            Err(AppError::Forbidden(_)) => (),
+            other => panic!("expected Forbidden, got {:?}", other.map(|(u, _)| u.id)),
+        }
+    }
+}

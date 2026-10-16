@@ -57,9 +57,13 @@ pub fn establish_connection() -> Result<RedisPool, AppError> {
     Ok(pool)
 }
 
-pub fn make_common_get_request_cache(cache_prefix: &str, ttl: u64) -> RedisCacheMiddleware {
-    let redis_url = env::var(env_key::REDIS_URL).expect("REDIS_URL must be set");
-
+/// Request-reply cache for the `GET /common/*` routes. Connects lazily (per
+/// request), so building it never touches Redis.
+pub fn make_common_get_request_cache(
+    redis_url: &str,
+    cache_prefix: &str,
+    ttl: u64,
+) -> RedisCacheMiddleware {
     RedisCacheMiddlewareBuilder::new(redis_url)
         .cache_prefix(cache_prefix)
         .ttl(ttl)
@@ -101,15 +105,11 @@ mod tests {
         assert!(result.is_err());
     }
 
+    /// Building the middleware must not need a reachable Redis (the server
+    /// builds it per worker at startup).
     #[test]
-    #[serial]
-    #[should_panic(expected = "REDIS_URL must be set")]
-    fn test_make_common_get_request_cache_panics_without_env() {
-        unsafe {
-            std::env::remove_var("REDIS_URL");
-        }
-
-        make_common_get_request_cache("test_prefix", 60);
+    fn test_make_common_get_request_cache_builds_without_connecting() {
+        make_common_get_request_cache("redis://127.0.0.1:1/", "test_prefix:", 60);
     }
 
     #[test]

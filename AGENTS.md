@@ -132,6 +132,16 @@ state: web::Data<AppState>
 
 Route patterns are matched by `path_matches`: a `{param}` segment matches exactly one non-empty path segment (`/api/organisation/update/{id}` matches `/api/organisation/update/<uuid>`), and a pattern ending with `/` is a prefix match (images style). Never rely on plain `starts_with` — a literal `{id}` in the pattern would silently disable auth for that route (this was a real bug). The test `test_every_auth_required_route_matches_a_real_path` guards against regressions; keep it passing when adding routes.
 
+### Tests
+
+Two kinds of tests, both inline `#[cfg(test)]` next to the code:
+
+- **Unit tests (no services):** usecases against hand-written stub repositories (`review/usecases.rs` pattern — assert rejected calls never reach the repository), presenters, enums, pure helpers.
+- **DB-backed HTTP tests** (`mod http_tests` in each feature's `controllers.rs`): requests go through the real `/api` routing (`configure_api` in `main.rs`) + auth middleware → controllers → usecases → repositories → Postgres. Helpers live in `src/test_support.rs`: `require_db!()` (pool for `TEST_DATABASE_URL`, migrations applied once; **skips the test when unset**, refuses a database whose name lacks `test`), `test_app!(pool)`, `call(&app, method, path, token, json)`, and factories (`user(pool, role)` with a JWT, `country`, `org_type`, `org(OrgSpec)`, `random_point`). Tests never assume an empty DB — use unique names/coordinates and assert on your own rows. Every test that issues a JWT or touches `JWT_*` / `S3_*` env vars is `#[serial(jwt_env)]`.
+- Redis-backed cache tests run when `REDIS_TEST_URL` is set (use a scratch DB index, e.g. `/15`).
+
+Locally: `docker start landly_postgres`, create `landly_test` once, put `TEST_DATABASE_URL=…/landly_test` in `.env` (the test helper reads only that key). CI (`rust.yml`) runs both test jobs with Postgres 17 + Redis 7 services.
+
 Route-table guard tests (they parse every feature `config.rs` via the test-only `src/app/route_inventory.rs`, so new features are covered automatically):
 
 - `auth.rs` → `test_every_mutating_route_is_protected_or_intentionally_public`: every POST/PUT/DELETE route must be in `AUTH_REQUIRED_ROUTES` or in the test's `INTENTIONALLY_PUBLIC_MUTATING_ROUTES` (each with a reason — adding one is a security decision); `test_intentionally_public_routes_exist_and_are_unprotected` keeps that list honest; `test_every_auth_required_route_protects_a_registered_route` catches typos/renamed routes.
@@ -173,7 +183,7 @@ The OpenAPI doc is split per feature: **every** feature declares its own `#[deri
 
 Definitions live in `.claude/agents/*.md` and `.claude/skills/*/SKILL.md` (their front-matter descriptions say when to use them); keep them in sync when conventions change (routes, env vars, RBAC rules).
 
-- Agents: `feature-scaffolder` (new feature module), `db-migrator` (schema changes), `api-smoke-tester` (real stack via `scripts/smoke.sh`), `security-reviewer` (read-only audit-invariant review of a diff), `usecase-test-writer` (DB-free stub-repo tests; `corridor/usecases.rs` has none yet).
+- Agents: `feature-scaffolder` (new feature module), `db-migrator` (schema changes), `api-smoke-tester` (real stack via `scripts/smoke.sh`), `security-reviewer` (read-only audit-invariant review of a diff), `usecase-test-writer` (DB-free stub-repo tests).
 - Skills: `add-endpoint` (route checklist ending in a ✓/✗ report), `sync-docs` (docs ↔ code, starts with `.claude/skills/sync-docs/check_docs.py`).
 - End-to-end baseline: `scripts/smoke.sh` (needs the running stack; `SMOKE_IMAGES=1` adds MinIO uploads).
 - Data inspection: project MCP servers in `.mcp.json` — `landly-postgres` (read-only role, no password hashes / claim tokens) and `landly-redis` (read-only ACL user, cache namespaces only, no `oauth:*`); prefer them over `docker exec psql` / `redis-cli` for reads. No MinIO MCP (none maintained). Setup and limits in `docs/operations.md`. GitHub: use the authenticated `gh` CLI (no GitHub MCP needed).
