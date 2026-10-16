@@ -583,6 +583,33 @@ mod http_tests {
         assert_eq!(flags.unwrap()["duplicateNearby"], true);
     }
 
+    /// `longitude` used to be DECIMAL(10, 8) (max ±99.99999999): every place
+    /// east of 100°E or west of 100°W — Tokyo, Bangkok, the Americas — failed
+    /// with a 500 "numeric field overflow".
+    #[actix_web::test]
+    #[serial(jwt_env)]
+    async fn test_create_accepts_the_full_longitude_range() {
+        let pool = require_db!();
+        let app = test_app!(pool);
+        let me = ts::user(&pool, "user");
+
+        for (city, lat, lng) in [
+            ("Tokyo", 35.6764, 139.6500),
+            ("Los Angeles", 34.0549, -118.2426),
+            ("Antimeridian", -16.5, 179.99999999),
+            ("Antimeridian west", 64.8, -179.99999999),
+        ] {
+            let (status, org) = call(&app, Method::POST, "/api/organisation/create", Some(&me.token),
+                Some(json!({ "name": format!("{city} {}", ts::unique()), "latitude": lat, "longitude": lng }))).await;
+            assert_eq!(status, StatusCode::OK, "{city}: {org}");
+            assert!(
+                (org["longitude"].as_f64().unwrap() - lng).abs() < 1e-6,
+                "{city}: stored {}",
+                org["longitude"]
+            );
+        }
+    }
+
     #[actix_web::test]
     #[serial(jwt_env)]
     async fn test_create_validates_input() {
