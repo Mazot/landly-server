@@ -520,7 +520,8 @@ mod http_tests {
     use uuid::Uuid;
 
     fn always_open() -> Value {
-        let day = json!([["00:00", "23:59"]]);
+        // Closing time is exclusive, so a full day ends at 24:00.
+        let day = json!([["00:00", "24:00"]]);
         json!({ "mon": day, "tue": day, "wed": day, "thu": day, "fri": day, "sat": day, "sun": day })
     }
 

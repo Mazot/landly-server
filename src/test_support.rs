@@ -55,25 +55,28 @@ pub fn pool() -> Option<DbPool> {
 
     POOL.get_or_init(|| {
         let url = database_url()?;
-        let db_name = url
-            .rsplit('/')
-            .next()
-            .and_then(|tail| tail.split('?').next())
-            .unwrap_or("");
-        assert!(
-            db_name.contains("test"),
-            "TEST_DATABASE_URL must name a database containing `test` (got `{db_name}`): \
-             the DB tests write to it"
-        );
-
         let pool = Pool::builder()
             .max_size(8)
             .connection_timeout(Duration::from_secs(5))
             .build(ConnectionManager::<PgConnection>::new(url))
             .expect("cannot connect to TEST_DATABASE_URL");
-        pool.get()
-            .expect("test database connection")
-            .run_pending_migrations(MIGRATIONS)
+        let conn = &mut pool.get().expect("test database connection");
+
+        // Check the database the server actually selected, not the URL text:
+        // a key-value DSN (`host=… dbname=landly`), PGDATABASE or a query
+        // parameter could otherwise point the writes at a real database.
+        let db_name: String = diesel::select(diesel::dsl::sql::<diesel::sql_types::Text>(
+            "current_database()",
+        ))
+        .get_result(conn)
+        .expect("SELECT current_database()");
+        assert!(
+            db_name.contains("test"),
+            "TEST_DATABASE_URL connects to `{db_name}`, whose name does not contain `test`: \
+             the DB tests write to it, so they refuse to run there"
+        );
+
+        conn.run_pending_migrations(MIGRATIONS)
             .expect("applying migrations to the test database");
 
         Some(pool)
@@ -95,14 +98,22 @@ macro_rules! require_db {
 }
 pub(crate) use require_db;
 
-/// The production `/api` routing + auth middleware over a `DiContainer` built
-/// from the test pool (no Redis → NoOp cache; no S3 → NoOp storage; no
-/// GOOGLE_* → OAuth answers 503).
+/// The production `/api` routing + auth middleware over a `DiContainer` with
+/// explicit test backends — NoOp cache, NoOp storage, no Google OAuth (503) —
+/// whatever `REDIS_URL` / `S3_*` / `GOOGLE_*` the developer has exported.
 macro_rules! test_app {
     ($pool:expr) => {{
         $crate::test_support::jwt_env();
         let state = $crate::app::drivers::middlewares::state::AppState {
-            di_container: $crate::utils::di::DiContainer::new(&$pool, None),
+            di_container: $crate::utils::di::DiContainer::with_backends(
+                &$pool,
+                $crate::utils::cache::TypedCache::new(std::sync::Arc::new(
+                    $crate::utils::cache::NoOpCacheService,
+                )
+                    as std::sync::Arc<dyn $crate::utils::cache::CacheService>),
+                std::sync::Arc::new($crate::utils::storage::NoOpStorageService),
+                None,
+            ),
         };
         let cache = state.di_container.redis_cache_service.clone();
         actix_web::test::init_service(
