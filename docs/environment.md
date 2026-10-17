@@ -6,7 +6,7 @@ Moved out of AGENTS.md. Read before adding/renaming an `env::var`, changing `.en
 | Variable | Required | Description |
 |---|---|---|
 | `DATABASE_URL` | yes | PostgreSQL connection string |
-| `REDIS_URL` | no | Redis connection string; cache disabled if absent |
+| `REDIS_URL` | no | Redis connection string; without it the repository cache is a no-op and `GET /common/*` is served uncached (Google OAuth needs it) |
 | `JWT_SECRET` | yes | JWT signing secret |
 | `JWT_EXPIRATION` | yes | JWT expiry in seconds |
 | `GOOGLE_CLIENT_ID` | no | OAuth Google client ID |
@@ -23,7 +23,8 @@ Moved out of AGENTS.md. Read before adding/renaming an `env::var`, changing `.en
 | `DB_POOL_MAX_SIZE`, `DB_POOL_MIN_IDLE`, `DB_POOL_MAX_LIFETIME_SECS`, `DB_POOL_IDLE_TIMEOUT_SECS`, `DB_POOL_CONNECTION_TIMEOUT_SECS` | no | r2d2 Postgres pool tuning (`utils/db.rs`) |
 | `REDIS_POOL_*` (same five suffixes) | no | r2d2 Redis pool tuning (`utils/redis.rs`) |
 | `RUST_LOG` | no | `env_logger` filter (compose default `info`) |
-| `REDIS_TEST_URL` | no | Enables the real-Redis GETDEL test in `utils/cache.rs` (a no-op without it) |
+| `TEST_DATABASE_URL` | no | Database for the DB-backed tests (`src/test_support.rs`); its name must contain `test`. Read from the env or that single key in `.env`; tests skip without it |
+| `REDIS_TEST_URL` | no | Enables the real-Redis cache tests in `utils/cache.rs` (use a scratch DB index such as `/15`); skipped without it |
 | `HOST`, `PORT` | — | Set by compose/`start.sh` but **not read** by the binary — it binds `constants::BIND` (`0.0.0.0:8080`) |
 
 Tooling-only (not read by the binary): `MCP_DATABASE_URL` / `MCP_REDIS_URL` — read-only connection strings for the `landly-postgres` / `landly-redis` MCP servers, written to `.env` by `scripts/dev/setup-readonly-db.sh` / `scripts/dev/setup-readonly-redis.sh` (see docs/operations.md).

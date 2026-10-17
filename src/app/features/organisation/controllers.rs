@@ -507,3 +507,515 @@ mod tests {
         assert_eq!(parse_csv(&Some(", ,".to_string())), None);
     }
 }
+
+/// DB-backed HTTP tests (skipped without TEST_DATABASE_URL, see test_support).
+#[cfg(test)]
+mod http_tests {
+    use crate::data::schema::{moderation_events, organisations};
+    use crate::test_support::{self as ts, OrgSpec, call, require_db, test_app};
+    use actix_web::http::{Method, StatusCode};
+    use diesel::prelude::*;
+    use serde_json::{Value, json};
+    use serial_test::serial;
+    use uuid::Uuid;
+
+    fn always_open() -> Value {
+        // Closing time is exclusive, so a full day ends at 24:00.
+        let day = json!([["00:00", "24:00"]]);
+        json!({ "mon": day, "tue": day, "wed": day, "thu": day, "fri": day, "sat": day, "sun": day })
+    }
+
+    fn ids(body: &Value) -> Vec<String> {
+        body["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|i| i["id"].as_str().unwrap().to_string())
+            .collect()
+    }
+
+    #[actix_web::test]
+    #[serial(jwt_env)]
+    async fn test_create_submits_a_pending_org_with_moderation_flags() {
+        let pool = require_db!();
+        let app = test_app!(pool);
+        let me = ts::user(&pool, "user");
+        let country = ts::country(&pool);
+        let (lat, lng) = ts::random_point();
+        let name = format!("Kiezladen {}", ts::unique());
+
+        let (status, org) = call(&app, Method::POST, "/api/organisation/create", Some(&me.token), Some(json!({
+            "name": name, "tel": "+49 30 1234567", "latitude": lat, "longitude": lng,
+            "location_country_id": country.id, "services": ["Help"], "languages": ["Russian"],
+            "opening_hours": always_open(), "timezone": "UTC", "cost": "free", "added_by": "community",
+        }))).await;
+        assert_eq!(status, StatusCode::OK, "{org}");
+        assert_eq!(org["status"], "pending");
+        assert_eq!(org["createdBy"], json!(me.id));
+        assert_eq!(org["openNow"], true);
+
+        let id: Uuid = org["id"].as_str().unwrap().parse().unwrap();
+        let conn = &mut pool.get().unwrap();
+        let flags: Option<Value> = moderation_events::table
+            .filter(moderation_events::target_id.eq(id))
+            .filter(moderation_events::action.eq("submitted"))
+            .select(moderation_events::flags)
+            .first(conn)
+            .unwrap();
+        let flags = flags.unwrap();
+        assert_eq!(flags["duplicateNearby"], false);
+        assert_eq!(flags["phoneLooksValid"], true);
+
+        // A second submission with the same name at the same spot is flagged.
+        let (_, dup) = call(
+            &app,
+            Method::POST,
+            "/api/organisation/create",
+            Some(&me.token),
+            Some(json!({ "name": name, "latitude": lat, "longitude": lng })),
+        )
+        .await;
+        let dup_id: Uuid = dup["id"].as_str().unwrap().parse().unwrap();
+        let flags: Option<Value> = moderation_events::table
+            .filter(moderation_events::target_id.eq(dup_id))
+            .select(moderation_events::flags)
+            .first(conn)
+            .unwrap();
+        assert_eq!(flags.unwrap()["duplicateNearby"], true);
+    }
+
+    /// `longitude` used to be DECIMAL(10, 8) (max ±99.99999999): every place
+    /// east of 100°E or west of 100°W — Tokyo, Bangkok, the Americas — failed
+    /// with a 500 "numeric field overflow".
+    #[actix_web::test]
+    #[serial(jwt_env)]
+    async fn test_create_accepts_the_full_longitude_range() {
+        let pool = require_db!();
+        let app = test_app!(pool);
+        let me = ts::user(&pool, "user");
+
+        for (city, lat, lng) in [
+            ("Tokyo", 35.6764, 139.6500),
+            ("Los Angeles", 34.0549, -118.2426),
+            ("Antimeridian", -16.5, 179.99999999),
+            ("Antimeridian west", 64.8, -179.99999999),
+        ] {
+            let (status, org) = call(&app, Method::POST, "/api/organisation/create", Some(&me.token),
+                Some(json!({ "name": format!("{city} {}", ts::unique()), "latitude": lat, "longitude": lng }))).await;
+            assert_eq!(status, StatusCode::OK, "{city}: {org}");
+            assert!(
+                (org["longitude"].as_f64().unwrap() - lng).abs() < 1e-6,
+                "{city}: stored {}",
+                org["longitude"]
+            );
+        }
+    }
+
+    #[actix_web::test]
+    #[serial(jwt_env)]
+    async fn test_create_validates_input() {
+        let pool = require_db!();
+        let app = test_app!(pool);
+        let me = ts::user(&pool, "user");
+
+        for body in [
+            json!({ "name": "x", "latitude": 91.0, "longitude": 0.0 }),
+            json!({ "name": "x", "latitude": 0.0, "longitude": 181.0 }),
+            json!({ "name": "x", "cost": "cheap" }),
+            json!({ "name": "x", "added_by": "robot" }),
+        ] {
+            let (status, resp) = call(
+                &app,
+                Method::POST,
+                "/api/organisation/create",
+                Some(&me.token),
+                Some(body.clone()),
+            )
+            .await;
+            assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body} -> {resp}");
+        }
+        let (status, _) = call(
+            &app,
+            Method::POST,
+            "/api/organisation/create",
+            None,
+            Some(json!({ "name": "x" })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::UNAUTHORIZED);
+    }
+
+    #[actix_web::test]
+    #[serial(jwt_env)]
+    async fn test_update_and_delete_respect_ownership_and_remoderation() {
+        let pool = require_db!();
+        let app = test_app!(pool);
+        let (creator, stranger, moderator) = (
+            ts::user(&pool, "user"),
+            ts::user(&pool, "user"),
+            ts::user(&pool, "moderator"),
+        );
+        let org = ts::org(
+            &pool,
+            OrgSpec {
+                created_by: Some(creator.id),
+                ..Default::default()
+            },
+        );
+        let path = format!("/api/organisation/update/{}", org.id);
+
+        let (status, _) = call(
+            &app,
+            Method::PUT,
+            &path,
+            Some(&stranger.token),
+            Some(json!({ "name": "hijack" })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::FORBIDDEN);
+
+        let (status, body) = call(
+            &app,
+            Method::PUT,
+            &path,
+            Some(&moderator.token),
+            Some(json!({ "description": "fixed typo" })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+        assert_eq!(body["status"], "live", "moderator edits keep the org live");
+
+        let (status, body) = call(
+            &app,
+            Method::PUT,
+            &path,
+            Some(&creator.token),
+            Some(json!({ "website": "https://example.test" })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(
+            body["status"], "pending",
+            "creator edits of a live org go back to moderation"
+        );
+        let conn = &mut pool.get().unwrap();
+        let flags: Option<Value> = moderation_events::table
+            .filter(moderation_events::target_id.eq(org.id))
+            .select(moderation_events::flags)
+            .first(conn)
+            .unwrap();
+        assert_eq!(flags.unwrap()["editedAfterApproval"], true);
+
+        let delete = format!("/api/organisation/delete/{}", org.id);
+        let (status, _) = call(&app, Method::DELETE, &delete, Some(&stranger.token), None).await;
+        assert_eq!(status, StatusCode::FORBIDDEN);
+        let (status, _) = call(&app, Method::DELETE, &delete, Some(&creator.token), None).await;
+        assert_eq!(status, StatusCode::OK);
+        let left: i64 = organisations::table
+            .filter(organisations::id.eq(org.id))
+            .count()
+            .get_result(conn)
+            .unwrap();
+        assert_eq!(left, 0);
+    }
+
+    #[actix_web::test]
+    #[serial(jwt_env)]
+    async fn test_list_and_fetch() {
+        let pool = require_db!();
+        let app = test_app!(pool);
+        let country = ts::country(&pool);
+        let suffix = ts::unique();
+        let name = format!("Listable-{suffix}");
+        let live = ts::org(
+            &pool,
+            OrgSpec {
+                country: Some(country.id),
+                name: Some(name.clone()),
+                ..Default::default()
+            },
+        );
+        let pending = ts::org(
+            &pool,
+            OrgSpec {
+                country: Some(country.id),
+                status: Some("pending"),
+                ..Default::default()
+            },
+        );
+
+        let (status, list) = call(
+            &app,
+            Method::GET,
+            &format!("/api/organisation/list?location_country_id={}", country.id),
+            None,
+            None,
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(
+            ids(&list),
+            vec![live.id.to_string()],
+            "only live orgs are listed"
+        );
+
+        let (_, by_name) = call(
+            &app,
+            Method::GET,
+            &format!("/api/organisation/list?name={}", suffix.to_uppercase()),
+            None,
+            None,
+        )
+        .await;
+        assert!(
+            ids(&by_name).contains(&live.id.to_string()),
+            "name filter is a case-insensitive substring"
+        );
+
+        let (status, detail) = call(
+            &app,
+            Method::GET,
+            &format!("/api/organisation/fetch/{}", live.id),
+            None,
+            None,
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(detail["community"]["peopleCame"], 0);
+        assert_eq!(detail["openNow"], Value::Null, "no hours → unknown");
+
+        let (status, _) = call(
+            &app,
+            Method::GET,
+            &format!("/api/organisation/fetch/{}", Uuid::new_v4()),
+            None,
+            None,
+        )
+        .await;
+        assert_eq!(status, StatusCode::NOT_FOUND);
+
+        // Documents current behaviour: fetch-by-id does not hide pending orgs.
+        let (status, body) = call(
+            &app,
+            Method::GET,
+            &format!("/api/organisation/fetch/{}", pending.id),
+            None,
+            None,
+        )
+        .await;
+        assert_eq!(
+            (status, body["status"].as_str()),
+            (StatusCode::OK, Some("pending"))
+        );
+    }
+
+    #[actix_web::test]
+    #[serial(jwt_env)]
+    async fn test_search_filters_and_sorting() {
+        let pool = require_db!();
+        let app = test_app!(pool);
+        let me = ts::user(&pool, "user");
+        let kind = ts::org_type(&pool);
+        let (lat, lng) = ts::random_point();
+        let near = ts::org(
+            &pool,
+            OrgSpec {
+                lat_lng: Some((lat, lng)),
+                org_type: Some(kind.id),
+                ..Default::default()
+            },
+        );
+        let far = ts::org(
+            &pool,
+            OrgSpec {
+                lat_lng: Some((lat + 0.05, lng)),
+                ..Default::default()
+            },
+        ); // ~5.5 km north
+        ts::org(
+            &pool,
+            OrgSpec {
+                lat_lng: Some((lat, lng)),
+                status: Some("pending"),
+                ..Default::default()
+            },
+        );
+        // Richer attributes go through the API so every column is set.
+        let (_, rich) = call(
+            &app,
+            Method::POST,
+            "/api/organisation/create",
+            Some(&me.token),
+            Some(json!({
+                "name": format!("Rich {}", ts::unique()), "latitude": lat + 0.01, "longitude": lng,
+                "languages": ["Ukrainian"], "opening_hours": always_open(), "timezone": "UTC",
+                "cost": "paid", "added_by": "official",
+            })),
+        )
+        .await;
+        let rich_id: Uuid = rich["id"].as_str().unwrap().parse().unwrap();
+        diesel::update(organisations::table.find(rich_id))
+            .set((
+                organisations::status.eq("live"),
+                organisations::verified.eq(true),
+                organisations::rating_avg.eq(Some(4.8)),
+            ))
+            .execute(&mut pool.get().unwrap())
+            .unwrap();
+
+        let base = format!("/api/organisation/search?lat={lat}&lng={lng}&radius_km=10");
+        let (status, all) = call(&app, Method::GET, &base, None, None).await;
+        assert_eq!(status, StatusCode::OK, "{all}");
+        assert_eq!(
+            ids(&all),
+            vec![near.id.to_string(), rich_id.to_string(), far.id.to_string()],
+            "nearest first, pending hidden"
+        );
+        assert!(all["items"][0]["distanceKm"].as_f64().unwrap() < 0.01);
+
+        let (_, small) = call(
+            &app,
+            Method::GET,
+            &format!("/api/organisation/search?lat={lat}&lng={lng}&radius_km=2"),
+            None,
+            None,
+        )
+        .await;
+        assert!(
+            !ids(&small).contains(&far.id.to_string()),
+            "radius excludes the far org"
+        );
+
+        for (filter, expected) in [
+            (
+                format!("&types={}", kind.slug.clone().unwrap()),
+                vec![near.id],
+            ),
+            ("&languages=Ukrainian".to_string(), vec![rich_id]),
+            ("&open_now=true".to_string(), vec![rich_id]),
+            ("&verified=true".to_string(), vec![rich_id]),
+            ("&min_rating=4.5".to_string(), vec![rich_id]),
+            ("&cost=paid".to_string(), vec![rich_id]),
+            ("&added_by=official".to_string(), vec![rich_id]),
+        ] {
+            let (_, body) = call(&app, Method::GET, &format!("{base}{filter}"), None, None).await;
+            let expected: Vec<String> = expected.iter().map(Uuid::to_string).collect();
+            assert_eq!(ids(&body), expected, "filter {filter}");
+        }
+
+        let (_, verified_first) = call(
+            &app,
+            Method::GET,
+            &format!("{base}&sort=verified"),
+            None,
+            None,
+        )
+        .await;
+        assert_eq!(verified_first["items"][0]["id"], json!(rich_id));
+        let (_, recent) = call(
+            &app,
+            Method::GET,
+            &format!("{base}&sort=recent"),
+            None,
+            None,
+        )
+        .await;
+        assert_eq!(recent["items"][0]["id"], json!(rich_id), "created last");
+
+        let bbox = format!(
+            "/api/organisation/search?min_lat={}&min_lng={}&max_lat={}&max_lng={}",
+            lat - 0.001,
+            lng - 0.001,
+            lat + 0.001,
+            lng + 0.001
+        );
+        let (_, boxed) = call(&app, Method::GET, &bbox, None, None).await;
+        assert_eq!(ids(&boxed), vec![near.id.to_string()]);
+    }
+
+    #[actix_web::test]
+    #[serial(jwt_env)]
+    async fn test_search_rejects_bad_parameters() {
+        let pool = require_db!();
+        let app = test_app!(pool);
+        for query in [
+            "",
+            "lat=10",
+            "min_lat=1&min_lng=1&max_lat=2",
+            "lat=95&lng=0",
+            "min_lat=1&min_lng=1&max_lat=2&max_lng=2&sort=nearest",
+            "lat=1&lng=1&sort=popular",
+        ] {
+            let (status, body) = call(
+                &app,
+                Method::GET,
+                &format!("/api/organisation/search?{query}"),
+                None,
+                None,
+            )
+            .await;
+            assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{query}: {body}");
+        }
+    }
+
+    #[actix_web::test]
+    #[serial(jwt_env)]
+    async fn test_visit_counter_and_checkins() {
+        let pool = require_db!();
+        let app = test_app!(pool);
+        let me = ts::user(&pool, "user");
+        let org = ts::org(&pool, OrgSpec::default());
+
+        for expected in [1, 2] {
+            let (status, body) = call(
+                &app,
+                Method::POST,
+                &format!("/api/organisation/visit/{}", org.id),
+                None,
+                None,
+            )
+            .await;
+            assert_eq!(status, StatusCode::OK);
+            assert_eq!(body["visitsCount"], expected);
+        }
+
+        let checkin = format!("/api/organisation/checkin/{}", org.id);
+        let (status, body) = call(
+            &app,
+            Method::POST,
+            &checkin,
+            Some(&me.token),
+            Some(json!({ "still_active": true, "tip": "Bring your passport" })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+        let (_, body) = call(
+            &app,
+            Method::POST,
+            &checkin,
+            Some(&me.token),
+            Some(json!({ "still_active": false })),
+        )
+        .await;
+        assert_eq!(body["community"]["peopleCame"], 2);
+        assert_eq!(body["community"]["stillActivePct"], 50.0);
+        assert_eq!(body["community"]["tips"], json!(["Bring your passport"]));
+
+        let pending = ts::org(
+            &pool,
+            OrgSpec {
+                status: Some("pending"),
+                ..Default::default()
+            },
+        );
+        let (status, _) = call(
+            &app,
+            Method::POST,
+            &format!("/api/organisation/checkin/{}", pending.id),
+            Some(&me.token),
+            Some(json!({})),
+        )
+        .await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    }
+}

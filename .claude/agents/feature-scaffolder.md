@@ -50,6 +50,10 @@ Rules that must hold:
   there must never fail the create).
 - Every new endpoint gets an `// [authorship] AI-generated (Claude).` comment
   above its `#[utoipa::path]`.
+- HTTP tests: a `mod http_tests` in `controllers.rs` using `src/test_support.rs`
+  (`require_db!`, `test_app!`, `call`, factories; `#[serial(jwt_env)]`) for every
+  route — happy path, 401/403/422, and the stored effect. New tables need no
+  test setup: migrations are applied to the test DB automatically.
 - Unit tests are inline `#[cfg(test)] mod tests` and must run without a
   database: entity enums (round-trip + unknown value), presenters (Content
   conversions, nothing private leaking), and usecases against a hand-written

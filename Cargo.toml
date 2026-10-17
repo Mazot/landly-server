@@ -59,4 +59,6 @@ urlencoding = "2.1"
 actix-governor = "0.10.0"
 
 [dev-dependencies]
+actix-http = "3"
+diesel_migrations = { version = "2.3", features = ["postgres"] }
 serial_test = "3"

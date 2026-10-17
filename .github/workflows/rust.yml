@@ -15,6 +15,28 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # Throw-away services for the DB/Redis-backed tests (src/test_support.rs);
+    # without them those tests skip themselves.
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: landly
+          POSTGRES_PASSWORD: landly
+          POSTGRES_DB: landly_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U landly -d landly_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgres://landly:landly@localhost:5432/landly_test
+      REDIS_TEST_URL: redis://localhost:6379/15
     steps:
     - uses: actions/checkout@v4
     - uses: dtolnay/rust-toolchain@stable
@@ -45,6 +67,28 @@ jobs:
 
   coverage:
     runs-on: ubuntu-latest
+    # Throw-away services for the DB/Redis-backed tests (src/test_support.rs);
+    # without them those tests skip themselves.
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: landly
+          POSTGRES_PASSWORD: landly
+          POSTGRES_DB: landly_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U landly -d landly_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgres://landly:landly@localhost:5432/landly_test
+      REDIS_TEST_URL: redis://localhost:6379/15
     steps:
     - uses: actions/checkout@v4
     - name: Install Rust toolchain

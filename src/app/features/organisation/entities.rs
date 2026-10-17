@@ -284,8 +284,11 @@ impl Organisation {
 
     /// Submit-time auto-check: does a live org with a very similar name exist
     /// within ~1 km of these coordinates?
+    /// Another organisation (not `exclude_id` — the check runs right after
+    /// the new row is inserted) with the same name within ~1 km.
     pub fn has_duplicate_nearby(
         conn: &mut PgConnection,
+        exclude_id: Uuid,
         name: &str,
         latitude: Option<&BigDecimal>,
         longitude: Option<&BigDecimal>,
@@ -298,6 +301,7 @@ impl Organisation {
         let delta = BigDecimal::try_from(0.01).map_err(|_| AppError::InternalServerError)?;
 
         let count = organisations::table
+            .filter(organisations::id.ne(exclude_id))
             .filter(organisations::name.ilike(name))
             .filter(organisations::latitude.between(lat - &delta, lat + &delta))
             .filter(organisations::longitude.between(lng - &delta, lng + &delta))

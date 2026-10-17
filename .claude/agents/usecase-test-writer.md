@@ -44,9 +44,12 @@ leave it failing, and report the bug first in your summary with `file:line`.
 
 ## Rules
 
-- No Postgres, Redis or network: if something needs them, it belongs to the
-  `api-smoke-tester` agent, not here. Tests touching env vars use
-  `#[serial]` from `serial_test` (see `utils/token.rs`).
+- No Postgres, Redis or network in these unit tests. SQL and HTTP behaviour is
+  covered by the DB-backed `http_tests` modules (`src/test_support.rs`) — add
+  cases there if a branch only exists in a repository/entity; full-stack
+  checks with Redis/MinIO belong to the `api-smoke-tester` agent.
+- Tests touching `JWT_*` or `S3_*` env vars are `#[serial(jwt_env)]` (the key the
+  token, auth, S3 and DB-backed tests share); other env vars use `#[serial]`.
 - One behaviour per test; name it `test_<method>_<expectation>` and add a
   one-line `///` comment when the *why* isn't obvious (e.g. which audit rule it
   guards).

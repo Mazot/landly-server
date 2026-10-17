@@ -69,8 +69,11 @@ merges. Never add paths to the root `#[openapi]`. Docs UI: `/scalar`; spec:
 
 ## Tests & CI
 
-- Tests are inline `#[cfg(test)]` and need no database: usecases against hand-written stub
-  repositories (`review/usecases.rs`), asserting that rejected calls never reach the repository.
+- Tests are inline `#[cfg(test)]`. Unit tests need no services: usecases against hand-written
+  stub repositories (`review/usecases.rs`), asserting that rejected calls never reach the
+  repository. HTTP behaviour is tested in each feature's `controllers.rs` `http_tests` module
+  through `src/test_support.rs` (`require_db!`, `test_app!`, `call`, factories) against
+  `TEST_DATABASE_URL` — skipped when unset, `#[serial(jwt_env)]`, unique data per test.
 - Guard tests fail when a route is missing from `ApiDoc` or the spec has a stale path (`main.rs`),
   or when a mutating route is unprotected / an `AUTH_REQUIRED_ROUTES` entry matches no route
   (`auth.rs`). Fix the code, don't loosen the test.

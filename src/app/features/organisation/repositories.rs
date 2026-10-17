@@ -70,6 +70,7 @@ pub trait OrganisationRepository: Send + Sync + 'static {
     /// Submit-time auto-check inputs.
     fn has_duplicate_nearby(
         &self,
+        exclude_id: Uuid,
         name: &str,
         latitude: Option<&BigDecimal>,
         longitude: Option<&BigDecimal>,
@@ -490,13 +491,14 @@ impl OrganisationRepository for OrganisationRepositoryImpl {
 
     fn has_duplicate_nearby(
         &self,
+        exclude_id: Uuid,
         name: &str,
         latitude: Option<&BigDecimal>,
         longitude: Option<&BigDecimal>,
     ) -> Result<bool, AppError> {
         let connection = &mut self.pool.get()?;
 
-        Organisation::has_duplicate_nearby(connection, name, latitude, longitude)
+        Organisation::has_duplicate_nearby(connection, exclude_id, name, latitude, longitude)
     }
 
     fn count_live_orgs_created_by(&self, user_id: Uuid) -> Result<i64, AppError> {

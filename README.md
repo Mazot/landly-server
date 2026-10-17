@@ -444,9 +444,25 @@ cargo test -- --nocapture
 cargo test test_name
 ```
 
-Tests are inline `#[cfg(test)] mod tests` modules next to the code and run without Postgres
-or Redis: usecases are exercised against hand-written stub repositories, presenters and
-domain enums directly. Anything that needs the real stack belongs in a smoke test, not here.
+Tests are inline `#[cfg(test)]` modules next to the code:
+
+- **Unit tests** run anywhere: usecases against hand-written stub repositories, presenters,
+  domain enums and helpers.
+- **DB-backed HTTP tests** (`http_tests` in each feature's `controllers.rs`) drive the real
+  routing, auth middleware, usecases and SQL against a dedicated Postgres database. They run
+  when `TEST_DATABASE_URL` points at a database whose name contains `test` and are skipped
+  otherwise:
+
+  ```bash
+  docker exec landly_postgres psql -U landly-user -d landly -c "CREATE DATABASE landly_test"
+  echo 'TEST_DATABASE_URL=postgres://landly-user:<password>@localhost:5432/landly_test' >> .env
+  cargo test
+  ```
+
+- **Redis cache tests** run with `REDIS_TEST_URL` (use a scratch DB index, e.g.
+  `redis://user:pass@localhost:6379/15`).
+
+CI provides both services, so Codecov sees every test.
 
 Guard tests also parse every feature `config.rs` and fail when a route is missing from the
 OpenAPI spec or a mutating route is not behind authentication.

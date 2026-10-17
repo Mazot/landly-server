@@ -100,6 +100,27 @@ impl DiContainer {
             }
         };
 
+        let oauth_google = OAuthGoogle::try_new(typed_cache_service.clone());
+        if oauth_google.is_none() {
+            log::warn!(
+                "Google OAuth is not configured (missing GOOGLE_* env vars). \
+                 /api/user/oauth/google/* endpoints will return 503."
+            );
+        }
+
+        Self::with_backends(pool, typed_cache_service, storage_service, oauth_google)
+    }
+
+    /// Wires every usecase over explicitly chosen backends. `new` resolves
+    /// them from the environment; the DB-backed tests pass NoOp ones so that a
+    /// developer's exported `S3_*` / `GOOGLE_*` never reach a real bucket or
+    /// Google.
+    pub fn with_backends(
+        pool: &DbPool,
+        typed_cache_service: TypedCache<Arc<dyn CacheService>>,
+        storage_service: Arc<dyn StorageService>,
+        oauth_google: Option<OAuthGoogle>,
+    ) -> Self {
         // ---------------------------------------------------------------------------
         // Feature repositories
         // ---------------------------------------------------------------------------
@@ -191,16 +212,7 @@ impl DiContainer {
                 Arc::new(image_presenter),
                 storage_service,
             ),
-            oauth_google: {
-                let oauth = OAuthGoogle::try_new(typed_cache_service.clone());
-                if oauth.is_none() {
-                    log::warn!(
-                        "Google OAuth is not configured (missing GOOGLE_* env vars). \
-                         /api/user/oauth/google/* endpoints will return 503."
-                    );
-                }
-                oauth
-            },
+            oauth_google,
         }
     }
 }

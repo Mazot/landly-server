@@ -709,4 +709,109 @@ mod tests {
         );
         assert_eq!(CacheKeys::common_countries_pattern(), "common:countries:*");
     }
+
+    /// Real-Redis cache behind the `Arc<dyn CacheService>` the app uses, or
+    /// None without REDIS_TEST_URL (point it at a scratch DB, e.g. `/15`).
+    fn redis_cache() -> Option<TypedCache<Arc<dyn CacheService>>> {
+        let url = std::env::var("REDIS_TEST_URL").ok()?;
+        let pool = r2d2::Pool::builder()
+            .max_size(2)
+            .build(redis::Client::open(url).unwrap())
+            .unwrap();
+        Some(TypedCache::new(
+            Arc::new(RedisCacheService::new(pool)) as Arc<dyn CacheService>
+        ))
+    }
+
+    #[derive(Debug, PartialEq, Serialize, serde::Deserialize, Clone)]
+    struct Cached {
+        id: u32,
+        name: String,
+    }
+
+    #[test]
+    fn test_redis_typed_get_set_delete() {
+        let Some(cache) = redis_cache() else { return };
+        let key = format!("test:typed:{}", uuid::Uuid::new_v4());
+        let value = Cached {
+            id: 7,
+            name: "seven".into(),
+        };
+
+        assert_eq!(cache.get::<Cached>(&key).unwrap(), None);
+        cache
+            .set(&key, &value, Some(Duration::from_secs(60)))
+            .unwrap();
+        assert_eq!(cache.get::<Cached>(&key).unwrap(), Some(value.clone()));
+        assert!(cache.exists(&key).unwrap());
+        // Default TTL path (no explicit TTL).
+        cache.set(&key, &value, None).unwrap();
+        assert!(cache.exists(&key).unwrap());
+
+        cache.delete(&key).unwrap();
+        assert!(!cache.exists(&key).unwrap());
+    }
+
+    #[test]
+    fn test_redis_mget_mset_keep_order_and_gaps() {
+        let Some(cache) = redis_cache() else { return };
+        let prefix = format!("test:multi:{}", uuid::Uuid::new_v4());
+        let items: Vec<(String, Cached)> = (0..3)
+            .map(|i| {
+                (
+                    format!("{prefix}:{i}"),
+                    Cached {
+                        id: i,
+                        name: format!("n{i}"),
+                    },
+                )
+            })
+            .collect();
+        cache.mset(&items, Some(Duration::from_secs(60))).unwrap();
+        cache.mset::<Cached>(&[], None).unwrap();
+
+        let keys = vec![
+            items[2].0.clone(),
+            format!("{prefix}:missing"),
+            items[0].0.clone(),
+        ];
+        let got = cache.mget::<Cached>(&keys).unwrap();
+        assert_eq!(
+            got,
+            vec![Some(items[2].1.clone()), None, Some(items[0].1.clone())]
+        );
+        assert!(cache.mget::<Cached>(&[]).unwrap().is_empty());
+
+        cache.invalidate_pattern(&format!("{prefix}:*")).unwrap();
+    }
+
+    /// Repositories call this on every write; it must drop the namespace and
+    /// nothing else.
+    #[test]
+    fn test_redis_invalidate_pattern_only_touches_the_namespace() {
+        let Some(cache) = redis_cache() else { return };
+        let run = uuid::Uuid::new_v4();
+        let doomed: Vec<String> = (0..150).map(|i| format!("test:{run}:org:{i}")).collect();
+        for key in &doomed {
+            cache.set(key, &1u8, Some(Duration::from_secs(60))).unwrap();
+        }
+        let survivor = format!("test:{run}:cor:1");
+        cache
+            .set(&survivor, &1u8, Some(Duration::from_secs(60)))
+            .unwrap();
+
+        cache
+            .invalidate_pattern(&format!("test:{run}:org:*"))
+            .unwrap();
+
+        assert!(
+            doomed.iter().all(|k| !cache.exists(k).unwrap()),
+            "SCAN must cover every page"
+        );
+        assert!(cache.exists(&survivor).unwrap());
+        cache.invalidate_pattern(&format!("test:{run}:*")).unwrap();
+        cache
+            .invalidate_pattern(&format!("test:{run}:nothing:*"))
+            .unwrap();
+    }
 }

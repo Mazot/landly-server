@@ -44,3 +44,49 @@ pub async fn create_report(
         form.reason.clone(),
     )
 }
+
+/// DB-backed HTTP tests (skipped without TEST_DATABASE_URL, see test_support).
+#[cfg(test)]
+mod http_tests {
+    use crate::test_support::{self as ts, call, require_db, test_app};
+    use actix_web::http::{Method, StatusCode};
+    use serde_json::json;
+    use serial_test::serial;
+    use uuid::Uuid;
+
+    #[actix_web::test]
+    #[serial(jwt_env)]
+    async fn test_create_report() {
+        let pool = require_db!();
+        let app = test_app!(pool);
+        let me = ts::user(&pool, "user");
+
+        let (status, report) = call(&app, Method::POST, "/api/report/create", Some(&me.token),
+            Some(json!({ "target_kind": "conversation", "target_id": Uuid::new_v4(), "reason": "Spam" }))).await;
+        assert_eq!(status, StatusCode::OK, "{report}");
+        assert_eq!(report["status"], "open");
+        assert!(
+            report.get("reporterId").is_none(),
+            "the reporter is not echoed back"
+        );
+
+        let (status, _) = call(
+            &app,
+            Method::POST,
+            "/api/report/create",
+            Some(&me.token),
+            Some(json!({ "target_kind": "planet", "target_id": Uuid::new_v4(), "reason": "?" })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+        let (status, _) = call(
+            &app,
+            Method::POST,
+            "/api/report/create",
+            None,
+            Some(json!({ "target_kind": "org", "target_id": Uuid::new_v4(), "reason": "x" })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::UNAUTHORIZED);
+    }
+}
