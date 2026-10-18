@@ -1,4 +1,4 @@
-use crate::data::models::{Country, OrganisationType};
+use crate::data::models::{Country, Language, OrganisationType};
 use actix_web::HttpResponse;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -12,6 +12,7 @@ pub trait CommonPresenter: Send + Sync + 'static {
     fn to_single_organization_type_json(&self, item: OrganisationType) -> HttpResponse;
     fn to_multi_country_json(&self, item: Vec<Country>) -> HttpResponse;
     fn to_multi_organization_type_json(&self, item: Vec<OrganisationType>) -> HttpResponse;
+    fn to_multi_language_json(&self, item: Vec<Language>) -> HttpResponse;
 }
 
 #[derive(Clone)]
@@ -58,6 +59,13 @@ impl CommonPresenter for CommonPresenterImpl {
 
     fn to_single_organization_type_json(&self, item: OrganisationType) -> HttpResponse {
         let response_content = OrganisationTypeContent::from(item);
+
+        HttpResponse::Ok().json(response_content)
+    }
+
+    fn to_multi_language_json(&self, item: Vec<Language>) -> HttpResponse {
+        let response_content: Vec<LanguageContent> =
+            item.into_iter().map(LanguageContent::from).collect();
 
         HttpResponse::Ok().json(response_content)
     }
@@ -165,6 +173,27 @@ impl From<OrganisationType> for OrganisationTypeContent {
             color: val.color,
             title: val.title,
             slug: val.slug,
+        }
+    }
+}
+
+#[derive(Deserialize, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct LanguageContent {
+    /// Language ID — the value used in `language_ids` / `languages_ids` on
+    /// people and users.
+    pub id: Uuid,
+    /// Language name in English, e.g. "Russian".
+    pub name: String,
+    /// Short code, e.g. "ru".
+    pub symbol: Option<String>,
+}
+impl From<Language> for LanguageContent {
+    fn from(val: Language) -> Self {
+        Self {
+            id: val.id,
+            name: val.name,
+            symbol: val.symbol,
         }
     }
 }
@@ -281,6 +310,21 @@ mod tests {
         let response = presenter.to_multi_organization_type_json(org_types);
 
         assert_eq!(response.status(), actix_web::http::StatusCode::OK);
+    }
+
+    #[test]
+    fn test_language_content_from_language() {
+        let id = Uuid::new_v4();
+        let content = LanguageContent::from(Language {
+            id,
+            name: "Russian".to_string(),
+            symbol: Some("ru".to_string()),
+        });
+
+        assert_eq!(
+            serde_json::to_value(&content).unwrap(),
+            serde_json::json!({ "id": id, "name": "Russian", "symbol": "ru" })
+        );
     }
 
     #[test]

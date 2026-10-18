@@ -1,6 +1,8 @@
 use super::{
     presenters::CommonPresenter,
-    repositories::{CommonRepository, GetAllCountriesRepositoryInput},
+    repositories::{
+        CommonRepository, GetAllCountriesRepositoryInput, GetAllLanguagesRepositoryInput,
+    },
 };
 use crate::{
     app::features::common::repositories::CreateOrganisationTypeRepositoryInput, error::AppError,
@@ -52,6 +54,22 @@ impl CommonUsecase {
         Ok(response)
     }
 
+    pub fn fetch_all_languages(
+        &self,
+        params: FetchAllLanguagesUsecaseInput,
+    ) -> Result<HttpResponse, AppError> {
+        let languages = self
+            .common_repo
+            .get_all_languages(GetAllLanguagesRepositoryInput {
+                limit: params.limit,
+                offset: params.offset,
+                name: params.name,
+            })?;
+        let response = self.common_presenter.to_multi_language_json(languages);
+
+        Ok(response)
+    }
+
     pub fn fetch_organisation_types(&self) -> Result<HttpResponse, AppError> {
         let org_types = self.common_repo.get_all_organisation_types()?;
         let response = self
@@ -99,6 +117,15 @@ pub struct FetchAllCountriesUsecaseInput {
     pub name: Option<String>,
 }
 
+pub struct FetchAllLanguagesUsecaseInput {
+    /// Page size (already clamped by the controller).
+    pub limit: i64,
+    /// Rows to skip.
+    pub offset: i64,
+    /// Case-insensitive substring filter on the name.
+    pub name: Option<String>,
+}
+
 pub struct CreateOrganisationTypeUsecaseInput {
     /// Type key.
     pub org_type: String,
@@ -116,7 +143,7 @@ mod tests {
     use crate::app::features::common::presenters::CommonPresenterImpl;
     use crate::app::features::common::repositories::GetCountryRepositoryInput;
     use crate::app::features::user::entities::UserRole;
-    use crate::data::models::{Country, OrganisationType};
+    use crate::data::models::{Country, Language, OrganisationType};
     use std::sync::Mutex;
 
     struct StubRepo {
@@ -137,6 +164,13 @@ mod tests {
         }
 
         fn get_country_detail(&self, _id: Uuid) -> Result<(Country, Vec<(String, i64)>), AppError> {
+            unimplemented!()
+        }
+
+        fn get_all_languages(
+            &self,
+            _params: GetAllLanguagesRepositoryInput,
+        ) -> Result<Vec<Language>, AppError> {
             unimplemented!()
         }
 

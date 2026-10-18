@@ -1,4 +1,4 @@
-use super::usecases::FetchAllCountriesUsecaseInput;
+use super::usecases::{FetchAllCountriesUsecaseInput, FetchAllLanguagesUsecaseInput};
 use crate::app::{
     drivers::middlewares::state::AppState,
     features::common::usecases::CreateOrganisationTypeUsecaseInput,
@@ -77,6 +77,36 @@ pub async fn fetch_country_detail(
         .fetch_country_detail(id.into_inner())
 }
 
+// [authorship] AI-generated (Claude).
+#[utoipa::path(
+    get,
+    path = "/common/languages",
+    context_path = "/api",
+    params(LanguagesListQueryParams),
+    responses(
+        (status = 200, description = "Languages ordered by name; `id` is what `language_ids` / `languages_ids` reference", body = Vec<super::presenters::LanguageContent>),
+        (status = 500, description = "Internal server error", body = AppError)
+    ),
+    tag = "Common"
+)]
+pub async fn fetch_all_languages(
+    state: Data<AppState>,
+    params: Query<LanguagesListQueryParams>,
+) -> Result<HttpResponse, AppError> {
+    let offset = params.offset.unwrap_or(0).max(0);
+    let limit = params.limit.unwrap_or(100).clamp(0, 500);
+    let name = params.name.clone();
+
+    state
+        .di_container
+        .common_usecase
+        .fetch_all_languages(FetchAllLanguagesUsecaseInput {
+            limit,
+            offset,
+            name,
+        })
+}
+
 // [authorship] Human-written (original codebase).
 #[utoipa::path(
     get,
@@ -144,6 +174,16 @@ pub struct CountriesListQueryParams {
     /// Rows to skip (default 0, max 150).
     pub offset: Option<i64>,
     /// Case-insensitive substring filter on the country name.
+    pub name: Option<String>,
+}
+
+#[derive(Deserialize, ToSchema, IntoParams)]
+pub struct LanguagesListQueryParams {
+    /// Page size (default 100, max 500).
+    pub limit: Option<i64>,
+    /// Rows to skip (default 0).
+    pub offset: Option<i64>,
+    /// Case-insensitive substring filter on the language name.
     pub name: Option<String>,
 }
 
@@ -248,6 +288,75 @@ mod http_tests {
         )
         .await;
         assert_eq!(status, StatusCode::NOT_FOUND);
+    }
+
+    #[actix_web::test]
+    #[serial(jwt_env)]
+    async fn test_languages_list() {
+        use crate::data::schema::languages;
+        use diesel::prelude::*;
+
+        let pool = require_db!();
+        let app = test_app!(pool);
+        let marker = ts::unique();
+        let conn = &mut pool.get().unwrap();
+        let ids: Vec<uuid::Uuid> = ["B", "A"]
+            .iter()
+            .map(|prefix| {
+                diesel::insert_into(languages::table)
+                    .values((
+                        languages::name.eq(format!("{prefix} Lang {marker}")),
+                        languages::symbol.eq("xx"),
+                    ))
+                    .returning(languages::id)
+                    .get_result(conn)
+                    .unwrap()
+            })
+            .collect();
+
+        let (status, list) = call(
+            &app,
+            Method::GET,
+            &format!("/api/common/languages?name={}", marker.to_uppercase()),
+            None,
+            None,
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{list}");
+        assert_eq!(
+            list,
+            json!([
+                { "id": ids[1], "name": format!("A Lang {marker}"), "symbol": "xx" },
+                { "id": ids[0], "name": format!("B Lang {marker}"), "symbol": "xx" },
+            ]),
+            "public, case-insensitive name filter, ordered by name"
+        );
+
+        let (status, page) = call(
+            &app,
+            Method::GET,
+            &format!("/api/common/languages?name={marker}&limit=1&offset=1"),
+            None,
+            None,
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(page.as_array().unwrap().len(), 1);
+        assert_eq!(page[0]["id"], json!(ids[0]));
+
+        let (status, _) = call(
+            &app,
+            Method::GET,
+            "/api/common/languages?limit=-5&offset=-5",
+            None,
+            None,
+        )
+        .await;
+        assert_eq!(
+            status,
+            StatusCode::OK,
+            "negative paging is clamped, not a 500"
+        );
     }
 
     #[actix_web::test]
