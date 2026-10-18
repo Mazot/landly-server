@@ -297,6 +297,7 @@ pub async fn create_organisation(
             cost: form.cost.clone(),
             google_place_id: form.google_place_id.clone(),
         })
+        .await
 }
 
 // [authorship] AI-generated (Claude).
@@ -1017,5 +1018,367 @@ mod http_tests {
         )
         .await;
         assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    }
+}
+
+/// DB-backed tests of the Google Places location rules (stubbed Google).
+#[cfg(test)]
+mod location_tests {
+    use crate::data::schema::{moderation_events, organisations};
+    use crate::error::AppError;
+    use crate::test_support::{self as ts, OrgSpec, call, require_db, test_app};
+    use crate::utils::google_places::{PlaceDetails, PlaceFuture, PlaceLookup};
+    use actix_web::http::{Method, StatusCode};
+    use chrono::NaiveDateTime;
+    use diesel::prelude::*;
+    use serde_json::{Value, json};
+    use serial_test::serial;
+    use std::sync::Arc;
+    use uuid::Uuid;
+
+    const GOOGLE_POINT: (f64, f64) = (52.516275, 13.377704);
+
+    /// Unknown for ids starting with `ChIJunknown`, an outage for `ChIJdown`,
+    /// otherwise a permanently closed place at GOOGLE_POINT.
+    struct StubPlaces;
+
+    impl PlaceLookup for StubPlaces {
+        fn lookup<'a>(&'a self, place_id: &'a str) -> PlaceFuture<'a> {
+            Box::pin(async move {
+                if place_id.starts_with("ChIJunknown") {
+                    return Err(AppError::UnprocessableEntity(
+                        json!({ "error": "Unknown google_place_id" }),
+                    ));
+                }
+                if place_id.starts_with("ChIJdown") {
+                    return Err(AppError::ServiceUnavailable(json!({ "error": "down" })));
+                }
+                Ok(PlaceDetails {
+                    latitude: GOOGLE_POINT.0,
+                    longitude: GOOGLE_POINT.1,
+                    business_status: Some("CLOSED_PERMANENTLY".to_string()),
+                })
+            })
+        }
+    }
+
+    fn google() -> Option<Arc<dyn PlaceLookup>> {
+        Some(Arc::new(StubPlaces))
+    }
+
+    fn place_id() -> String {
+        format!("ChIJ{}", ts::unique())
+    }
+
+    fn stored(
+        pool: &crate::utils::db::DbPool,
+        id: &Value,
+    ) -> (Option<String>, Option<NaiveDateTime>) {
+        let id: Uuid = id.as_str().unwrap().parse().unwrap();
+        organisations::table
+            .find(id)
+            .select((
+                organisations::location_source,
+                organisations::location_refreshed_at,
+            ))
+            .first(&mut pool.get().unwrap())
+            .unwrap()
+    }
+
+    fn submitted_flags(pool: &crate::utils::db::DbPool, id: &Value) -> Value {
+        let id: Uuid = id.as_str().unwrap().parse().unwrap();
+        let flags: Option<Value> = moderation_events::table
+            .filter(moderation_events::target_id.eq(id))
+            .select(moderation_events::flags)
+            .first(&mut pool.get().unwrap())
+            .unwrap();
+        flags.unwrap()
+    }
+
+    #[actix_web::test]
+    #[serial(jwt_env)]
+    async fn test_google_place_coordinates_come_from_google() {
+        let pool = require_db!();
+        let app = test_app!(pool, google());
+        let me = ts::user(&pool, "user");
+
+        // The client's point is ignored: the server asks Google.
+        let (status, org) = call(&app, Method::POST, "/api/organisation/create", Some(&me.token),
+            Some(json!({ "name": "Embassy", "google_place_id": place_id(), "latitude": 1.0, "longitude": 1.0 }))).await;
+        assert_eq!(status, StatusCode::OK, "{org}");
+        assert_eq!(
+            (org["latitude"].as_f64(), org["longitude"].as_f64()),
+            (Some(GOOGLE_POINT.0), Some(GOOGLE_POINT.1))
+        );
+        assert_eq!(org["locationSource"], "google");
+        assert!(
+            org.get("googleRating").is_none(),
+            "Google's rating is never stored or returned"
+        );
+
+        let (source, refreshed) = stored(&pool, &org["id"]);
+        assert_eq!(source.as_deref(), Some("google"));
+        assert!(
+            refreshed.is_some(),
+            "a verified Google point records when it was fetched"
+        );
+        let flags = submitted_flags(&pool, &org["id"]);
+        assert_eq!(flags["googlePlaceVerified"], true);
+        assert_eq!(
+            flags["googleBusinessStatus"], "CLOSED_PERMANENTLY",
+            "closed places are flagged for the moderator"
+        );
+    }
+
+    #[actix_web::test]
+    #[serial(jwt_env)]
+    async fn test_unknown_place_and_google_outage_store_nothing() {
+        let pool = require_db!();
+        let app = test_app!(pool, google());
+        let me = ts::user(&pool, "user");
+
+        for (id, expected) in [
+            (
+                format!("ChIJunknown{}", ts::unique()),
+                StatusCode::UNPROCESSABLE_ENTITY,
+            ),
+            (
+                format!("ChIJdown{}", ts::unique()),
+                StatusCode::SERVICE_UNAVAILABLE,
+            ),
+            ("../admin".to_string(), StatusCode::UNPROCESSABLE_ENTITY),
+        ] {
+            let name = format!("Nowhere {}", ts::unique());
+            let (status, body) = call(
+                &app,
+                Method::POST,
+                "/api/organisation/create",
+                Some(&me.token),
+                Some(json!({ "name": name, "google_place_id": id })),
+            )
+            .await;
+            assert_eq!(status, expected, "{id}: {body}");
+            let rows: i64 = organisations::table
+                .filter(organisations::name.eq(&name))
+                .count()
+                .get_result(&mut pool.get().unwrap())
+                .unwrap();
+            assert_eq!(rows, 0, "{id}: nothing is stored");
+        }
+    }
+
+    /// Without GOOGLE_PLACES_API_KEY the client's point is kept but marked
+    /// unverified, like the other optional integrations.
+    #[actix_web::test]
+    #[serial(jwt_env)]
+    async fn test_without_a_server_key_the_point_is_unverified() {
+        let pool = require_db!();
+        let app = test_app!(pool);
+        let me = ts::user(&pool, "user");
+
+        let (status, org) = call(&app, Method::POST, "/api/organisation/create", Some(&me.token),
+            Some(json!({ "name": "Unverified", "google_place_id": place_id(), "latitude": 48.85, "longitude": 2.35 }))).await;
+        assert_eq!(status, StatusCode::OK, "{org}");
+        assert_eq!(org["latitude"].as_f64(), Some(48.85));
+        assert_eq!(
+            stored(&pool, &org["id"]),
+            (Some("google".to_string()), None)
+        );
+        assert_eq!(
+            submitted_flags(&pool, &org["id"])["googlePlaceVerified"],
+            false
+        );
+
+        let (status, _) = call(
+            &app,
+            Method::POST,
+            "/api/organisation/create",
+            Some(&me.token),
+            Some(json!({ "name": "Bad id", "google_place_id": "id?key=x" })),
+        )
+        .await;
+        assert_eq!(
+            status,
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "place ids are validated even without a key"
+        );
+    }
+
+    #[actix_web::test]
+    #[serial(jwt_env)]
+    async fn test_one_organisation_per_google_place() {
+        let pool = require_db!();
+        let app = test_app!(pool, google());
+        let me = ts::user(&pool, "user");
+        let id = place_id();
+
+        let (status, _) = call(
+            &app,
+            Method::POST,
+            "/api/organisation/create",
+            Some(&me.token),
+            Some(json!({ "name": "First", "google_place_id": id })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        let (status, body) = call(
+            &app,
+            Method::POST,
+            "/api/organisation/create",
+            Some(&me.token),
+            Some(json!({ "name": "Second", "google_place_id": id })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+        assert_eq!(body["constraint"], "organisations_google_place_id_key");
+    }
+
+    #[actix_web::test]
+    #[serial(jwt_env)]
+    async fn test_a_point_is_a_pair_and_user_pins_are_ours() {
+        let pool = require_db!();
+        let app = test_app!(pool);
+        let me = ts::user(&pool, "user");
+
+        for body in [
+            json!({ "name": "x", "latitude": 10.0 }),
+            json!({ "name": "x", "longitude": 10.0 }),
+        ] {
+            let (status, _) = call(
+                &app,
+                Method::POST,
+                "/api/organisation/create",
+                Some(&me.token),
+                Some(body.clone()),
+            )
+            .await;
+            assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
+        }
+
+        let (_, pinned) = call(
+            &app,
+            Method::POST,
+            "/api/organisation/create",
+            Some(&me.token),
+            Some(json!({ "name": "Pinned", "latitude": 41.9, "longitude": 12.5 })),
+        )
+        .await;
+        assert_eq!(pinned["locationSource"], "user_pin");
+        let (_, online) = call(
+            &app,
+            Method::POST,
+            "/api/organisation/create",
+            Some(&me.token),
+            Some(json!({ "name": "Online community" })),
+        )
+        .await;
+        assert_eq!(online["locationSource"], Value::Null);
+
+        let path = format!(
+            "/api/organisation/update/{}",
+            pinned["id"].as_str().unwrap()
+        );
+        let (status, _) = call(
+            &app,
+            Method::PUT,
+            &path,
+            Some(&me.token),
+            Some(json!({ "longitude": 12.6 })),
+        )
+        .await;
+        assert_eq!(
+            status,
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "updates move a point as a pair too"
+        );
+    }
+
+    /// A point moved by hand is no longer Google's: it is never refreshed.
+    #[actix_web::test]
+    #[serial(jwt_env)]
+    async fn test_moved_points_stop_being_google_points() {
+        let pool = require_db!();
+        let app = test_app!(pool, google());
+        let (creator, moderator) = (ts::user(&pool, "user"), ts::user(&pool, "moderator"));
+
+        let (_, org) = call(
+            &app,
+            Method::POST,
+            "/api/organisation/create",
+            Some(&creator.token),
+            Some(json!({ "name": "Moved", "google_place_id": place_id() })),
+        )
+        .await;
+        let path = format!("/api/organisation/update/{}", org["id"].as_str().unwrap());
+
+        let (status, body) = call(
+            &app,
+            Method::PUT,
+            &path,
+            Some(&moderator.token),
+            Some(json!({ "latitude": 52.5164, "longitude": 13.3778 })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+        assert_eq!(
+            stored(&pool, &org["id"]),
+            (Some("moderator".to_string()), None)
+        );
+
+        let (_, body) = call(
+            &app,
+            Method::PUT,
+            &path,
+            Some(&creator.token),
+            Some(json!({ "latitude": 52.5165, "longitude": 13.3779 })),
+        )
+        .await;
+        assert_eq!(body["locationSource"], "user_pin");
+
+        // Edits that do not touch the point keep its source.
+        let (_, body) = call(
+            &app,
+            Method::PUT,
+            &path,
+            Some(&moderator.token),
+            Some(json!({ "description": "x" })),
+        )
+        .await;
+        assert_eq!(body["locationSource"], "user_pin");
+        ts::org(&pool, OrgSpec::default()); // factory still builds valid rows
+    }
+
+    /// Review regression: saving an edit form re-sends the coordinates it
+    /// loaded. That must not turn a verified Google point into a user pin
+    /// (it would lose its refresh time and drop out of the refresh job).
+    #[actix_web::test]
+    #[serial(jwt_env)]
+    async fn test_resending_the_same_point_keeps_it_a_google_point() {
+        let pool = require_db!();
+        let app = test_app!(pool, google());
+        let (creator, moderator) = (ts::user(&pool, "user"), ts::user(&pool, "moderator"));
+        let (_, org) = call(
+            &app,
+            Method::POST,
+            "/api/organisation/create",
+            Some(&creator.token),
+            Some(json!({ "name": "Unchanged", "google_place_id": place_id() })),
+        )
+        .await;
+        let before = stored(&pool, &org["id"]);
+        assert_eq!(before.0.as_deref(), Some("google"));
+
+        let path = format!("/api/organisation/update/{}", org["id"].as_str().unwrap());
+        for who in [&moderator, &creator] {
+            let (status, body) = call(&app, Method::PUT, &path, Some(&who.token), Some(json!({
+                "description": "edited", "latitude": org["latitude"], "longitude": org["longitude"],
+            }))).await;
+            assert_eq!(status, StatusCode::OK, "{body}");
+            assert_eq!(
+                stored(&pool, &org["id"]),
+                before,
+                "same point, same provenance"
+            );
+        }
     }
 }

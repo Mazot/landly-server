@@ -38,6 +38,7 @@ use crate::app::features::user::{
     usecases::UserUsecase,
 };
 use crate::utils::cache::{CacheService, NoOpCacheService, RedisCacheService, TypedCache};
+use crate::utils::google_places::{GooglePlacesClient, PlaceLookup};
 use crate::utils::s3::S3ClientWrapper;
 use crate::utils::storage::{NoOpStorageService, StorageService};
 use std::sync::Arc;
@@ -108,7 +109,22 @@ impl DiContainer {
             );
         }
 
-        Self::with_backends(pool, typed_cache_service, storage_service, oauth_google)
+        let place_lookup = GooglePlacesClient::try_from_env()
+            .map(|client| Arc::new(client) as Arc<dyn PlaceLookup>);
+        if place_lookup.is_none() {
+            log::warn!(
+                "Google Places is not configured (missing GOOGLE_PLACES_API_KEY). \
+                 Submitted google_place_id coordinates are stored unverified."
+            );
+        }
+
+        Self::with_backends(
+            pool,
+            typed_cache_service,
+            storage_service,
+            oauth_google,
+            place_lookup,
+        )
     }
 
     /// Wires every usecase over explicitly chosen backends. `new` resolves
@@ -120,6 +136,7 @@ impl DiContainer {
         typed_cache_service: TypedCache<Arc<dyn CacheService>>,
         storage_service: Arc<dyn StorageService>,
         oauth_google: Option<OAuthGoogle>,
+        place_lookup: Option<Arc<dyn PlaceLookup>>,
     ) -> Self {
         // ---------------------------------------------------------------------------
         // Feature repositories
@@ -169,6 +186,7 @@ impl DiContainer {
                 Arc::new(organisation_repo.clone()),
                 Arc::new(organisation_presenter.clone()),
                 moderation_repo_arc.clone(),
+                place_lookup,
             ),
             person_usecase: PersonUsecase::new(
                 Arc::new(person_repo.clone()),

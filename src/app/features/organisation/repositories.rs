@@ -10,6 +10,7 @@ use crate::{
     },
 };
 use bigdecimal::{BigDecimal, ToPrimitive};
+use chrono::NaiveDateTime;
 use std::{
     collections::hash_map::DefaultHasher,
     hash::{Hash, Hasher},
@@ -361,6 +362,8 @@ impl OrganisationRepository for OrganisationRepositoryImpl {
                 timezone: params.timezone,
                 cost: params.cost,
                 google_place_id: params.google_place_id,
+                location_source: params.location_source,
+                location_refreshed_at: params.location_refreshed_at,
             },
         )?;
 
@@ -435,6 +438,8 @@ impl OrganisationRepository for OrganisationRepositoryImpl {
                 timezone: params.timezone,
                 cost: params.cost,
                 status: params.status,
+                location_source: params.location_source,
+                location_refreshed_at: params.location_refreshed_at,
                 updated_at: chrono::Utc::now().naive_utc(),
             },
         )?;
@@ -563,6 +568,10 @@ pub struct UpdateOrganisationRepositoryInput {
     pub cost: Option<String>,
     /// Set to `pending` when the creator edits a live organisation; otherwise `None`.
     pub status: Option<String>,
+    /// Set together with a moved point (`user_pin` or `moderator`); `None` keeps it.
+    pub location_source: Option<String>,
+    /// `Some(None)` clears it when a point is moved by hand; `None` keeps it.
+    pub location_refreshed_at: Option<Option<NaiveDateTime>>,
 }
 
 pub struct FetchOrganisationsRepositoryInput {
@@ -660,8 +669,12 @@ pub struct CreateOrganisationRepositoryInput {
     pub timezone: Option<String>,
     /// `free` or `paid`.
     pub cost: Option<String>,
-    /// Google Places ID when imported from Google.
+    /// Google Places ID (unique); the only Google content stored indefinitely.
     pub google_place_id: Option<String>,
+    /// Where the point came from (`LocationSource::as_str`); null without a point.
+    pub location_source: Option<String>,
+    /// When a `google` point was fetched from Google; null if not verified.
+    pub location_refreshed_at: Option<NaiveDateTime>,
 }
 
 #[cfg(test)]

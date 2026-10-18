@@ -1,6 +1,7 @@
 pub mod cache;
 pub mod db;
 pub mod di;
+pub mod google_places;
 pub mod hash;
 pub mod redis;
 pub mod s3;

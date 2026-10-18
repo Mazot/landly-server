@@ -148,10 +148,11 @@ diesel::table! {
         timezone -> Nullable<Text>,
         cost -> Nullable<Text>,
         google_place_id -> Nullable<Text>,
-        google_rating -> Nullable<Float8>,
         visits_count -> Int8,
         rating_avg -> Nullable<Float8>,
         reviews_count -> Int8,
+        location_source -> Nullable<Text>,
+        location_refreshed_at -> Nullable<Timestamp>,
     }
 }
 

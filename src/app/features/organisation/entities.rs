@@ -103,6 +103,44 @@ impl TryFrom<&str> for Cost {
     }
 }
 
+/// Where an organisation's point came from (`organisations.location_source`,
+/// TEXT + CHECK constraint). Only `Google` points are Google content: they
+/// are re-fetched before Google's caching window ends. The others are ours.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LocationSource {
+    /// Coordinates of `google_place_id`, looked up by the server.
+    Google,
+    /// Placed by the submitter on the map.
+    UserPin,
+    /// Moved by a moderator.
+    Moderator,
+}
+
+impl LocationSource {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            LocationSource::Google => "google",
+            LocationSource::UserPin => "user_pin",
+            LocationSource::Moderator => "moderator",
+        }
+    }
+}
+
+impl TryFrom<&str> for LocationSource {
+    type Error = AppError;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        match value {
+            "google" => Ok(LocationSource::Google),
+            "user_pin" => Ok(LocationSource::UserPin),
+            "moderator" => Ok(LocationSource::Moderator),
+            other => Err(AppError::UnprocessableEntity(
+                json!({ "error": format!("Unknown location source: {}", other) }),
+            )),
+        }
+    }
+}
+
 #[derive(Debug, Associations, Serialize, Deserialize, Queryable, Insertable, Selectable, Clone)]
 // #[diesel(belongs_to(Country, foreign_key = location_country_id))]
 // #[diesel(belongs_to(Country, foreign_key = founder_country_id))]
@@ -163,16 +201,18 @@ pub struct Organisation {
     pub timezone: Option<String>,
     /// `free` or `paid`.
     pub cost: Option<String>,
-    /// Google Places ID when imported from Google.
+    /// Google Places ID; the only Google content stored indefinitely (unique).
     pub google_place_id: Option<String>,
-    /// Google rating at import time (0–5).
-    pub google_rating: Option<f64>,
     /// Detail-page visit counter (POST /organisation/visit/{id}).
     pub visits_count: i64,
     /// Average review rating (1–5); null without reviews. Recomputed from reviews on every create/delete.
     pub rating_avg: Option<f64>,
     /// Number of reviews.
     pub reviews_count: i64,
+    /// Where the point came from: `google`, `user_pin` or `moderator` (see `LocationSource`); null without a point.
+    pub location_source: Option<String>,
+    /// When a `google` point was last fetched from Google; null if never verified (no server key) or not a Google point.
+    pub location_refreshed_at: Option<NaiveDateTime>,
 }
 
 impl Organisation {
@@ -431,8 +471,12 @@ pub struct CreateOrganisation {
     pub timezone: Option<String>,
     /// `free` or `paid`.
     pub cost: Option<String>,
-    /// Google Places ID when imported from Google.
+    /// Google Places ID (unique); the only Google content stored indefinitely.
     pub google_place_id: Option<String>,
+    /// Where the point came from (`LocationSource::as_str`); null without a point.
+    pub location_source: Option<String>,
+    /// When a `google` point was fetched from Google; null if not verified.
+    pub location_refreshed_at: Option<NaiveDateTime>,
 }
 
 #[derive(AsChangeset, Clone)]
@@ -480,6 +524,10 @@ pub struct UpdateOrganisation {
     pub cost: Option<String>,
     /// Only set when an edit has to go back through moderation.
     pub status: Option<String>,
+    /// Set together with a moved point: `user_pin` (creator) or `moderator`; `None` keeps the current value.
+    pub location_source: Option<String>,
+    /// `Some(None)` clears it when a point is moved by hand (it is no longer Google's); `None` keeps it.
+    pub location_refreshed_at: Option<Option<NaiveDateTime>>,
 }
 
 #[cfg(test)]

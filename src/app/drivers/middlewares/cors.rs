@@ -18,8 +18,10 @@ pub fn cors() -> Cors {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serial_test::serial;
 
     #[test]
+    #[serial(frontend_origin_env)]
     fn test_cors_with_default_origin() {
         unsafe {
             std::env::remove_var("FRONTEND_ORIGIN");
@@ -32,6 +34,7 @@ mod tests {
     }
 
     #[test]
+    #[serial(frontend_origin_env)]
     fn test_cors_with_custom_origin() {
         unsafe {
             std::env::set_var("FRONTEND_ORIGIN", "https://example.com");
@@ -42,6 +45,7 @@ mod tests {
     }
 
     #[test]
+    #[serial(frontend_origin_env)]
     fn test_cors_origin_defaults_to_wildcard() {
         unsafe {
             std::env::remove_var("FRONTEND_ORIGIN");
