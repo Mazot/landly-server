@@ -1,5 +1,5 @@
 use super::{
-    entities::{AddedBy, Cost, Organisation, OrganisationStatus},
+    entities::{AddedBy, Cost, LocationSource, Organisation, OrganisationStatus},
     presenters::OrganisationPresenter,
     repositories::{
         CreateOrganisationRepositoryInput, FetchOrganisationsRepositoryInput,
@@ -10,8 +10,10 @@ use super::{
 use crate::app::features::moderation::entities::TargetKind;
 use crate::app::features::moderation::repositories::{ModerationRepository, SubmittedEventInput};
 use crate::error::AppError;
+use crate::utils::google_places::{PlaceLookup, validate_place_id};
 use actix_web::HttpResponse;
-use bigdecimal::BigDecimal;
+use bigdecimal::{BigDecimal, FromPrimitive};
+use chrono::NaiveDateTime;
 use serde_json::json;
 use std::sync::Arc;
 use uuid::Uuid;
@@ -21,6 +23,20 @@ pub struct OrganisationUsecase {
     organisation_repo: Arc<dyn OrganisationRepository>,
     organisation_presenter: Arc<dyn OrganisationPresenter>,
     moderation_repo: Arc<dyn ModerationRepository>,
+    /// Google Places lookups; None without `GOOGLE_PLACES_API_KEY`.
+    place_lookup: Option<Arc<dyn PlaceLookup>>,
+}
+
+/// The point a new submission is stored with, plus what Google said about it.
+struct ResolvedLocation {
+    latitude: Option<BigDecimal>,
+    longitude: Option<BigDecimal>,
+    source: Option<LocationSource>,
+    refreshed_at: Option<NaiveDateTime>,
+    /// Some(true/false) when a `google_place_id` was given: whether the
+    /// server could confirm it with Google.
+    google_verified: Option<bool>,
+    google_business_status: Option<String>,
 }
 
 impl OrganisationUsecase {
@@ -28,12 +44,80 @@ impl OrganisationUsecase {
         organisation_repo: Arc<dyn OrganisationRepository>,
         organisation_presenter: Arc<dyn OrganisationPresenter>,
         moderation_repo: Arc<dyn ModerationRepository>,
+        place_lookup: Option<Arc<dyn PlaceLookup>>,
     ) -> Self {
         Self {
             organisation_repo,
             organisation_presenter,
             moderation_repo,
+            place_lookup,
         }
+    }
+
+    /// A point is a pair: a lone latitude or longitude can never be shown on
+    /// the map (search needs both), and the DB CHECK would reject it anyway.
+    fn ensure_point_is_pair(
+        latitude: &Option<BigDecimal>,
+        longitude: &Option<BigDecimal>,
+    ) -> Result<(), AppError> {
+        if latitude.is_some() != longitude.is_some() {
+            return Err(AppError::UnprocessableEntity(
+                json!({ "error": "latitude and longitude must be given together" }),
+            ));
+        }
+        Ok(())
+    }
+
+    /// Decides the stored point of a submission:
+    /// - with `google_place_id` and a server key: Google's coordinates (the
+    ///   client's are ignored), source `google`, refreshed now;
+    /// - with `google_place_id` but no key: the client's point (from its
+    ///   Places Autocomplete), source `google`, unverified (`refreshed_at`
+    ///   null) — a disabled integration, like Google OAuth without its keys;
+    /// - without it: the client's pin, source `user_pin`.
+    async fn resolve_new_location(
+        &self,
+        place_id: Option<&str>,
+        latitude: Option<BigDecimal>,
+        longitude: Option<BigDecimal>,
+    ) -> Result<ResolvedLocation, AppError> {
+        Self::ensure_point_is_pair(&latitude, &longitude)?;
+
+        let Some(place_id) = place_id else {
+            let source = latitude.is_some().then_some(LocationSource::UserPin);
+            return Ok(ResolvedLocation {
+                latitude,
+                longitude,
+                source,
+                refreshed_at: None,
+                google_verified: None,
+                google_business_status: None,
+            });
+        };
+        validate_place_id(place_id)?;
+
+        let Some(lookup) = &self.place_lookup else {
+            let source = latitude.is_some().then_some(LocationSource::Google);
+            return Ok(ResolvedLocation {
+                latitude,
+                longitude,
+                source,
+                refreshed_at: None,
+                google_verified: Some(false),
+                google_business_status: None,
+            });
+        };
+
+        let place = lookup.lookup(place_id).await?;
+        let decimal = |v: f64| BigDecimal::from_f64(v).ok_or(AppError::InternalServerError);
+        Ok(ResolvedLocation {
+            latitude: Some(decimal(place.latitude)?),
+            longitude: Some(decimal(place.longitude)?),
+            source: Some(LocationSource::Google),
+            refreshed_at: Some(chrono::Utc::now().naive_utc()),
+            google_verified: Some(true),
+            google_business_status: place.business_status,
+        })
     }
 
     /// Loose phone sanity check for the moderation auto-flags: "+" followed
@@ -69,7 +153,7 @@ impl OrganisationUsecase {
 
     /// Creates a community submission: validated, owned by the caller and
     /// entered into moderation as `pending` (invisible to list/search).
-    pub fn create_organisation(
+    pub async fn create_organisation(
         &self,
         params: CreateOrganisationUsecaseInput,
     ) -> Result<HttpResponse, AppError> {
@@ -79,6 +163,13 @@ impl OrganisationUsecase {
         if let Some(cost) = params.cost.as_deref() {
             Cost::try_from(cost)?;
         }
+        let location = self
+            .resolve_new_location(
+                params.google_place_id.as_deref(),
+                params.latitude,
+                params.longitude,
+            )
+            .await?;
 
         let new_organisation =
             self.organisation_repo
@@ -91,8 +182,8 @@ impl OrganisationUsecase {
                     founder_country_id: params.founder_country_id,
                     location_country_id: params.location_country_id,
                     organisation_type_id: params.organisation_type_id,
-                    latitude: params.latitude,
-                    longitude: params.longitude,
+                    latitude: location.latitude,
+                    longitude: location.longitude,
                     created_by: params.created_by,
                     // New community submissions go through moderation.
                     status: OrganisationStatus::Pending.as_str().to_string(),
@@ -107,6 +198,8 @@ impl OrganisationUsecase {
                     timezone: params.timezone,
                     cost: params.cost,
                     google_place_id: params.google_place_id,
+                    location_source: location.source.map(|s| s.as_str().to_string()),
+                    location_refreshed_at: location.refreshed_at,
                 })?;
 
         // Submit-time auto-checks for the moderation queue (best-effort:
@@ -132,6 +225,8 @@ impl OrganisationUsecase {
                 "phoneLooksValid": new_organisation.tel.as_deref().map(Self::phone_looks_valid),
                 "creatorLiveOrgs": live_orgs_by_creator,
                 "trustedVolunteer": live_orgs_by_creator >= 3,
+                "googlePlaceVerified": location.google_verified,
+                "googleBusinessStatus": location.google_business_status,
             }),
         });
 
@@ -150,8 +245,18 @@ impl OrganisationUsecase {
             Cost::try_from(cost)?;
         }
 
+        Self::ensure_point_is_pair(&params.latitude, &params.longitude)?;
+
         let existing = self.organisation_repo.fetch_organisation(id)?;
         let managed_by = self.ensure_can_manage(&existing, caller_user_id)?;
+
+        // A point moved by hand is ours, not Google's: it is never refreshed
+        // from Google again.
+        let moved = params.latitude.is_some();
+        let location_source = moved.then(|| match managed_by {
+            ManagedBy::Moderator => LocationSource::Moderator.as_str().to_string(),
+            ManagedBy::Creator => LocationSource::UserPin.as_str().to_string(),
+        });
 
         // A creator's edit of an already approved organisation must not go
         // live unreviewed — otherwise approval of a harmless entry could be
@@ -183,6 +288,8 @@ impl OrganisationUsecase {
                 cost: params.cost,
                 status: back_to_moderation
                     .then(|| OrganisationStatus::Pending.as_str().to_string()),
+                location_source,
+                location_refreshed_at: moved.then_some(None),
             },
         )?;
 
@@ -618,10 +725,11 @@ mod tests {
             timezone: None,
             cost: None,
             google_place_id: None,
-            google_rating: None,
             visits_count: 0,
             rating_avg: None,
             reviews_count: 0,
+            location_source: None,
+            location_refreshed_at: None,
         }
     }
 
@@ -666,6 +774,7 @@ mod tests {
             repo,
             Arc::new(OrganisationPresenterImpl::new()),
             Arc::new(UnreachableModerationRepo),
+            None,
         )
     }
 

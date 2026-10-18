@@ -236,10 +236,11 @@ mod tests {
             timezone: None,
             cost: None,
             google_place_id: None,
-            google_rating: None,
             visits_count: 0,
             rating_avg: None,
             reviews_count: 0,
+            location_source: None,
+            location_refreshed_at: None,
         }
     }
 

@@ -24,6 +24,15 @@ Moved out of AGENTS.md. Read before touching `.github/workflows/`, `scripts/`, `
 - Shell snippets in compose (`redis` command, `minio-init` entrypoint) read credentials from the container environment as quoted `"$$VAR"` — never interpolate `${VAR}` secrets into shell text. Postgres/Redis passwords must be URL-safe (they are embedded in `DATABASE_URL`/`REDIS_URL`).
 - `docker/docker-compose-{postgre,redis,minio}.yml` are standalone single-service files for local experiments (the MinIO one uses the `minioadmin` defaults); the root `docker-compose.yml` is the real stack and the one the rules above apply to.
 
+## Google Places
+
+The map provider is Google Maps Platform. What may be kept follows Google's terms: only the place ID indefinitely; coordinates as a cache that must be refreshed within 30 days; nothing else (rating, hours, photos, reviews) — the client fetches those live by `place_id` and shows them on a Google map with Google's attribution.
+
+- **Keys.** The browser key (Maps JavaScript API, Places Autocomplete/Details) is restricted by HTTP referrer and lives only in the client. The server key `GOOGLE_PLACES_API_KEY` is restricted to the Places API and the server IPs and never leaves the server.
+- **Server lookups** (`src/utils/google_places.rs`): Place Details (New) with the field mask `id,location,businessStatus` — the mask decides the billed SKU, keep it minimal. `place_id` is validated as a URL-safe token before it goes into the path. Unknown place → 422, any other Google failure → 503 (never 500).
+- **Without the server key** the integration is off: a submitted `google_place_id` is stored with the client's point as an unverified `google` point (`location_refreshed_at` NULL) — fine for local development.
+- **Still to build:** a refresher binary in `scripts/crates` (daily cron) that re-fetches `location_source='google'` points older than ~25 days or never verified, and flags places Google reports as closed or gone for the moderators.
+
 ## Local data inspection (MCP servers)
 
 ### Postgres — `landly-postgres`

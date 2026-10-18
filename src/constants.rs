@@ -7,6 +7,8 @@ pub mod env_key {
     pub const GOOGLE_CLIENT_ID: &str = "GOOGLE_CLIENT_ID";
     pub const GOOGLE_CLIENT_SECRET: &str = "GOOGLE_CLIENT_SECRET";
     pub const OAUTH_GOOGLE_REDIRECT_URL: &str = "OAUTH_GOOGLE_REDIRECT_URL";
+    /// Server key for Places API lookups of `google_place_id`; optional.
+    pub const GOOGLE_PLACES_API_KEY: &str = "GOOGLE_PLACES_API_KEY";
     pub const JWT_SECRET: &str = "JWT_SECRET";
     pub const JWT_EXPIRATION: &str = "JWT_EXPIRATION";
     /// Rate limiting keys clients by `Forwarded`/`X-Forwarded-For` when "true".
