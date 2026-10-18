@@ -1,5 +1,5 @@
 use crate::app::features::user::entities::{User, UserRole};
-use crate::data::models::{Country, CreateOrganisationType, OrganisationType};
+use crate::data::models::{Country, CreateOrganisationType, Language, OrganisationType};
 use crate::error::AppError;
 use crate::utils::cache::{CacheKeys, CacheService, TypedCache};
 use crate::utils::db::DbPool;
@@ -18,6 +18,13 @@ pub trait CommonRepository: Send + Sync + 'static {
     /// Country + live-organisation counts grouped by org type slug
     /// (design: country-full.jsx).
     fn get_country_detail(&self, id: Uuid) -> Result<(Country, Vec<(String, i64)>), AppError>;
+
+    /// Languages ordered by name; their ids are what `language_ids` /
+    /// `languages_ids` on people and users reference.
+    fn get_all_languages(
+        &self,
+        params: GetAllLanguagesRepositoryInput,
+    ) -> Result<Vec<Language>, AppError>;
 
     fn get_organisation_type(&self, id: &Uuid) -> Result<OrganisationType, AppError>;
 
@@ -111,6 +118,34 @@ impl CommonRepository for CommonRepositoryImpl {
         Ok((country, by_type))
     }
 
+    fn get_all_languages(
+        &self,
+        params: GetAllLanguagesRepositoryInput,
+    ) -> Result<Vec<Language>, AppError> {
+        use crate::data::schema::languages;
+        use diesel::prelude::*;
+
+        // Languages are seeded outside the API (scripts/crates country_parser),
+        // so there is no write path here to invalidate
+        // `CacheKeys::common_languages_pattern()` from; the cached
+        // GET /common/languages response expires with its TTL.
+        let connection = &mut self.pool.get()?;
+        let mut query = languages::table.select(languages::all_columns).into_boxed();
+
+        if let Some(ref name) = params.name {
+            let pattern = format!("%{}%", name);
+            query = query.filter(languages::name.ilike(pattern));
+        }
+
+        let languages_list = query
+            .order((languages::name.asc(), languages::id.asc()))
+            .limit(params.limit)
+            .offset(params.offset)
+            .load::<Language>(connection)?;
+
+        Ok(languages_list)
+    }
+
     fn get_organisation_type(&self, id: &Uuid) -> Result<OrganisationType, AppError> {
         let connection = &mut self.pool.get()?;
         let org_type = OrganisationType::get_by_id(connection, id)?;
@@ -164,6 +199,15 @@ pub struct GetCountryRepositoryInput {
 }
 
 pub struct GetAllCountriesRepositoryInput {
+    /// Page size (already clamped by the controller).
+    pub limit: i64,
+    /// Rows to skip.
+    pub offset: i64,
+    /// Case-insensitive substring filter on the name.
+    pub name: Option<String>,
+}
+
+pub struct GetAllLanguagesRepositoryInput {
     /// Page size (already clamped by the controller).
     pub limit: i64,
     /// Rows to skip.

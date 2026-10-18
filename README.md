@@ -329,6 +329,15 @@ GET /api/common/countries
 GET /api/common/countries/{id}
 ```
 
+### Languages
+
+```http
+# public; ?name= (case-insensitive substring), limit (default 100, max 500), offset
+# → [{ id, name, symbol }] ordered by name; `id` is what people's `language_ids`
+#   and POST/DELETE /api/user/languages `languages_ids` reference
+GET /api/common/languages
+```
+
 ### Organisation types & Country connections
 
 ```http

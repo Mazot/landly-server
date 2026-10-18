@@ -456,6 +456,10 @@ impl CacheKeys {
     pub fn common_countries_pattern() -> String {
         "common:countries:*".to_string()
     }
+
+    pub fn common_languages_pattern() -> String {
+        "common:languages:*".to_string()
+    }
 }
 
 #[cfg(test)]
@@ -708,6 +712,7 @@ mod tests {
             "common:organisation_types:*"
         );
         assert_eq!(CacheKeys::common_countries_pattern(), "common:countries:*");
+        assert_eq!(CacheKeys::common_languages_pattern(), "common:languages:*");
     }
 
     /// Real-Redis cache behind the `Arc<dyn CacheService>` the app uses, or
