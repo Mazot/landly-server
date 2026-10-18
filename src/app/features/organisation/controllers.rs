@@ -1347,4 +1347,38 @@ mod location_tests {
         assert_eq!(body["locationSource"], "user_pin");
         ts::org(&pool, OrgSpec::default()); // factory still builds valid rows
     }
+
+    /// Review regression: saving an edit form re-sends the coordinates it
+    /// loaded. That must not turn a verified Google point into a user pin
+    /// (it would lose its refresh time and drop out of the refresh job).
+    #[actix_web::test]
+    #[serial(jwt_env)]
+    async fn test_resending_the_same_point_keeps_it_a_google_point() {
+        let pool = require_db!();
+        let app = test_app!(pool, google());
+        let (creator, moderator) = (ts::user(&pool, "user"), ts::user(&pool, "moderator"));
+        let (_, org) = call(
+            &app,
+            Method::POST,
+            "/api/organisation/create",
+            Some(&creator.token),
+            Some(json!({ "name": "Unchanged", "google_place_id": place_id() })),
+        )
+        .await;
+        let before = stored(&pool, &org["id"]);
+        assert_eq!(before.0.as_deref(), Some("google"));
+
+        let path = format!("/api/organisation/update/{}", org["id"].as_str().unwrap());
+        for who in [&moderator, &creator] {
+            let (status, body) = call(&app, Method::PUT, &path, Some(&who.token), Some(json!({
+                "description": "edited", "latitude": org["latitude"], "longitude": org["longitude"],
+            }))).await;
+            assert_eq!(status, StatusCode::OK, "{body}");
+            assert_eq!(
+                stored(&pool, &org["id"]),
+                before,
+                "same point, same provenance"
+            );
+        }
+    }
 }

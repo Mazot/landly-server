@@ -84,6 +84,13 @@ pub fn parse_place_details(status: u16, body: &str) -> Result<PlaceDetails, AppE
                 business_status: place.business_status,
             })
         }
+        // Google also answers 400 for a bad server key (reason API_KEY_INVALID,
+        // API_KEY_IP_ADDRESS_BLOCKED, …): a configuration failure, not the
+        // client's place ID.
+        400 if has_api_key_error(body) => {
+            log::error!("Places API rejected the server key: {body}");
+            Err(unavailable())
+        }
         // Unknown or malformed place ID.
         400 | 404 => Err(AppError::UnprocessableEntity(
             json!({ "error": "Unknown google_place_id" }),
@@ -94,6 +101,31 @@ pub fn parse_place_details(status: u16, body: &str) -> Result<PlaceDetails, AppE
             Err(unavailable())
         }
     }
+}
+
+/// Google API errors carry `error.details[]`; `google.rpc.ErrorInfo` entries
+/// have a machine-readable `reason`. Every key problem starts with `API_KEY_`.
+fn has_api_key_error(body: &str) -> bool {
+    #[derive(Deserialize)]
+    struct Envelope {
+        error: Option<ErrorBody>,
+    }
+    #[derive(Deserialize)]
+    struct ErrorBody {
+        #[serde(default)]
+        details: Vec<serde_json::Value>,
+    }
+
+    serde_json::from_str::<Envelope>(body)
+        .ok()
+        .and_then(|envelope| envelope.error)
+        .is_some_and(|error| {
+            error.details.iter().any(|detail| {
+                detail["reason"]
+                    .as_str()
+                    .is_some_and(|reason| reason.starts_with("API_KEY_"))
+            })
+        })
 }
 
 fn unavailable() -> AppError {
@@ -195,6 +227,33 @@ mod tests {
         ));
         assert!(matches!(
             parse_place_details(200, r#"{"id":"x"}"#),
+            Err(AppError::UnprocessableEntity(_))
+        ));
+    }
+
+    /// Review regression: a bad server key is a 400 from Google, but it must
+    /// surface as 503 (our configuration), not as "Unknown google_place_id".
+    #[test]
+    fn test_parse_place_details_treats_api_key_errors_as_unavailable() {
+        let invalid_key = r#"{"error":{"code":400,"message":"API key not valid. Please pass a valid API key.","status":"INVALID_ARGUMENT","details":[{"@type":"type.googleapis.com/google.rpc.ErrorInfo","reason":"API_KEY_INVALID","domain":"googleapis.com","metadata":{"service":"places.googleapis.com"}}]}}"#;
+        assert!(matches!(
+            parse_place_details(400, invalid_key),
+            Err(AppError::ServiceUnavailable(_))
+        ));
+        let ip_blocked = invalid_key.replace("API_KEY_INVALID", "API_KEY_IP_ADDRESS_BLOCKED");
+        assert!(matches!(
+            parse_place_details(400, &ip_blocked),
+            Err(AppError::ServiceUnavailable(_))
+        ));
+
+        let bad_place = r#"{"error":{"code":400,"message":"Not a valid Place ID.","status":"INVALID_ARGUMENT"}}"#;
+        assert!(matches!(
+            parse_place_details(400, bad_place),
+            Err(AppError::UnprocessableEntity(_))
+        ));
+        let other_reason = invalid_key.replace("API_KEY_INVALID", "SOMETHING_ELSE");
+        assert!(matches!(
+            parse_place_details(400, &other_reason),
             Err(AppError::UnprocessableEntity(_))
         ));
     }

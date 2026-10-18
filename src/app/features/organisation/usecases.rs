@@ -12,7 +12,7 @@ use crate::app::features::moderation::repositories::{ModerationRepository, Submi
 use crate::error::AppError;
 use crate::utils::google_places::{PlaceLookup, validate_place_id};
 use actix_web::HttpResponse;
-use bigdecimal::{BigDecimal, FromPrimitive};
+use bigdecimal::{BigDecimal, FromPrimitive, RoundingMode};
 use chrono::NaiveDateTime;
 use serde_json::json;
 use std::sync::Arc;
@@ -66,6 +66,28 @@ impl OrganisationUsecase {
             ));
         }
         Ok(())
+    }
+
+    /// Whether an update really moves the point. Edit forms usually re-send
+    /// the coordinates they loaded; compared at the column precision
+    /// (DECIMAL(_, 8), which Postgres rounds half away from zero) that is
+    /// no move, so a Google point keeps its source and refresh time.
+    fn point_moved(
+        existing: &Organisation,
+        latitude: &Option<BigDecimal>,
+        longitude: &Option<BigDecimal>,
+    ) -> bool {
+        let (Some(latitude), Some(longitude)) = (latitude, longitude) else {
+            return false;
+        };
+        let at_db_precision = |v: &BigDecimal| v.with_scale_round(8, RoundingMode::HalfUp);
+        let stored = existing
+            .latitude
+            .as_ref()
+            .zip(existing.longitude.as_ref())
+            .map(|(lat, lng)| (at_db_precision(lat), at_db_precision(lng)));
+
+        stored != Some((at_db_precision(latitude), at_db_precision(longitude)))
     }
 
     /// Decides the stored point of a submission:
@@ -252,7 +274,7 @@ impl OrganisationUsecase {
 
         // A point moved by hand is ours, not Google's: it is never refreshed
         // from Google again.
-        let moved = params.latitude.is_some();
+        let moved = Self::point_moved(&existing, &params.latitude, &params.longitude);
         let location_source = moved.then(|| match managed_by {
             ManagedBy::Moderator => LocationSource::Moderator.as_str().to_string(),
             ManagedBy::Creator => LocationSource::UserPin.as_str().to_string(),
@@ -693,6 +715,49 @@ mod tests {
         fn count_live_orgs_created_by(&self, _user_id: Uuid) -> Result<i64, AppError> {
             unimplemented!()
         }
+    }
+
+    #[test]
+    fn test_point_moved_compares_at_the_column_precision() {
+        use bigdecimal::{BigDecimal, FromPrimitive};
+        use std::str::FromStr;
+        let dec = |v: &str| Some(BigDecimal::from_str(v).unwrap());
+        let mut org = test_organisation(None);
+        org.latitude = dec("52.51627500");
+        org.longitude = dec("13.37770400");
+
+        // What a client sends back after a JSON round-trip through f64.
+        let float = |v: f64| Some(BigDecimal::from_f64(v).unwrap());
+        assert!(!OrganisationUsecase::point_moved(
+            &org,
+            &float(52.516275),
+            &float(13.377704)
+        ));
+        assert!(!OrganisationUsecase::point_moved(
+            &org,
+            &dec("52.516275004"),
+            &dec("13.377704")
+        ));
+        assert!(OrganisationUsecase::point_moved(
+            &org,
+            &dec("52.51627501"),
+            &dec("13.377704")
+        ));
+        assert!(
+            OrganisationUsecase::point_moved(&org, &dec("52.516275005"), &dec("13.377704")),
+            "half up, like Postgres"
+        );
+        assert!(
+            !OrganisationUsecase::point_moved(&org, &None, &None),
+            "no point sent"
+        );
+
+        org.latitude = None;
+        org.longitude = None;
+        assert!(
+            OrganisationUsecase::point_moved(&org, &float(1.0), &float(2.0)),
+            "first point counts as a move"
+        );
     }
 
     fn test_organisation(created_by: Option<Uuid>) -> Organisation {
