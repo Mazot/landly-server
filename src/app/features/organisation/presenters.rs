@@ -125,10 +125,11 @@ pub struct OrganisationContent {
     pub open_now: Option<bool>,
     /// `free` or `paid`.
     pub cost: Option<String>,
-    /// Google Places ID when imported from Google.
+    /// Google Places ID: the client fetches Google's live details (hours,
+    /// photos, Google rating) with it and shows them on a Google map.
     pub google_place_id: Option<String>,
-    /// Google rating at import time (0–5).
-    pub google_rating: Option<f64>,
+    /// Where the point came from: `google`, `user_pin` or `moderator`; null without a point.
+    pub location_source: Option<String>,
     /// Detail-page visit counter (POST /organisation/visit/{id}).
     pub visits_count: i64,
     /// Average review rating (1–5); null without reviews. Recomputed from reviews on every create/delete.
@@ -204,7 +205,7 @@ impl From<Organisation> for OrganisationContent {
             open_now,
             cost: org.cost,
             google_place_id: org.google_place_id,
-            google_rating: org.google_rating,
+            location_source: org.location_source,
             visits_count: org.visits_count,
             rating_avg: org.rating_avg,
             reviews_count: org.reviews_count,
@@ -354,10 +355,11 @@ mod tests {
             timezone: None,
             cost: Some("free".to_string()),
             google_place_id: None,
-            google_rating: None,
             visits_count: 7,
             rating_avg: Some(4.5),
             reviews_count: 12,
+            location_source: None,
+            location_refreshed_at: None,
         }
     }
 

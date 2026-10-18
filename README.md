@@ -286,6 +286,10 @@ GET /api/organisation/fetch/{id}
 # Create organisation (requires auth; new submissions get status=pending)
 POST /api/organisation/create
 Authorization: Bearer <jwt_token>
+#   { name, google_place_id?, latitude?, longitude?, ... }
+#   latitude/longitude come as a pair. With google_place_id the server takes the
+#   point from Google (when GOOGLE_PLACES_API_KEY is set); one organisation per place.
+#   Responses carry locationSource: google | user_pin | moderator.
 
 # Update / delete — only the creator or a moderator/admin
 PUT    /api/organisation/update/{id}
@@ -300,6 +304,10 @@ When the creator (not a moderator) edits a `live` organisation, it goes back to 
 ### Images
 
 Organisation photos live in S3/R2 (MinIO locally); the API stores only the metadata.
+
+The map is Google Maps. From Google the server keeps only `google_place_id` and a refreshable
+copy of its coordinates; hours, photos and Google ratings are fetched by the client live with
+the place ID (Google's terms do not allow storing them).
 
 ```http
 POST   /api/images/upload/{organisation_id}   # auth; multipart/form-data

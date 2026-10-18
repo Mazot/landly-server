@@ -11,6 +11,7 @@ Moved out of AGENTS.md. Read before adding/renaming an `env::var`, changing `.en
 | `JWT_EXPIRATION` | yes | JWT expiry in seconds |
 | `GOOGLE_CLIENT_ID` | no | OAuth Google client ID |
 | `GOOGLE_CLIENT_SECRET` | no | OAuth Google client secret |
+| `GOOGLE_PLACES_API_KEY` | no | Server key for Places API (New) lookups of `google_place_id` (restrict it to the Places API and the server IPs). Without it the client's point is stored as an unverified `google` point; never send it to the client |
 | `OAUTH_GOOGLE_REDIRECT_URL` | no | Google OAuth callback URL |
 | `S3_ENDPOINT_URL` | no | S3/R2 endpoint; storage disabled if absent |
 | `S3_ACCESS_KEY_ID` | no | S3/R2 access key |

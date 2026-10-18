@@ -99,10 +99,15 @@ macro_rules! require_db {
 pub(crate) use require_db;
 
 /// The production `/api` routing + auth middleware over a `DiContainer` with
-/// explicit test backends — NoOp cache, NoOp storage, no Google OAuth (503) —
-/// whatever `REDIS_URL` / `S3_*` / `GOOGLE_*` the developer has exported.
+/// explicit test backends — NoOp cache, NoOp storage, no Google OAuth (503),
+/// no Places lookups — whatever `REDIS_URL` / `S3_*` / `GOOGLE_*` the
+/// developer has exported.
 macro_rules! test_app {
-    ($pool:expr) => {{
+    ($pool:expr) => {
+        $crate::test_support::test_app!($pool, None)
+    };
+    // `$places`: Option<Arc<dyn PlaceLookup>> — a stub for the Google path.
+    ($pool:expr, $places:expr) => {{
         $crate::test_support::jwt_env();
         let state = $crate::app::drivers::middlewares::state::AppState {
             di_container: $crate::utils::di::DiContainer::with_backends(
@@ -113,6 +118,7 @@ macro_rules! test_app {
                     as std::sync::Arc<dyn $crate::utils::cache::CacheService>),
                 std::sync::Arc::new($crate::utils::storage::NoOpStorageService),
                 None,
+                $places,
             ),
         };
         let cache = state.di_container.redis_cache_service.clone();
@@ -295,6 +301,8 @@ pub fn org(pool: &DbPool, spec: OrgSpec) -> Organisation {
             timezone: None,
             cost: None,
             google_place_id: None,
+            location_source: spec.lat_lng.map(|_| "user_pin".to_string()),
+            location_refreshed_at: None,
         },
     )
     .unwrap();

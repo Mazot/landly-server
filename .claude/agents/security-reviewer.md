@@ -70,6 +70,13 @@ test would settle a question.
 - Raw SQL (`sql_query`, `diesel::dsl::sql`) only with `.bind()`, never `format!`.
 - Pagination limits/offsets are clamped; geo scans stay capped.
 
+**Google data**
+- From Google only `google_place_id` is stored indefinitely and Google
+  coordinates only as a refreshable cache (`location_source='google'`); no
+  Google ratings, hours, photos or reviews in the DB or our responses.
+- `GOOGLE_PLACES_API_KEY` stays server-side; `place_id` is validated before it
+  is put into a Google URL.
+
 **Infrastructure**
 - docker-compose: secrets only via `${VAR:?}` (no defaults), never interpolated
   into shell text (`"$$VAR"` from the environment instead); data services bound
