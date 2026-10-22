@@ -259,7 +259,11 @@ pub async fn delete_organisation(
     responses(
         (status = 200, description = "Organisation created successfully", body = super::presenters::OrganisationContent),
         (status = 400, description = "Bad request", body = AppError),
-        (status = 500, description = "Internal server error", body = AppError)
+        (status = 401, description = "Unauthorized", body = AppError),
+        (status = 422, description = "Invalid input, unknown Google place, or the place already has an organisation (constraint organisations_google_place_id_key)", body = AppError),
+        (status = 429, description = "Rate limit (per IP and per user) or submission quota exceeded: at most 10 organisations waiting for moderation and 20 submissions per day for regular users", body = AppError),
+        (status = 500, description = "Internal server error", body = AppError),
+        (status = 503, description = "Google Places is unavailable or misconfigured", body = AppError)
     ),
     tag = "Organisation"
 )]
@@ -1380,5 +1384,339 @@ mod location_tests {
                 "same point, same provenance"
             );
         }
+    }
+}
+
+/// DB-backed tests of the cost controls on `POST /organisation/create`
+/// (M2 of the security audit): quotas, no Google call for a taken place, and
+/// the real per-IP / per-user rate limiters.
+#[cfg(test)]
+mod cost_control_tests {
+    use crate::app::drivers::middlewares::rate_limit::RateLimits;
+    use crate::data::schema::organisations;
+    use crate::test_support::{self as ts, OrgSpec, call, require_db, test_app};
+    use crate::utils::google_places::{PlaceDetails, PlaceFuture, PlaceLookup};
+    use actix_web::http::{Method, StatusCode};
+    use diesel::prelude::*;
+    use serde_json::json;
+    use serial_test::serial;
+    use std::sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    };
+    use uuid::Uuid;
+
+    /// Always finds the place, and counts how often Google was asked.
+    struct CountingPlaces(Arc<AtomicUsize>);
+
+    impl PlaceLookup for CountingPlaces {
+        fn lookup<'a>(&'a self, _place_id: &'a str) -> PlaceFuture<'a> {
+            self.0.fetch_add(1, Ordering::SeqCst);
+            Box::pin(async {
+                Ok(PlaceDetails {
+                    latitude: 48.137154,
+                    longitude: 11.576124,
+                    business_status: Some("OPERATIONAL".to_string()),
+                })
+            })
+        }
+    }
+
+    fn counting() -> (Arc<AtomicUsize>, Option<Arc<dyn PlaceLookup>>) {
+        let calls = Arc::new(AtomicUsize::new(0));
+        (calls.clone(), Some(Arc::new(CountingPlaces(calls))))
+    }
+
+    fn seed(pool: &crate::utils::db::DbPool, user: Uuid, status: &'static str, count: usize) {
+        for _ in 0..count {
+            ts::org(
+                pool,
+                OrgSpec {
+                    created_by: Some(user),
+                    status: Some(status),
+                    ..Default::default()
+                },
+            );
+        }
+    }
+
+    fn submit_body() -> serde_json::Value {
+        json!({ "name": format!("Submission {}", ts::unique()) })
+    }
+
+    #[actix_web::test]
+    #[serial(jwt_env)]
+    async fn test_pending_cap_protects_the_moderation_queue() {
+        let pool = require_db!();
+        let app = test_app!(pool);
+        let (user, moderator) = (ts::user(&pool, "user"), ts::user(&pool, "moderator"));
+        seed(&pool, user.id, "pending", 9);
+
+        let (status, _) = call(
+            &app,
+            Method::POST,
+            "/api/organisation/create",
+            Some(&user.token),
+            Some(submit_body()),
+        )
+        .await;
+        assert_eq!(
+            status,
+            StatusCode::OK,
+            "the 10th pending submission is still fine"
+        );
+        let (status, body) = call(
+            &app,
+            Method::POST,
+            "/api/organisation/create",
+            Some(&user.token),
+            Some(submit_body()),
+        )
+        .await;
+        assert_eq!(status, StatusCode::TOO_MANY_REQUESTS, "{body}");
+        assert!(
+            body["error"]
+                .as_str()
+                .unwrap()
+                .contains("waiting for moderation"),
+            "{body}"
+        );
+
+        // Approved ones no longer count against the cap.
+        let conn = &mut pool.get().unwrap();
+        let reviewed: Uuid = organisations::table
+            .filter(organisations::created_by.eq(user.id))
+            .filter(organisations::status.eq("pending"))
+            .select(organisations::id)
+            .first(conn)
+            .unwrap();
+        diesel::update(organisations::table.find(reviewed))
+            .set(organisations::status.eq("live"))
+            .execute(conn)
+            .unwrap();
+        let (status, _) = call(
+            &app,
+            Method::POST,
+            "/api/organisation/create",
+            Some(&user.token),
+            Some(submit_body()),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "a reviewed submission frees a slot");
+
+        // Moderators review the queue; they are not throttled by it.
+        seed(&pool, moderator.id, "pending", 12);
+        let (status, _) = call(
+            &app,
+            Method::POST,
+            "/api/organisation/create",
+            Some(&moderator.token),
+            Some(submit_body()),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+    }
+
+    #[actix_web::test]
+    #[serial(jwt_env)]
+    async fn test_daily_cap_counts_a_rolling_24_hours() {
+        let pool = require_db!();
+        let app = test_app!(pool);
+        let user = ts::user(&pool, "user");
+        seed(&pool, user.id, "live", 20);
+
+        let (status, body) = call(
+            &app,
+            Method::POST,
+            "/api/organisation/create",
+            Some(&user.token),
+            Some(submit_body()),
+        )
+        .await;
+        assert_eq!(status, StatusCode::TOO_MANY_REQUESTS, "{body}");
+        assert!(
+            body["error"].as_str().unwrap().contains("per day"),
+            "{body}"
+        );
+
+        diesel::update(organisations::table.filter(organisations::created_by.eq(user.id)))
+            .set(
+                organisations::created_at
+                    .eq(chrono::Utc::now().naive_utc() - chrono::Duration::hours(25)),
+            )
+            .execute(&mut pool.get().unwrap())
+            .unwrap();
+        let (status, _) = call(
+            &app,
+            Method::POST,
+            "/api/organisation/create",
+            Some(&user.token),
+            Some(submit_body()),
+        )
+        .await;
+        assert_eq!(
+            status,
+            StatusCode::OK,
+            "submissions older than 24 h do not count"
+        );
+    }
+
+    /// The point of the whole exercise: nothing that gets refused may cost a
+    /// Google lookup.
+    #[actix_web::test]
+    #[serial(jwt_env)]
+    async fn test_refused_submissions_never_call_google() {
+        let pool = require_db!();
+        let (calls, places) = counting();
+        let app = test_app!(pool, places);
+        let (first, second, capped) = (
+            ts::user(&pool, "user"),
+            ts::user(&pool, "user"),
+            ts::user(&pool, "user"),
+        );
+        let place = format!("ChIJ{}", ts::unique());
+
+        let (status, _) = call(
+            &app,
+            Method::POST,
+            "/api/organisation/create",
+            Some(&first.token),
+            Some(json!({ "name": "First", "google_place_id": place })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+
+        // Resubmitting a taken place (same or another user): the DB answers.
+        for who in [&first, &second] {
+            let (status, body) = call(
+                &app,
+                Method::POST,
+                "/api/organisation/create",
+                Some(&who.token),
+                Some(json!({ "name": "Again", "google_place_id": place })),
+            )
+            .await;
+            assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
+            assert_eq!(
+                body["constraint"], "organisations_google_place_id_key",
+                "same shape as the unique index"
+            );
+        }
+        // Malformed ids and users over quota are refused before Google too.
+        let (status, _) = call(
+            &app,
+            Method::POST,
+            "/api/organisation/create",
+            Some(&second.token),
+            Some(json!({ "name": "Bad", "google_place_id": "../x" })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+        seed(&pool, capped.id, "pending", 10);
+        let (status, _) = call(
+            &app,
+            Method::POST,
+            "/api/organisation/create",
+            Some(&capped.token),
+            Some(
+                json!({ "name": "Over quota", "google_place_id": format!("ChIJ{}", ts::unique()) }),
+            ),
+        )
+        .await;
+        assert_eq!(status, StatusCode::TOO_MANY_REQUESTS);
+
+        assert_eq!(
+            calls.load(Ordering::SeqCst),
+            1,
+            "only the one new place reached Google"
+        );
+    }
+
+    /// Production limits through the whole stack: per user (burst 5) and per
+    /// IP (burst 10, shared by every account behind the same address).
+    #[actix_web::test]
+    #[serial(jwt_env)]
+    async fn test_submission_rate_limits_per_user_and_per_ip() {
+        let pool = require_db!();
+        let app = test_app!(pool, None, RateLimits::new());
+        let (a, b) = (ts::user(&pool, "user"), ts::user(&pool, "user"));
+
+        for n in 1..=5 {
+            let (status, body) = call(
+                &app,
+                Method::POST,
+                "/api/organisation/create",
+                Some(&a.token),
+                Some(submit_body()),
+            )
+            .await;
+            assert_eq!(status, StatusCode::OK, "user A request {n}: {body}");
+        }
+        let (status, _) = call(
+            &app,
+            Method::POST,
+            "/api/organisation/create",
+            Some(&a.token),
+            Some(submit_body()),
+        )
+        .await;
+        assert_eq!(
+            status,
+            StatusCode::TOO_MANY_REQUESTS,
+            "user A is over their own limit"
+        );
+
+        // The limit is scoped to the create route and to that user.
+        let (status, _) = call(
+            &app,
+            Method::GET,
+            "/api/organisation/list",
+            Some(&a.token),
+            None,
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "other routes are untouched");
+        for n in 1..=4 {
+            let (status, body) = call(
+                &app,
+                Method::POST,
+                "/api/organisation/create",
+                Some(&b.token),
+                Some(submit_body()),
+            )
+            .await;
+            assert_eq!(status, StatusCode::OK, "user B request {n}: {body}");
+        }
+
+        // 6 (A) + 4 (B) requests used the IP burst of 10: B's own bucket has
+        // room, but the shared address is exhausted.
+        let (status, _) = call(
+            &app,
+            Method::POST,
+            "/api/organisation/create",
+            Some(&b.token),
+            Some(submit_body()),
+        )
+        .await;
+        assert_eq!(
+            status,
+            StatusCode::TOO_MANY_REQUESTS,
+            "the per-IP limit holds across accounts"
+        );
+
+        let (status, _) = call(
+            &app,
+            Method::POST,
+            "/api/organisation/create",
+            None,
+            Some(submit_body()),
+        )
+        .await;
+        assert_eq!(
+            status,
+            StatusCode::UNAUTHORIZED,
+            "authentication is checked before any limiter"
+        );
     }
 }

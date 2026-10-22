@@ -57,7 +57,7 @@ pub fn build_openapi() -> utoipa::openapi::OpenApi {
 pub(crate) fn configure_api(
     cfg: &mut web::ServiceConfig,
     cache: TypedCache<Arc<dyn CacheService>>,
-    auth_limit: rate_limit::RateLimitConfig,
+    limits: rate_limit::RateLimits,
     redis_url: Option<String>,
 ) {
     use app::features;
@@ -70,7 +70,7 @@ pub(crate) fn configure_api(
         redis_url,
     ))
     .configure(features::user::config::create_configure_services_closure(
-        auth_limit,
+        limits.auth,
     ))
     .configure(features::corridor::config::configure_services)
     .configure(features::person::config::configure_services)
@@ -78,7 +78,13 @@ pub(crate) fn configure_api(
     .configure(features::saved::config::configure_services)
     .configure(features::report::config::configure_services)
     .configure(features::moderation::config::configure_services)
-    .configure(features::organisation::config::create_configure_services_closure(cache.clone()))
+    .configure(
+        features::organisation::config::create_configure_services_closure(
+            cache.clone(),
+            limits.submit_ip,
+            limits.submit_user,
+        ),
+    )
     .configure(
         features::country_connection::config::create_configure_services_closure(cache.clone()),
     )
@@ -109,13 +115,13 @@ async fn main() -> std::io::Result<()> {
     // Rate limiter state must be shared by all workers, so the configs are
     // built once here and only cloned into each worker's App.
     let api_rate_limit = rate_limit::api_rate_limit();
-    let auth_rate_limit = rate_limit::auth_rate_limit();
+    let rate_limits = rate_limit::RateLimits::new();
     // Optional: without it the GET /common/* response cache is simply off.
     let redis_url = std::env::var(constants::env_key::REDIS_URL).ok();
 
     HttpServer::new(move || {
         let cache = app_state.di_container.redis_cache_service.clone();
-        let auth_limit = auth_rate_limit.clone();
+        let limits = rate_limits.clone();
         let redis_url = redis_url.clone();
 
         App::new()
@@ -141,8 +147,7 @@ async fn main() -> std::io::Result<()> {
             .service(web::redirect("/swagger-ui", "/scalar"))
             .service(web::redirect("/swagger-ui/", "/scalar"))
             .service(
-                web::scope("/api")
-                    .configure(|cfg| configure_api(cfg, cache, auth_limit, redis_url)),
+                web::scope("/api").configure(|cfg| configure_api(cfg, cache, limits, redis_url)),
             )
     })
     .bind(constants::BIND)?
