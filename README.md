@@ -290,6 +290,10 @@ Authorization: Bearer <jwt_token>
 #   latitude/longitude come as a pair. With google_place_id the server takes the
 #   point from Google (when GOOGLE_PLACES_API_KEY is set); one organisation per place.
 #   Responses carry locationSource: google | user_pin | moderator.
+#   Throttled: 429 over the per-IP / per-user rate limit, or over the quota
+#   (regular users: at most 10 organisations waiting for moderation and 20
+#   submissions per day; moderators are exempt). A place that already has an
+#   organisation is a 422 with constraint organisations_google_place_id_key.
 
 # Update / delete — only the creator or a moderator/admin
 PUT    /api/organisation/update/{id}

@@ -39,6 +39,13 @@ struct ResolvedLocation {
     google_business_status: Option<String>,
 }
 
+/// Non-moderators may have at most this many organisations waiting for
+/// moderation — a flood of submissions must not bury the queue.
+const MAX_PENDING_PER_USER: i64 = 10;
+/// ...and may submit at most this many per rolling 24 hours (every submission
+/// with a Google place is a billed lookup).
+const MAX_SUBMISSIONS_PER_DAY: i64 = 20;
+
 impl OrganisationUsecase {
     pub fn new(
         organisation_repo: Arc<dyn OrganisationRepository>,
@@ -52,6 +59,45 @@ impl OrganisationUsecase {
             moderation_repo,
             place_lookup,
         }
+    }
+
+    /// Per-user quotas for new submissions; moderators and admins are exempt.
+    /// Runs first, before any validation that costs a query or a Google call.
+    fn ensure_submission_quota(&self, user_id: Uuid) -> Result<(), AppError> {
+        if self
+            .organisation_repo
+            .fetch_user_role(user_id)?
+            .is_moderator()
+        {
+            return Ok(());
+        }
+
+        let pending = self
+            .organisation_repo
+            .count_pending_orgs_created_by(user_id)?;
+        if pending >= MAX_PENDING_PER_USER {
+            return Err(AppError::TooManyRequests(json!({
+                "error": format!(
+                    "You already have {pending} organisations waiting for moderation; \
+                     please wait until they are reviewed"
+                )
+            })));
+        }
+
+        let since = chrono::Utc::now().naive_utc() - chrono::Duration::hours(24);
+        let recent = self
+            .organisation_repo
+            .count_orgs_created_since(user_id, since)?;
+        if recent >= MAX_SUBMISSIONS_PER_DAY {
+            return Err(AppError::TooManyRequests(json!({
+                "error": format!(
+                    "You can submit at most {MAX_SUBMISSIONS_PER_DAY} organisations per day; \
+                     please try again tomorrow"
+                )
+            })));
+        }
+
+        Ok(())
     }
 
     /// A point is a pair: a lone latitude or longitude can never be shown on
@@ -117,6 +163,16 @@ impl OrganisationUsecase {
             });
         };
         validate_place_id(place_id)?;
+
+        // A place that already has an organisation is refused here, before
+        // the (billed) Google call. Same answer as the unique index gives
+        // when two submissions race past this check.
+        if self.organisation_repo.exists_by_google_place_id(place_id)? {
+            return Err(AppError::UnprocessableEntity(json!({
+                "error": "A record with these values already exists",
+                "constraint": "organisations_google_place_id_key",
+            })));
+        }
 
         let Some(lookup) = &self.place_lookup else {
             let source = latitude.is_some().then_some(LocationSource::Google);
@@ -185,6 +241,7 @@ impl OrganisationUsecase {
         if let Some(cost) = params.cost.as_deref() {
             Cost::try_from(cost)?;
         }
+        self.ensure_submission_quota(params.created_by)?;
         let location = self
             .resolve_new_location(
                 params.google_place_id.as_deref(),
@@ -709,6 +766,22 @@ mod tests {
             _latitude: Option<&BigDecimal>,
             _longitude: Option<&BigDecimal>,
         ) -> Result<bool, AppError> {
+            unimplemented!()
+        }
+
+        fn count_pending_orgs_created_by(&self, _user_id: Uuid) -> Result<i64, AppError> {
+            unimplemented!()
+        }
+
+        fn count_orgs_created_since(
+            &self,
+            _user_id: Uuid,
+            _since: chrono::NaiveDateTime,
+        ) -> Result<i64, AppError> {
+            unimplemented!()
+        }
+
+        fn exists_by_google_place_id(&self, _place_id: &str) -> Result<bool, AppError> {
             unimplemented!()
         }
 

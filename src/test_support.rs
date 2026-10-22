@@ -107,7 +107,15 @@ macro_rules! test_app {
         $crate::test_support::test_app!($pool, None)
     };
     // `$places`: Option<Arc<dyn PlaceLookup>> — a stub for the Google path.
-    ($pool:expr, $places:expr) => {{
+    ($pool:expr, $places:expr) => {
+        $crate::test_support::test_app!(
+            $pool,
+            $places,
+            $crate::app::drivers::middlewares::rate_limit::RateLimits::relaxed()
+        )
+    };
+    // `$limits`: RateLimits — pass `RateLimits::new()` to test the real ones.
+    ($pool:expr, $places:expr, $limits:expr) => {{
         $crate::test_support::jwt_env();
         let state = $crate::app::drivers::middlewares::state::AppState {
             di_container: $crate::utils::di::DiContainer::with_backends(
@@ -126,14 +134,10 @@ macro_rules! test_app {
             actix_web::App::new()
                 .app_data(actix_web::web::Data::new(state))
                 .wrap($crate::app::drivers::middlewares::auth::Authentication)
-                .service(actix_web::web::scope("/api").configure(|cfg| {
-                    $crate::configure_api(
-                        cfg,
-                        cache,
-                        $crate::app::drivers::middlewares::rate_limit::auth_rate_limit(),
-                        None,
-                    )
-                })),
+                .service(
+                    actix_web::web::scope("/api")
+                        .configure(|cfg| $crate::configure_api(cfg, cache, $limits, None)),
+                ),
         )
         .await
     }};
