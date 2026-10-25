@@ -326,7 +326,8 @@ Uploads accept JPEG, PNG, WebP and GIF up to 10 MB; permissions are checked befo
 ### Countries
 
 ```http
-# All countries
+# All countries (public); ?name= (substring), limit (default 20, max 250), offset (max 150),
+# brief=true leaves out the large `geoJson` border (null) — the full list is ~12 MB with borders
 GET /api/common/countries
 
 # Country page payload: country + live-place breakdown by org type

@@ -39,6 +39,7 @@ impl CommonUsecase {
                 limit: params.limit,
                 offset: params.offset,
                 name: params.name,
+                brief: params.brief,
             })?;
         let response = self.common_presenter.to_multi_country_json(countries);
 
@@ -115,6 +116,8 @@ pub struct FetchAllCountriesUsecaseInput {
     pub offset: i64,
     /// Case-insensitive substring filter on the name.
     pub name: Option<String>,
+    /// Skip the `geo_json` border column.
+    pub brief: bool,
 }
 
 pub struct FetchAllLanguagesUsecaseInput {

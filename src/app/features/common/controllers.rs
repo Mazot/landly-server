@@ -21,7 +21,7 @@ fn caller_user_id(req: &HttpRequest) -> Result<Uuid, AppError> {
         .ok_or_else(|| AppError::Unauthorized(json!({ "error": "Missing authenticated user" })))
 }
 
-// [authorship] Human-written (original codebase).
+// [authorship] Human-written (original codebase); `brief` param added by AI (Claude).
 #[utoipa::path(
     get,
     path = "/common/countries",
@@ -49,6 +49,7 @@ pub async fn fetch_all_countries(
             limit,
             offset,
             name,
+            brief: params.brief.unwrap_or(false),
         })
 }
 
@@ -175,6 +176,9 @@ pub struct CountriesListQueryParams {
     pub offset: Option<i64>,
     /// Case-insensitive substring filter on the country name.
     pub name: Option<String>,
+    /// Leave out the (large) `geoJson` border — it comes back as `null`. For pickers
+    /// that only need name and flag: the full list is ~12 MB with borders.
+    pub brief: Option<bool>,
 }
 
 #[derive(Deserialize, ToSchema, IntoParams)]
@@ -194,6 +198,71 @@ mod http_tests {
     use actix_web::http::{Method, StatusCode};
     use serde_json::{Value, json};
     use serial_test::serial;
+
+    #[actix_web::test]
+    #[serial(jwt_env)]
+    async fn test_countries_brief_leaves_out_the_border() {
+        use crate::data::models::{Country, CreateCountry};
+
+        let pool = require_db!();
+        let app = test_app!(pool);
+        let name = format!("Bordertest-{}", uuid::Uuid::new_v4());
+        Country::create(
+            &mut pool.get().unwrap(),
+            &CreateCountry {
+                name: name.clone(),
+                geo_json: Some(
+                    json!({"type": "Polygon", "coordinates": [[[0, 0], [1, 0], [1, 1], [0, 0]]]}),
+                ),
+                flag: Some("🏳️".to_string()),
+                capital_city: None,
+                description: None,
+                currency: None,
+                phone_code: None,
+                top_cities: None,
+            },
+        )
+        .unwrap();
+
+        let (_, full) = call(
+            &app,
+            Method::GET,
+            &format!("/api/common/countries?name={name}"),
+            None,
+            None,
+        )
+        .await;
+        assert_eq!(
+            full[0]["geoJson"]["type"], "Polygon",
+            "borders are the default"
+        );
+
+        let (status, brief) = call(
+            &app,
+            Method::GET,
+            &format!("/api/common/countries?name={name}&brief=true"),
+            None,
+            None,
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(brief[0]["name"], name.as_str());
+        assert_eq!(brief[0]["flag"], "🏳️");
+        assert!(
+            brief[0]["geoJson"].is_null(),
+            "brief answers null instead of the border"
+        );
+
+        let (_, explicit_off) = call(
+            &app,
+            Method::GET,
+            &format!("/api/common/countries?name={name}&brief=false"),
+            None,
+            None,
+        )
+        .await;
+        assert_eq!(explicit_off[0]["geoJson"]["type"], "Polygon");
+    }
 
     #[actix_web::test]
     #[serial(jwt_env)]
