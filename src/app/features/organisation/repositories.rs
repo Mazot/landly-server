@@ -77,6 +77,17 @@ pub trait OrganisationRepository: Send + Sync + 'static {
         longitude: Option<&BigDecimal>,
     ) -> Result<bool, AppError>;
     fn count_live_orgs_created_by(&self, user_id: Uuid) -> Result<i64, AppError>;
+    /// Organisations of `user_id` still waiting for moderation.
+    fn count_pending_orgs_created_by(&self, user_id: Uuid) -> Result<i64, AppError>;
+    /// Organisations `user_id` submitted at or after `since`, any status.
+    fn count_orgs_created_since(
+        &self,
+        user_id: Uuid,
+        since: NaiveDateTime,
+    ) -> Result<i64, AppError>;
+    /// Whether an organisation already holds this Google place (checked
+    /// before asking Google, so a resubmitted place costs nothing).
+    fn exists_by_google_place_id(&self, place_id: &str) -> Result<bool, AppError>;
 
     /// Role of a user, for ownership/RBAC checks in the usecase layer.
     fn fetch_user_role(&self, user_id: Uuid) -> Result<UserRole, AppError>;
@@ -518,6 +529,51 @@ impl OrganisationRepository for OrganisationRepositoryImpl {
             .get_result::<i64>(connection)?;
 
         Ok(count)
+    }
+
+    fn count_pending_orgs_created_by(&self, user_id: Uuid) -> Result<i64, AppError> {
+        use crate::data::schema::organisations;
+        use diesel::prelude::*;
+
+        let connection = &mut self.pool.get()?;
+        let count = organisations::table
+            .filter(organisations::created_by.eq(user_id))
+            .filter(organisations::status.eq(OrganisationStatus::Pending.as_str()))
+            .count()
+            .get_result::<i64>(connection)?;
+
+        Ok(count)
+    }
+
+    fn count_orgs_created_since(
+        &self,
+        user_id: Uuid,
+        since: NaiveDateTime,
+    ) -> Result<i64, AppError> {
+        use crate::data::schema::organisations;
+        use diesel::prelude::*;
+
+        let connection = &mut self.pool.get()?;
+        let count = organisations::table
+            .filter(organisations::created_by.eq(user_id))
+            .filter(organisations::created_at.ge(since))
+            .count()
+            .get_result::<i64>(connection)?;
+
+        Ok(count)
+    }
+
+    fn exists_by_google_place_id(&self, place_id: &str) -> Result<bool, AppError> {
+        use crate::data::schema::organisations;
+        use diesel::prelude::*;
+
+        let connection = &mut self.pool.get()?;
+        let found = diesel::select(diesel::dsl::exists(
+            organisations::table.filter(organisations::google_place_id.eq(place_id)),
+        ))
+        .get_result::<bool>(connection)?;
+
+        Ok(found)
     }
 
     fn fetch_user_role(&self, user_id: Uuid) -> Result<UserRole, AppError> {

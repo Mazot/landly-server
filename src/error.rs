@@ -28,6 +28,11 @@ pub enum AppError {
     #[error("Unprocessable Entity: {}", _0)]
     UnprocessableEntity(JsonValue),
 
+    // 429 — a per-user quota is used up (the per-IP rate limiter answers
+    // 429 on its own, before the request reaches a handler)
+    #[error("Too Many Requests: {}", _0)]
+    TooManyRequests(JsonValue),
+
     // 500
     #[error("Internal Server Error")]
     InternalServerError,
@@ -44,6 +49,7 @@ impl ResponseError for AppError {
             AppError::Forbidden(_) => StatusCode::FORBIDDEN,
             AppError::NotFound(_) => StatusCode::NOT_FOUND,
             AppError::UnprocessableEntity(_) => StatusCode::UNPROCESSABLE_ENTITY,
+            AppError::TooManyRequests(_) => StatusCode::TOO_MANY_REQUESTS,
             AppError::InternalServerError => StatusCode::INTERNAL_SERVER_ERROR,
             AppError::ServiceUnavailable(_) => StatusCode::SERVICE_UNAVAILABLE,
         }
@@ -55,6 +61,7 @@ impl ResponseError for AppError {
             AppError::Forbidden(msg) => HttpResponse::Forbidden().json(msg),
             AppError::NotFound(msg) => HttpResponse::NotFound().json(msg),
             AppError::UnprocessableEntity(msg) => HttpResponse::UnprocessableEntity().json(msg),
+            AppError::TooManyRequests(msg) => HttpResponse::TooManyRequests().json(msg),
             AppError::InternalServerError => {
                 HttpResponse::InternalServerError().json("Internal Server Error")
             }
@@ -212,6 +219,16 @@ mod tests {
         assert_eq!(
             error.error_response().status(),
             StatusCode::SERVICE_UNAVAILABLE
+        );
+    }
+
+    #[test]
+    fn test_app_error_too_many_requests_status() {
+        let error = AppError::TooManyRequests(json!({ "error": "quota used up" }));
+        assert_eq!(error.status_code(), StatusCode::TOO_MANY_REQUESTS);
+        assert_eq!(
+            error.error_response().status(),
+            StatusCode::TOO_MANY_REQUESTS
         );
     }
 
