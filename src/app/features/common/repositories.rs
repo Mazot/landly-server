@@ -73,10 +73,31 @@ impl CommonRepository for CommonRepositoryImpl {
         params: GetAllCountriesRepositoryInput,
     ) -> Result<Vec<Country>, AppError> {
         use crate::data::schema::countries;
+        use diesel::dsl::sql;
         use diesel::prelude::*;
+        use diesel::sql_types::{Jsonb, Nullable};
 
         let connection = &mut self.pool.get()?;
-        let mut query = countries::table.select(countries::all_columns).into_boxed();
+        // Same column order as `Country`; `brief` swaps the border for a NULL so
+        // Postgres never reads or sends the large `geo_json` values.
+        let geo_json = sql::<Nullable<Jsonb>>(if params.brief {
+            "NULL::jsonb"
+        } else {
+            "geo_json"
+        });
+        let mut query = countries::table
+            .select((
+                countries::id,
+                countries::name,
+                geo_json,
+                countries::flag,
+                countries::capital_city,
+                countries::description,
+                countries::currency,
+                countries::phone_code,
+                countries::top_cities,
+            ))
+            .into_boxed();
 
         if let Some(ref name) = params.name {
             let pattern = format!("%{}%", name);
@@ -205,6 +226,8 @@ pub struct GetAllCountriesRepositoryInput {
     pub offset: i64,
     /// Case-insensitive substring filter on the name.
     pub name: Option<String>,
+    /// Do not read the `geo_json` column (~50 KB per country): it is returned as `None`.
+    pub brief: bool,
 }
 
 pub struct GetAllLanguagesRepositoryInput {
