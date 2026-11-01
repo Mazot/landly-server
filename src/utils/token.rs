@@ -15,6 +15,65 @@ pub struct JwtClaims {
     iat: usize,
 }
 
+/// Shortest accepted `JWT_SECRET`, in bytes (HS256 wants at least the 256-bit
+/// hash size).
+pub const MIN_JWT_SECRET_BYTES: usize = 32;
+
+/// Fewest distinct characters a secret must contain; rules out `aaaa…`,
+/// `0101…` and repeated short phrases.
+const MIN_DISTINCT_CHARS: usize = 10;
+
+/// Fragments of the placeholder values that shipped in `.env.example`, the
+/// README and tutorials. A secret containing one was copied, not generated.
+const PLACEHOLDER_FRAGMENTS: [&str; 9] = [
+    "changeme",
+    "change-me",
+    "change_me",
+    "your-",
+    "your_",
+    "example",
+    "placeholder",
+    "super-secret",
+    "secret-jwt",
+];
+
+/// Checks that `JWT_SECRET` can safely sign tokens: anyone who guesses it can
+/// mint a token for any user, including an admin (audit H2). Called once at
+/// startup so a weak secret stops the server instead of running exposed.
+pub fn validate_jwt_secret(secret: &str) -> Result<(), String> {
+    let how = "generate one with `openssl rand -hex 32`";
+    if secret.len() < MIN_JWT_SECRET_BYTES {
+        return Err(format!(
+            "JWT_SECRET is too short ({} bytes, need at least {MIN_JWT_SECRET_BYTES}); {how}",
+            secret.len()
+        ));
+    }
+    let lowered = secret.to_lowercase();
+    if PLACEHOLDER_FRAGMENTS.iter().any(|p| lowered.contains(p)) {
+        return Err(format!(
+            "JWT_SECRET looks like a placeholder from the docs; {how}"
+        ));
+    }
+    let distinct = secret
+        .chars()
+        .collect::<std::collections::HashSet<_>>()
+        .len();
+    if distinct < MIN_DISTINCT_CHARS {
+        return Err(format!(
+            "JWT_SECRET is too repetitive ({distinct} distinct characters, need {MIN_DISTINCT_CHARS}); {how}"
+        ));
+    }
+    Ok(())
+}
+
+/// Validates the `JWT_SECRET` environment variable (see [`validate_jwt_secret`]).
+pub fn validate_jwt_secret_env() -> Result<(), String> {
+    match std::env::var(env_key::JWT_SECRET) {
+        Ok(secret) => validate_jwt_secret(&secret),
+        Err(_) => Err("JWT_SECRET is not set; generate one with `openssl rand -hex 32`".into()),
+    }
+}
+
 fn get_jwt_secret() -> String {
     std::env::var(env_key::JWT_SECRET).expect("JWT_SECRET must be set")
 }
@@ -66,6 +125,57 @@ pub fn generate_token(user_id: Uuid) -> Result<String, AppError> {
 mod tests {
     use super::*;
     use serial_test::serial;
+
+    #[test]
+    fn test_validate_jwt_secret_accepts_generated_secrets() {
+        // `openssl rand -hex 32` and `openssl rand -base64 48` shapes.
+        assert!(
+            validate_jwt_secret("9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08")
+                .is_ok()
+        );
+        assert!(
+            validate_jwt_secret("Zx3/9qLm+Vt0aPb7KdWc2YhNfRu8EoJi5GsTy1XnMwQ4eAvB6CkDlHgUjOpIrSzF")
+                .is_ok()
+        );
+    }
+
+    #[test]
+    fn test_validate_jwt_secret_rejects_weak_secrets() {
+        for weak in [
+            "",
+            "0987654321",
+            "test_secret",
+            "your-super-secret-jwt-key",
+            // long enough, but copied from docs / not random
+            "your-super-secret-jwt-key-change-me-please",
+            "0123012301230123012301230123012301230123",
+            "ChangeMeChangeMeChangeMeChangeMe1234",
+        ] {
+            assert!(
+                validate_jwt_secret(weak).is_err(),
+                "{weak:?} must be rejected"
+            );
+        }
+        assert!(validate_jwt_secret(&"k".repeat(64)).is_err());
+        assert!(validate_jwt_secret(&"k".repeat(MIN_JWT_SECRET_BYTES - 1)).is_err());
+    }
+
+    #[test]
+    #[serial(jwt_env)]
+    fn test_validate_jwt_secret_env_requires_the_variable() {
+        // SAFETY: serialized by #[serial(jwt_env)].
+        unsafe { std::env::remove_var("JWT_SECRET") };
+        assert!(validate_jwt_secret_env().is_err());
+        unsafe { std::env::set_var("JWT_SECRET", "short") };
+        assert!(validate_jwt_secret_env().is_err());
+        unsafe {
+            std::env::set_var(
+                "JWT_SECRET",
+                "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822c",
+            )
+        };
+        assert!(validate_jwt_secret_env().is_ok());
+    }
 
     fn setup_test_env() {
         unsafe {

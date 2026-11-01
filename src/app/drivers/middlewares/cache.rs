@@ -49,8 +49,6 @@ where
     forward_ready!(service);
 
     fn call(&self, req: ServiceRequest) -> Self::Future {
-        println!("Hi from start. You requested: {}", req.path());
-
         let path = req.path().to_string();
         let method = req.method().clone();
 

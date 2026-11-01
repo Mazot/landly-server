@@ -13,9 +13,8 @@ mod test_support;
 mod trust_rules_tests;
 pub mod utils;
 
-use crate::app::drivers::middlewares::{auth::Authentication, cors::cors, rate_limit};
+use crate::app::drivers::middlewares::{auth::Authentication, cors::cors, rate_limit, request_log};
 use actix_governor::Governor;
-use actix_web::middleware::Logger;
 use actix_web::{App, HttpResponse, HttpServer, web};
 use dotenv::dotenv;
 use std::sync::Arc;
@@ -111,6 +110,15 @@ async fn main() -> std::io::Result<()> {
     // std::env::set_var("RUST_LOG", "actix_web=info");
     env_logger::init();
 
+    // Refuse to run with a guessable signing key (audit H2).
+    if let Err(reason) = utils::token::validate_jwt_secret_env() {
+        log::error!("{reason}");
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            reason,
+        ));
+    }
+
     let app_state = {
         use crate::app::drivers::middlewares::state::AppState;
         let db_pool = utils::db::establish_connection();
@@ -137,7 +145,7 @@ async fn main() -> std::io::Result<()> {
         App::new()
             .app_data(web::Data::new(app_state.clone()))
             .app_data(web::Data::new(openapi.clone()))
-            .wrap(Logger::default())
+            .wrap(request_log::request_logger())
             // Inside CORS so that 429 responses still carry CORS headers.
             .wrap(Governor::new(&api_rate_limit))
             .wrap(cors())
