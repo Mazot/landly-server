@@ -145,13 +145,24 @@ mod tests {
         }
 
         let lines = capture.0.lock().unwrap().join("\n");
-        for secret in [TOKEN, "SECRETCODE123", "SECRETSTATE456", "app.test"] {
+        // Failure messages deliberately carry no log content: on a failure
+        // that content is the very secret the test hunts for.
+        for (n, forbidden) in [TOKEN, "SECRETCODE123", "SECRETSTATE456", "app.test"]
+            .iter()
+            .enumerate()
+        {
             assert!(
-                !lines.contains(secret),
-                "{secret} leaked into the log:\n{lines}"
+                !lines.contains(forbidden),
+                "forbidden value #{n} reached the access log"
             );
         }
-        assert!(lines.contains("/api/person/claim/{redacted}"), "{lines}");
-        assert!(lines.contains("/api/user/oauth/google/callback"), "{lines}");
+        assert!(
+            lines.contains("/api/person/claim/{redacted}"),
+            "claim path was not masked"
+        );
+        assert!(
+            lines.contains("/api/user/oauth/google/callback"),
+            "callback path missing from the access log"
+        );
     }
 }
