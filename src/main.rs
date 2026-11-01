@@ -4,7 +4,13 @@ mod constants;
 pub mod data;
 mod error;
 #[cfg(test)]
+mod input_limits_tests;
+#[cfg(test)]
+mod storage_cleanup_tests;
+#[cfg(test)]
 mod test_support;
+#[cfg(test)]
+mod trust_rules_tests;
 pub mod utils;
 
 use crate::app::drivers::middlewares::{auth::Authentication, cors::cors, rate_limit};
@@ -61,6 +67,10 @@ pub(crate) fn configure_api(
     redis_url: Option<String>,
 ) {
     use app::features;
+
+    // JSON bodies are small forms: 64 KB instead of actix's 2 MB default.
+    // (Multipart image uploads do not go through this extractor.)
+    cfg.app_data(web::JsonConfig::default().limit(utils::validation::MAX_JSON_BODY_BYTES));
 
     cfg.service(
         web::scope("/healthcheck")

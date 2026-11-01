@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "bin/country_loader",
     "bin/country_parser",
+    "bin/orphan_images",
 ]
 
 [workspace.package]

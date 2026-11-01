@@ -208,16 +208,9 @@ pub fn normalize_username(raw: &str) -> Result<String, AppError> {
     Ok(username)
 }
 
-/// Upper bound for free-text profile fields.
-pub fn validate_max_chars(field: &str, value: Option<&str>, max: usize) -> Result<(), AppError> {
-    match value {
-        Some(v) if v.chars().count() > max => Err(unprocessable(format!(
-            "{} must be at most {} characters",
-            field, max
-        ))),
-        _ => Ok(()),
-    }
-}
+/// Shared length rule (`utils::validation`); kept under its old name for the
+/// profile code.
+pub use crate::utils::validation::max_chars as validate_max_chars;
 
 diesel::define_sql_function! {
     /// SQL `lower()` — lookups match emails stored before normalization too.

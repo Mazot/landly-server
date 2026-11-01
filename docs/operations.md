@@ -12,7 +12,18 @@ Moved out of AGENTS.md. Read before touching `.github/workflows/`, `scripts/`, `
 
 ## Scripts workspace
 
-`scripts/crates` is a **separate Cargo workspace** (`country_parser`, `country_loader`) that depends on the main crate as a library (`landly-server = { path = "../.." }`). It is NOT built by `cargo build`/`cargo test` at the repo root — after changing structs it consumes (notably `Country`/`CreateCountry` in `src/data/models.rs`), verify it still compiles: `cd scripts/crates && cargo build`. The Docker image builds it and `start.sh` runs `country_loader` on first boot when the `countries` table is empty. Seed SQL for manual testing lives in `scripts/data/seed_test_data*.sql`.
+`scripts/crates` is a **separate Cargo workspace** (`country_parser`, `country_loader`, `orphan_images`) that depends on the main crate as a library (`landly-server = { path = "../.." }`). It is NOT built by `cargo build`/`cargo test` at the repo root — after changing structs it consumes (notably `Country`/`CreateCountry` in `src/data/models.rs`), verify it still compiles: `cd scripts/crates && cargo build`. The Docker image builds it and `start.sh` runs `country_loader` on first boot when the `countries` table is empty. Seed SQL for manual testing lives in `scripts/data/seed_test_data*.sql`.
+
+### `orphan_images` — stray storage objects
+
+`orphan_images` lists the objects under `images/` in the bucket that no `images` row points to (left behind when a storage cleanup failed, or by organisation deletes before the cleanup existed; the bucket is publicly readable, so they stay reachable). It needs `DATABASE_URL` and the `S3_*` variables.
+
+```bash
+cd scripts/crates && cargo run --bin orphan_images                 # dry run: report only
+cd scripts/crates && cargo run --bin orphan_images -- --delete     # delete them
+```
+
+Objects younger than 24 h are skipped (an upload writes the object before its row; `--min-age-hours N` changes that), and `--delete` refuses to run when the database knows no images at all — a sign of the wrong `DATABASE_URL` (`--allow-empty-db` overrides). Run it by hand or from a weekly cron; the logic lives in `src/utils/orphan_cleanup.rs` and is unit-tested. The Docker image ships the binary next to `country_loader`.
 
 ## Docker
 

@@ -48,6 +48,10 @@ pub trait OrganisationRepository: Send + Sync + 'static {
 
     fn delete_organisation(&self, id: Uuid) -> Result<(), AppError>;
 
+    /// Storage keys of the organisation's images (for cleaning up the objects
+    /// once the rows are gone with the organisation).
+    fn list_image_keys(&self, organisation_id: Uuid) -> Result<Vec<String>, AppError>;
+
     fn fetch_organisation(&self, id: Uuid) -> Result<Organisation, AppError>;
 
     fn update_organisation(
@@ -399,8 +403,25 @@ impl OrganisationRepository for OrganisationRepositoryImpl {
         let _ = self
             .cache_service
             .invalidate_pattern(&CacheKeys::organisation_pattern());
+        // The image rows went with the organisation (ON DELETE CASCADE).
+        let _ = self
+            .cache_service
+            .invalidate_pattern(&CacheKeys::images_pattern());
 
         Ok(())
+    }
+
+    fn list_image_keys(&self, organisation_id: Uuid) -> Result<Vec<String>, AppError> {
+        use crate::data::schema::images;
+        use diesel::prelude::*;
+
+        let connection = &mut self.pool.get()?;
+        let keys = images::table
+            .filter(images::organisation_id.eq(organisation_id))
+            .select(images::s3_key)
+            .load::<String>(connection)?;
+
+        Ok(keys)
     }
 
     fn fetch_organisation(&self, id: Uuid) -> Result<Organisation, AppError> {
@@ -448,6 +469,7 @@ impl OrganisationRepository for OrganisationRepositoryImpl {
                 opening_hours: params.opening_hours,
                 timezone: params.timezone,
                 cost: params.cost,
+                added_by: params.added_by,
                 status: params.status,
                 location_source: params.location_source,
                 location_refreshed_at: params.location_refreshed_at,
@@ -584,6 +606,8 @@ impl OrganisationRepository for OrganisationRepositoryImpl {
 }
 
 pub struct UpdateOrganisationRepositoryInput {
+    /// Who added it: `official`, `community` or `volunteer`; only moderators/admins can set or change `official`; `None` keeps the current value.
+    pub added_by: Option<String>,
     /// Display name; `None` keeps the current value.
     pub name: Option<String>,
     /// Contact phone, free text (format is only sanity-checked into moderation flags); `None` keeps the current value.

@@ -6,6 +6,7 @@ use super::{
 use crate::app::features::moderation::entities::TargetKind;
 use crate::app::features::moderation::repositories::{ModerationRepository, SubmittedEventInput};
 use crate::error::AppError;
+use crate::utils::validation::{self as v, limits};
 use actix_web::HttpResponse;
 use serde_json::json;
 use std::sync::Arc;
@@ -38,6 +39,17 @@ impl PersonUsecase {
         &self,
         params: CreatePersonUsecaseInput,
     ) -> Result<HttpResponse, AppError> {
+        v::required_max_chars("name", &params.name, limits::PERSON_NAME)?;
+        v::max_chars("bio", params.bio.as_deref(), limits::BIO)?;
+        v::max_chars("city", params.city.as_deref(), limits::CITY)?;
+        v::max_chars("email", params.email.as_deref(), limits::EMAIL)?;
+        v::max_chars("whatsapp", params.whatsapp.as_deref(), limits::HANDLE)?;
+        v::tag_list("skills", Some(&params.skills), limits::SKILLS, limits::TAG)?;
+        v::max_items(
+            "language_ids",
+            Some(&params.language_ids),
+            limits::LANGUAGE_IDS,
+        )?;
         if !params.consent_given {
             return Err(AppError::UnprocessableEntity(json!({
                 "error": "consent_given is required: the person must have agreed to be recommended"
@@ -100,6 +112,18 @@ impl PersonUsecase {
     }
 
     pub fn list_people(&self, filters: ListPeopleFilters) -> Result<HttpResponse, AppError> {
+        v::max_chars("city", filters.city.as_deref(), limits::FILTER)?;
+        v::tag_list(
+            "skills",
+            filters.skills.as_deref(),
+            limits::FILTER_LIST_ITEMS,
+            limits::TAG,
+        )?;
+        v::max_items(
+            "language_ids",
+            filters.language_ids.as_deref(),
+            limits::FILTER_LIST_ITEMS,
+        )?;
         let items = self.person_repo.list_people(filters)?;
 
         Ok(self.person_presenter.to_multi_json(items))
@@ -112,11 +136,17 @@ impl PersonUsecase {
         user_id: Uuid,
         note: Option<String>,
     ) -> Result<HttpResponse, AppError> {
+        v::max_chars("note", note.as_deref(), limits::VOUCH_NOTE)?;
         let (person, _, _) = self.person_repo.fetch_person(person_id)?;
         if !person.status_enum().is_public() {
             return Err(AppError::UnprocessableEntity(
                 json!({ "error": "Only confirmed people can be vouched for" }),
             ));
+        }
+        if person.is_connected_to(user_id) {
+            return Err(AppError::Forbidden(json!({
+                "error": "You cannot vouch for a person you recommended, or for yourself"
+            })));
         }
 
         self.person_repo.vouch_person(person_id, user_id, note)?;
@@ -310,6 +340,14 @@ mod tests {
     struct FailingModerationRepo;
 
     impl ModerationRepository for FailingModerationRepo {
+        fn fetch_submitter(
+            &self,
+            _kind: TargetKind,
+            _target_id: Uuid,
+        ) -> Result<Option<Uuid>, AppError> {
+            unreachable!()
+        }
+
         fn record_submitted(&self, _input: SubmittedEventInput) -> Result<(), AppError> {
             Err(AppError::InternalServerError)
         }

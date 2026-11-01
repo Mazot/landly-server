@@ -3,6 +3,7 @@ use super::{
     presenters::ModerationPresenter,
     repositories::ModerationRepository,
 };
+use crate::app::features::user::entities::UserRole;
 use crate::error::AppError;
 use actix_web::HttpResponse;
 use serde_json::json;
@@ -27,11 +28,12 @@ impl ModerationUsecase {
     }
 
     /// Every moderation endpoint requires the moderator (or admin) role.
-    fn ensure_moderator(&self, caller_user_id: Uuid) -> Result<(), AppError> {
+    /// Returns the caller's role.
+    fn ensure_moderator(&self, caller_user_id: Uuid) -> Result<UserRole, AppError> {
         let role = self.moderation_repo.fetch_user_role(caller_user_id)?;
 
         if role.is_moderator() {
-            return Ok(());
+            return Ok(role);
         }
 
         Err(AppError::Forbidden(
@@ -59,8 +61,19 @@ impl ModerationUsecase {
         target_id: Uuid,
         note: Option<String>,
     ) -> Result<HttpResponse, AppError> {
-        self.ensure_moderator(caller_user_id)?;
+        let role = self.ensure_moderator(caller_user_id)?;
         let kind = TargetKind::try_from(kind.as_str())?;
+
+        // Four eyes: a moderator cannot publish their own submission — another
+        // moderator or an admin must. Admins are exempt, otherwise a team with
+        // a single admin could never publish anything of its own (audit M4).
+        if !role.is_admin()
+            && self.moderation_repo.fetch_submitter(kind, target_id)? == Some(caller_user_id)
+        {
+            return Err(AppError::Forbidden(json!({
+                "error": "You cannot approve your own submission; another moderator must review it"
+            })));
+        }
 
         self.moderation_repo.moderate(
             kind,
@@ -138,6 +151,8 @@ mod tests {
     #[derive(Default)]
     struct StubRepo {
         caller_role: Option<UserRole>,
+        /// Who "submitted" every target in these tests.
+        submitter: Option<Uuid>,
         moderated: Mutex<Vec<(TargetKind, ModerationAction, Option<String>)>>,
     }
 
@@ -161,6 +176,14 @@ mod tests {
             self.moderated.lock().unwrap().push((kind, action, note));
 
             Ok(())
+        }
+
+        fn fetch_submitter(
+            &self,
+            _kind: TargetKind,
+            _target_id: Uuid,
+        ) -> Result<Option<Uuid>, AppError> {
+            Ok(self.submitter)
         }
 
         fn fetch_user_role(&self, _user_id: Uuid) -> Result<UserRole, AppError> {
@@ -276,6 +299,48 @@ mod tests {
         assert_eq!(moderated[0].0, TargetKind::Person);
         assert_eq!(moderated[0].1, ModerationAction::RequestChanges);
         assert_eq!(moderated[0].2.as_deref(), Some("add a phone number"));
+    }
+
+    /// Audit M4 (four eyes): a moderator cannot approve their own submission
+    /// — and the rejected call must not reach the repository's write path.
+    #[test]
+    fn test_moderator_cannot_approve_own_submission() {
+        let me = Uuid::new_v4();
+        let repo = Arc::new(StubRepo {
+            caller_role: Some(UserRole::Moderator),
+            submitter: Some(me),
+            ..Default::default()
+        });
+        let usecase =
+            ModerationUsecase::new(repo.clone(), Arc::new(ModerationPresenterImpl::new()));
+
+        match usecase.approve(me, "org".to_string(), Uuid::new_v4(), None) {
+            Err(AppError::Forbidden(_)) => (),
+            other => panic!("expected Forbidden, got {:?}", other.err()),
+        }
+        assert!(repo.moderated.lock().unwrap().is_empty());
+
+        // Somebody else's submission, an unknown submitter, and an admin's
+        // own submission all go through.
+        for (role, submitter) in [
+            (UserRole::Moderator, Some(Uuid::new_v4())),
+            (UserRole::Moderator, None),
+            (UserRole::Admin, Some(me)),
+        ] {
+            let repo = Arc::new(StubRepo {
+                caller_role: Some(role),
+                submitter,
+                ..Default::default()
+            });
+            let usecase =
+                ModerationUsecase::new(repo.clone(), Arc::new(ModerationPresenterImpl::new()));
+            assert!(
+                usecase
+                    .approve(me, "org".to_string(), Uuid::new_v4(), None)
+                    .is_ok()
+            );
+            assert_eq!(repo.moderated.lock().unwrap().len(), 1);
+        }
     }
 
     #[test]

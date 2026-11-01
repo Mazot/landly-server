@@ -5,6 +5,7 @@ use super::{
 };
 use crate::app::features::organisation::entities::OrganisationStatus;
 use crate::error::AppError;
+use crate::utils::validation::{self as v, limits};
 use actix_web::HttpResponse;
 use serde_json::json;
 use std::sync::Arc;
@@ -34,6 +35,8 @@ impl ReviewUsecase {
         params: CreateReviewUsecaseInput,
     ) -> Result<HttpResponse, AppError> {
         validate_rating(params.rating)?;
+        v::max_chars("topic", params.topic.as_deref(), limits::REVIEW_TOPIC)?;
+        v::max_chars("text", params.text.as_deref(), limits::REVIEW_TEXT)?;
 
         match (params.organisation_id, params.person_id) {
             (Some(org_id), None) => {
@@ -41,6 +44,11 @@ impl ReviewUsecase {
                 if org.status != OrganisationStatus::Live.as_str() {
                     return Err(AppError::UnprocessableEntity(
                         json!({ "error": "Only live organisations can be reviewed" }),
+                    ));
+                }
+                if org.created_by == Some(params.author_id) {
+                    return Err(AppError::Forbidden(
+                        json!({ "error": "You cannot review an organisation you submitted" }),
                     ));
                 }
             }
@@ -55,6 +63,11 @@ impl ReviewUsecase {
                     return Err(AppError::Forbidden(
                         json!({ "error": "This person has disabled reviews" }),
                     ));
+                }
+                if person.is_connected_to(params.author_id) {
+                    return Err(AppError::Forbidden(json!({
+                        "error": "You cannot review a person you recommended, or yourself"
+                    })));
                 }
             }
             _ => {

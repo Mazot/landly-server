@@ -2,6 +2,7 @@ use super::{
     entities::ReportTargetKind, presenters::ReportPresenter, repositories::ReportRepository,
 };
 use crate::error::AppError;
+use crate::utils::validation::{self as v, limits};
 use actix_web::HttpResponse;
 use serde_json::json;
 use std::sync::Arc;
@@ -33,6 +34,7 @@ impl ReportUsecase {
         reason: String,
     ) -> Result<HttpResponse, AppError> {
         let kind = ReportTargetKind::try_from(target_kind.as_str())?;
+        v::required_max_chars("reason", &reason, limits::REPORT_REASON)?;
 
         let reason = reason.trim();
         if reason.is_empty() {

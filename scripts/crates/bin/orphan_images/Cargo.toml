@@ -1,0 +1,13 @@
+[package]
+name = "orphan_images"
+version = "0.1.0"
+edition.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "orphan_images"
+path = "src/main.rs"
+
+[dependencies]
+landly-server.workspace = true
+dotenv.workspace = true

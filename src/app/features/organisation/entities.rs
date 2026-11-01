@@ -253,6 +253,11 @@ impl Organisation {
     }
 
     /// Records a community check-in ("I was here, still active" + tip).
+    ///
+    /// One row per (organisation, user): checking in again replaces the
+    /// previous answer and time, and keeps the earlier tip unless a new one is
+    /// given — so a single user can never inflate "people came" or the
+    /// "still active" share (audit M4).
     pub fn checkin(
         conn: &mut PgConnection,
         organisation_id: Uuid,
@@ -262,12 +267,26 @@ impl Organisation {
     ) -> Result<(), AppError> {
         use crate::data::schema::org_checkins;
 
+        use diesel::sql_types::{Nullable, Text};
+        use diesel::upsert::excluded;
+
         diesel::insert_into(org_checkins::table)
             .values((
                 org_checkins::organisation_id.eq(organisation_id),
                 org_checkins::user_id.eq(user_id),
                 org_checkins::still_active.eq(still_active),
                 org_checkins::tip.eq(tip),
+            ))
+            .on_conflict((org_checkins::organisation_id, org_checkins::user_id))
+            .do_update()
+            .set((
+                org_checkins::still_active.eq(excluded(org_checkins::still_active)),
+                // A constant fragment (no user input): keep the old tip when
+                // this check-in has none.
+                org_checkins::tip.eq(diesel::dsl::sql::<Nullable<Text>>(
+                    "COALESCE(EXCLUDED.tip, org_checkins.tip)",
+                )),
+                org_checkins::created_at.eq(diesel::dsl::now),
             ))
             .execute(conn)?;
 
@@ -482,6 +501,8 @@ pub struct CreateOrganisation {
 #[derive(AsChangeset, Clone)]
 #[diesel(table_name = organisations)]
 pub struct UpdateOrganisation {
+    /// Who added it: `official`, `community` or `volunteer`; only moderators/admins can set or change `official`; `None` keeps the current value.
+    pub added_by: Option<String>,
     /// Display name; `None` keeps the current value.
     pub name: Option<String>,
     /// Contact phone, free text (format is only sanity-checked into moderation flags); `None` keeps the current value.

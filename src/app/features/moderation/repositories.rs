@@ -40,6 +40,11 @@ pub trait ModerationRepository: Send + Sync + 'static {
         moderator_id: Uuid,
     ) -> Result<(), AppError>;
 
+    /// Who submitted the organisation / recommended the person (None for
+    /// seeded rows or when that account is gone). `NotFound` if the target
+    /// does not exist.
+    fn fetch_submitter(&self, kind: TargetKind, target_id: Uuid) -> Result<Option<Uuid>, AppError>;
+
     fn fetch_user_role(&self, user_id: Uuid) -> Result<UserRole, AppError>;
 }
 
@@ -269,6 +274,23 @@ impl ModerationRepository for ModerationRepositoryImpl {
             .invalidate_pattern(&CacheKeys::person_pattern());
 
         Ok(())
+    }
+
+    fn fetch_submitter(&self, kind: TargetKind, target_id: Uuid) -> Result<Option<Uuid>, AppError> {
+        let conn = &mut self.pool.get()?;
+
+        let submitter = match kind {
+            TargetKind::Org => organisations::table
+                .find(target_id)
+                .select(organisations::created_by)
+                .first::<Option<Uuid>>(conn)?,
+            TargetKind::Person => people::table
+                .find(target_id)
+                .select(people::recommended_by)
+                .first::<Option<Uuid>>(conn)?,
+        };
+
+        Ok(submitter)
     }
 
     fn fetch_user_role(&self, user_id: Uuid) -> Result<UserRole, AppError> {

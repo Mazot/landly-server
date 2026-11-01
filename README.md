@@ -394,7 +394,7 @@ GET    /api/saved/counts         # per-kind counters for the Saved tab
 ### Community check-ins & Reports
 
 ```http
-POST /api/organisation/checkin/{id}   # auth; { still_active?, tip? }; detail payload gains a `community` block
+POST /api/organisation/checkin/{id}   # auth; { still_active?, tip? }; one per user and place (repeating updates it); detail payload gains a `community` block
 POST /api/report/create               # auth; { target_kind: org|person|conversation, target_id, reason }
 ```
 
@@ -402,7 +402,7 @@ POST /api/report/create               # auth; { target_kind: org|person|conversa
 
 ```http
 GET  /api/moderation/queue?kind=      # pending orgs + people, with submit-time auto-check flags and open report counts
-POST /api/moderation/approve          # org -> live; person -> awaiting
+POST /api/moderation/approve          # org -> live; person -> awaiting; a moderator cannot approve their own submission (admins can)
 POST /api/moderation/request-changes  # note REQUIRED; item stays pending
 POST /api/moderation/reject           # org -> rejected; person -> declined
 ```
@@ -554,6 +554,7 @@ The `scripts/` folder holds tooling used at container start and for seeding:
 - **`scripts/crates/`** — a separate Cargo workspace that links the main crate as a library:
   - `country_parser` — merges `countries.json` + `countries.geojson` into `merged_countries.json`
   - `country_loader` — loads `merged_countries.json` into the `countries` table (usage: `country_loader <path>`; safe to re-run, exits non-zero only on total failure)
+  - `orphan_images` — finds (and with `--delete` removes) bucket objects no `images` row points to; dry run by default (see `docs/operations.md`)
 - **`scripts/data/`** — `merged_countries.json` (236 countries) and `seed_test_data*.sql` with sample organisations/connections for manual testing (`psql "$DATABASE_URL" -f scripts/data/seed_test_data.sql`).
 
 > When you change `Country`/`CreateCountry` in `src/data/models.rs`, rebuild `scripts/crates` too — it compiles against the main crate and breaks silently otherwise (it is not covered by `cargo test` at the repo root).

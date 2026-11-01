@@ -119,6 +119,13 @@ impl ImageUsecase {
 
         let file_size = params.data.len() as i64;
 
+        // Resolve everything that can fail BEFORE the object is written, so a
+        // configuration error cannot leave an object without a row.
+        let bucket = env::var("S3_BUCKET").map_err(|_| {
+            log::error!("S3_BUCKET environment variable is not set");
+            AppError::InternalServerError
+        })?;
+
         // --- Upload to storage -------------------------------------------
 
         self.storage_service
@@ -127,12 +134,7 @@ impl ImageUsecase {
 
         // --- Persist metadata in DB --------------------------------------
 
-        let bucket = env::var("S3_BUCKET").map_err(|_| {
-            log::error!("S3_BUCKET environment variable is not set");
-            AppError::InternalServerError
-        })?;
-
-        let image = self.image_repo.create_image(CreateImageRepositoryInput {
+        let created = self.image_repo.create_image(CreateImageRepositoryInput {
             organisation_id: params.organisation_id,
             uploaded_by: params.uploaded_by,
             s3_key: object_key.clone(),
@@ -143,7 +145,21 @@ impl ImageUsecase {
             width: None,
             height: None,
             is_primary: params.is_primary,
-        })?;
+        });
+        let image = match created {
+            Ok(image) => image,
+            Err(e) => {
+                // The object is already in the bucket (publicly readable) but
+                // nothing points to it: take it out again (audit M7).
+                if let Err(cleanup) = self.storage_service.delete(&object_key).await {
+                    log::error!(
+                        "image row not saved and object `{object_key}` could not be removed \
+                         ({cleanup:?}); run orphan_images to clean it up"
+                    );
+                }
+                return Err(e);
+            }
+        };
 
         // --- Build response ----------------------------------------------
 
@@ -330,7 +346,8 @@ mod tests {
 
     impl ImageRepository for StubRepo {
         fn create_image(&self, _params: CreateImageRepositoryInput) -> Result<Image, AppError> {
-            unreachable!("the storage upload fails first in these tests")
+            // Tests that get this far want to see the failed insert.
+            Err(AppError::InternalServerError)
         }
 
         fn delete_image(&self, _id: Uuid) -> Result<Image, AppError> {
@@ -418,6 +435,29 @@ mod tests {
         assert!(
             !matches!(result, Err(AppError::Forbidden(_))),
             "moderator must be allowed"
+        );
+    }
+
+    /// Audit M7: when the row cannot be written after the object was
+    /// uploaded, the object is taken out of the bucket again.
+    #[actix_web::test]
+    #[serial_test::serial(jwt_env)]
+    async fn test_failed_insert_removes_the_uploaded_object() {
+        // SAFETY: serialized by #[serial(jwt_env)].
+        unsafe { std::env::set_var("S3_BUCKET", "test-bucket") };
+        let repo = Arc::new(StubRepo::new(UserRole::User));
+        let creator = repo.org_creator;
+        let storage = crate::test_support::RecordingStorage::new();
+        let usecase = ImageUsecase::new(repo, Arc::new(ImagePresenterImpl::new()), storage.clone());
+
+        let result = usecase.upload_image(upload_input(creator)).await;
+
+        assert!(matches!(result, Err(AppError::InternalServerError)));
+        assert_eq!(storage.uploaded().len(), 1);
+        assert_eq!(
+            storage.deleted(),
+            storage.uploaded(),
+            "the object without a row must be deleted"
         );
     }
 

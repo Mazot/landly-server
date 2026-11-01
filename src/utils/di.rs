@@ -187,6 +187,7 @@ impl DiContainer {
                 Arc::new(organisation_presenter.clone()),
                 moderation_repo_arc.clone(),
                 place_lookup,
+                storage_service.clone(),
             ),
             person_usecase: PersonUsecase::new(
                 Arc::new(person_repo.clone()),

@@ -2,6 +2,7 @@ use super::{
     presenters::{AuthUserContent, UserPresenter},
     repositories::UserRepository,
 };
+use crate::utils::validation::{self as v, limits};
 use crate::{
     app::features::user::entities::{
         AVATAR_COLOR_MAX_CHARS, BIO_MAX_CHARS, CITY_MAX_CHARS, HereAs, Locale, NAME_MAX_CHARS,
@@ -155,6 +156,11 @@ impl UserUsecase {
         user_id: Uuid,
         notification_settings: serde_json::Value,
     ) -> Result<HttpResponse, AppError> {
+        v::json_object(
+            "notification_settings",
+            Some(&notification_settings),
+            limits::JSON_DOCUMENT_BYTES,
+        )?;
         let (user, stats) = self.user_repository.update_profile(
             user_id,
             UpdateUserProfile {
@@ -173,6 +179,7 @@ impl UserUsecase {
         user_id: Uuid,
         languages_ids: Vec<Uuid>,
     ) -> Result<HttpResponse, AppError> {
+        v::max_items("languages_ids", Some(&languages_ids), limits::LANGUAGE_IDS)?;
         let languages = self.user_repository.add_languages(user_id, languages_ids)?;
         let response = self.user_presenter.to_lang_vec_json(languages);
 

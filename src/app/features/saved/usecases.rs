@@ -4,6 +4,7 @@ use super::{
     repositories::SavedRepository,
 };
 use crate::error::AppError;
+use crate::utils::validation::{self as v, limits};
 use actix_web::HttpResponse;
 use std::sync::Arc;
 use uuid::Uuid;
@@ -28,6 +29,12 @@ impl SavedUsecase {
     /// Saves a bookmark; the (user, kind, target) uniqueness lives in the DB.
     pub fn create_saved(&self, params: CreateSavedUsecaseInput) -> Result<HttpResponse, AppError> {
         let kind = SavedKind::try_from(params.kind.as_str())?;
+        v::max_chars("note", params.note.as_deref(), limits::SAVED_NOTE)?;
+        v::max_chars(
+            "list_name",
+            params.list_name.as_deref(),
+            limits::SAVED_LIST_NAME,
+        )?;
 
         let item = self.saved_repo.create_saved(CreateSavedItem {
             user_id: params.user_id,

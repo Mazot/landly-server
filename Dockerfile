@@ -39,11 +39,13 @@ EXPOSE 8080
 COPY --chown=appuser:appuser --from=builder /app/scripts/data /app/country_data
 COPY --chown=appuser:appuser --from=builder /app/scripts/crates/target/release/country_loader /app/country_loader
 COPY --chown=appuser:appuser --from=builder /app/scripts/crates/target/release/country_parser /app/country_parser
+COPY --chown=appuser:appuser --from=builder /app/scripts/crates/target/release/orphan_images /app/orphan_images
 COPY --chown=appuser:appuser src/data/schema.rs /app/src/data/schema.rs
 COPY --chown=appuser:appuser scripts/start.sh /app/start.sh
 
 RUN chmod +x /app/start.sh
 RUN chmod +x /app/country_loader
 RUN chmod +x /app/country_parser
+RUN chmod +x /app/orphan_images
 
 CMD ["./start.sh"]
