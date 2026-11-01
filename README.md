@@ -82,7 +82,8 @@ DATABASE_URL=postgres://landly-user:change-me-postgres@localhost:5432/landly
 REDIS_URL=redis://redis:change-me-redis@localhost:6379/
 
 # JWT
-JWT_SECRET=your-super-secret-jwt-key
+# at least 32 bytes, random: openssl rand -hex 32 (the server refuses to start with a weak one)
+JWT_SECRET=<output of openssl rand -hex 32>
 JWT_EXPIRATION=3600
 
 # OAuth (Google)

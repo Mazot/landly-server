@@ -7,7 +7,7 @@ Moved out of AGENTS.md. Read before adding/renaming an `env::var`, changing `.en
 |---|---|---|
 | `DATABASE_URL` | yes | PostgreSQL connection string |
 | `REDIS_URL` | no | Redis connection string; without it the repository cache is a no-op and `GET /common/*` is served uncached (Google OAuth needs it) |
-| `JWT_SECRET` | yes | JWT signing secret |
+| `JWT_SECRET` | yes | JWT signing secret. Checked at startup (`token::validate_jwt_secret`): at least 32 bytes, at least 10 distinct characters, no docs placeholder — otherwise the server exits. Generate with `openssl rand -hex 32` |
 | `JWT_EXPIRATION` | yes | JWT expiry in seconds |
 | `GOOGLE_CLIENT_ID` | no | OAuth Google client ID |
 | `GOOGLE_CLIENT_SECRET` | no | OAuth Google client secret |

@@ -76,6 +76,9 @@ test would settle a question.
   feature (per-worker counting); `TRUST_PROXY_HEADERS` stays opt-in.
 - `Content-Encoding: zstd` request bodies stay rejected (`middlewares/encoding.rs`);
   it is what makes the zstd ignores in `.cargo/audit.toml` honest.
+- Logs: no claim token, OAuth `code`/`state`, JWT, password or API key reaches a
+  log line; the access logger stays `request_log::request_logger()` (no query,
+  no Referer, `redact_path`); `JWT_SECRET` stays validated at startup.
 - Raw SQL (`sql_query`, `diesel::dsl::sql`) only with `.bind()`, never `format!`.
 - Pagination limits/offsets are clamped; geo scans stay capped.
 
