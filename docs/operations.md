@@ -12,6 +12,8 @@ Moved out of AGENTS.md. Read before touching `.github/workflows/`, `scripts/`, `
 
 ## Scripts workspace
 
+Per-tool usage (flags, exit codes, how to add a tool) is in [`scripts/crates/README.md`](../scripts/crates/README.md).
+
 `scripts/crates` is a **separate Cargo workspace** (`country_parser`, `country_loader`, `orphan_images`) that depends on the main crate as a library (`landly-server = { path = "../.." }`). It is NOT built by `cargo build`/`cargo test` at the repo root — after changing structs it consumes (notably `Country`/`CreateCountry` in `src/data/models.rs`), verify it still compiles: `cd scripts/crates && cargo build`. The Docker image builds it and `start.sh` runs `country_loader` on first boot when the `countries` table is empty. Seed SQL for manual testing lives in `scripts/data/seed_test_data*.sql`.
 
 ### `orphan_images` — stray storage objects
