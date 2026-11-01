@@ -4,6 +4,7 @@ use super::{
         CommonRepository, GetAllCountriesRepositoryInput, GetAllLanguagesRepositoryInput,
     },
 };
+use crate::utils::validation::{self as v, limits};
 use crate::{
     app::features::common::repositories::CreateOrganisationTypeRepositoryInput, error::AppError,
 };
@@ -92,6 +93,10 @@ impl CommonUsecase {
                 json!({ "error": "Only an admin can manage organisation types" }),
             ));
         }
+        v::required_max_chars("org_type", &params.org_type, limits::ORG_TYPE_KEY)?;
+        v::required_max_chars("color", &params.color, limits::COLOR)?;
+        v::required_max_chars("title", &params.title, limits::ORG_TYPE_TITLE)?;
+        v::max_chars("slug", params.slug.as_deref(), limits::SLUG)?;
 
         let org_type =
             self.common_repo

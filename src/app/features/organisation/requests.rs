@@ -50,6 +50,9 @@ pub struct CreateOrganisationRequest {
 
 #[derive(Debug, Deserialize, Serialize, ToSchema)]
 pub struct UpdateOrganisationRequest {
+    /// `official`, `community` or `volunteer`. Only moderators/admins can set
+    /// or change `official`; others may resend the stored value.
+    pub added_by: Option<String>,
     /// Display name; omit to keep the current value.
     pub name: Option<String>,
     /// Contact phone, free text (format is only sanity-checked into moderation flags); omit to keep the current value.
@@ -219,6 +222,7 @@ mod tests {
     #[test]
     fn test_update_organisation_request_all_none() {
         let request = UpdateOrganisationRequest {
+            added_by: None,
             name: None,
             tel: None,
             email: None,
@@ -247,6 +251,7 @@ mod tests {
     #[test]
     fn test_update_organisation_request_partial_update() {
         let request = UpdateOrganisationRequest {
+            added_by: None,
             name: Some("Updated Name".to_string()),
             tel: None,
             email: Some("new@example.com".to_string()),

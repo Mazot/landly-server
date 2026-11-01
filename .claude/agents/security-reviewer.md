@@ -62,11 +62,20 @@ test would settle a question.
 - Cookies: `HttpOnly`, `Secure`, `SameSite=Lax`, narrow `Path`.
 
 **Input & abuse**
+- New request fields get a length limit in the usecase (`utils/validation.rs`
+  `limits::*`); JSON bodies stay under `MAX_JSON_BODY_BYTES` (64 KB).
+- Trust rules: no self-review/self-vouch (`is_connected_to`, org `created_by`),
+  one check-in per (org, user), `official` only via a moderator, a moderator
+  never approves their own submission (admins exempt).
+- Deleting an organisation or failing an upload must not leave image objects
+  in storage (best-effort cleanup; `orphan_images` for the rest).
 - Emails via `normalize_email` + `lower(email)` lookups; passwords 8 chars–72
   bytes; free text length-capped; enum strings validated with `TryFrom`.
 - Credential-like or abuse-prone endpoints are wrapped with the shared
   `auth_rate_limit()` config; no limiter is built inside `HttpServer::new` or a
   feature (per-worker counting); `TRUST_PROXY_HEADERS` stays opt-in.
+- `Content-Encoding: zstd` request bodies stay rejected (`middlewares/encoding.rs`);
+  it is what makes the zstd ignores in `.cargo/audit.toml` honest.
 - Raw SQL (`sql_query`, `diesel::dsl::sql`) only with `.bind()`, never `format!`.
 - Pagination limits/offsets are clamped; geo scans stay capped.
 

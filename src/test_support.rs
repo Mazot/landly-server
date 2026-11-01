@@ -17,6 +17,8 @@ use crate::app::features::organisation::entities::{CreateOrganisation, Organisat
 use crate::app::features::user::entities::{CreateUser, User};
 use crate::data::models::{Country, CreateCountry, CreateOrganisationType, OrganisationType};
 use crate::data::schema::{organisation_types, organisations, users};
+use crate::error::AppError;
+use crate::utils::storage::{StorageFuture, StorageService};
 use crate::utils::{db::DbPool, token};
 use actix_http::Request;
 use actix_web::{
@@ -30,7 +32,7 @@ use diesel::prelude::*;
 use diesel::r2d2::{ConnectionManager, Pool};
 use diesel_migrations::{EmbeddedMigrations, MigrationHarness, embed_migrations};
 use serde_json::Value;
-use std::sync::OnceLock;
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
 use uuid::Uuid;
 
@@ -115,7 +117,16 @@ macro_rules! test_app {
         )
     };
     // `$limits`: RateLimits — pass `RateLimits::new()` to test the real ones.
-    ($pool:expr, $places:expr, $limits:expr) => {{
+    ($pool:expr, $places:expr, $limits:expr) => {
+        $crate::test_support::test_app!(
+            $pool,
+            $places,
+            $limits,
+            std::sync::Arc::new($crate::utils::storage::NoOpStorageService)
+        )
+    };
+    // `$storage`: Arc<dyn StorageService> — e.g. `RecordingStorage::new()`.
+    ($pool:expr, $places:expr, $limits:expr, $storage:expr) => {{
         $crate::test_support::jwt_env();
         let state = $crate::app::drivers::middlewares::state::AppState {
             di_container: $crate::utils::di::DiContainer::with_backends(
@@ -124,7 +135,7 @@ macro_rules! test_app {
                     $crate::utils::cache::NoOpCacheService,
                 )
                     as std::sync::Arc<dyn $crate::utils::cache::CacheService>),
-                std::sync::Arc::new($crate::utils::storage::NoOpStorageService),
+                $storage,
                 None,
                 $places,
             ),
@@ -321,4 +332,89 @@ pub fn random_point() -> (f64, f64) {
     let lat = -60.0 + (n % 120_000) as f64 / 1000.0; // -60..60
     let lng = -170.0 + ((n >> 32) % 340_000) as f64 / 1000.0; // -170..170
     (lat, lng)
+}
+
+/// Storage that records what the app does to it. Uploads succeed; deletes
+/// succeed too unless built with [`RecordingStorage::failing_deletes`].
+#[derive(Default)]
+pub struct RecordingStorage {
+    uploaded: Mutex<Vec<String>>,
+    deleted: Mutex<Vec<String>>,
+    delete_attempts: Mutex<Vec<String>>,
+    fail_deletes: bool,
+}
+
+impl RecordingStorage {
+    pub fn new() -> Arc<Self> {
+        Arc::new(Self::default())
+    }
+
+    pub fn failing_deletes() -> Arc<Self> {
+        Arc::new(Self {
+            fail_deletes: true,
+            ..Self::default()
+        })
+    }
+
+    pub fn uploaded(&self) -> Vec<String> {
+        self.uploaded.lock().unwrap().clone()
+    }
+
+    /// Keys removed successfully.
+    pub fn deleted(&self) -> Vec<String> {
+        self.deleted.lock().unwrap().clone()
+    }
+
+    /// Keys a delete was attempted for, whether it worked or not.
+    pub fn delete_attempts(&self) -> Vec<String> {
+        self.delete_attempts.lock().unwrap().clone()
+    }
+}
+
+impl StorageService for RecordingStorage {
+    fn upload<'a>(
+        &'a self,
+        key: &'a str,
+        _data: Vec<u8>,
+        _content_type: &'a str,
+    ) -> StorageFuture<'a, ()> {
+        Box::pin(async move {
+            self.uploaded.lock().unwrap().push(key.to_string());
+            Ok(())
+        })
+    }
+
+    fn delete<'a>(&'a self, key: &'a str) -> StorageFuture<'a, ()> {
+        Box::pin(async move {
+            self.delete_attempts.lock().unwrap().push(key.to_string());
+            if self.fail_deletes {
+                return Err(AppError::InternalServerError);
+            }
+            self.deleted.lock().unwrap().push(key.to_string());
+            Ok(())
+        })
+    }
+
+    fn get_public_url(&self, key: &str) -> String {
+        format!("https://cdn.test/{key}")
+    }
+}
+
+/// An image row for `organisation_id` pointing at storage key `key`.
+pub fn image(pool: &DbPool, organisation_id: Uuid, uploaded_by: Uuid, key: &str) -> Uuid {
+    use crate::data::schema::images;
+
+    diesel::insert_into(images::table)
+        .values((
+            images::organisation_id.eq(organisation_id),
+            images::uploaded_by.eq(uploaded_by),
+            images::s3_key.eq(key),
+            images::s3_bucket.eq("test-bucket"),
+            images::file_name.eq("photo.png"),
+            images::content_type.eq("image/png"),
+            images::file_size.eq(68_i64),
+        ))
+        .returning(images::id)
+        .get_result(&mut pool.get().unwrap())
+        .unwrap()
 }

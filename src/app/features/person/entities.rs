@@ -131,6 +131,13 @@ pub struct Person {
 }
 
 impl Person {
+    /// Whether `user_id` recommended this person or is this person (claimed
+    /// the profile). Such a user must not review or vouch for them: it would
+    /// let people manufacture their own reputation (audit M4).
+    pub fn is_connected_to(&self, user_id: Uuid) -> bool {
+        self.recommended_by == Some(user_id) || self.claimed_by == Some(user_id)
+    }
+
     pub fn status_enum(&self) -> PersonStatus {
         PersonStatus::try_from(self.status.as_str()).unwrap_or(PersonStatus::Pending)
     }

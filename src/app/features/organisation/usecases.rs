@@ -11,6 +11,8 @@ use crate::app::features::moderation::entities::TargetKind;
 use crate::app::features::moderation::repositories::{ModerationRepository, SubmittedEventInput};
 use crate::error::AppError;
 use crate::utils::google_places::{PlaceLookup, validate_place_id};
+use crate::utils::storage::StorageService;
+use crate::utils::validation::{self as v, limits};
 use actix_web::HttpResponse;
 use bigdecimal::{BigDecimal, FromPrimitive, RoundingMode};
 use chrono::NaiveDateTime;
@@ -25,6 +27,8 @@ pub struct OrganisationUsecase {
     moderation_repo: Arc<dyn ModerationRepository>,
     /// Google Places lookups; None without `GOOGLE_PLACES_API_KEY`.
     place_lookup: Option<Arc<dyn PlaceLookup>>,
+    /// Object storage, to remove an organisation's images when it is deleted.
+    storage: Arc<dyn StorageService>,
 }
 
 /// The point a new submission is stored with, plus what Google said about it.
@@ -37,6 +41,56 @@ struct ResolvedLocation {
     /// server could confirm it with Google.
     google_verified: Option<bool>,
     google_business_status: Option<String>,
+}
+
+/// The user-supplied text of an organisation, borrowed from either the create
+/// or the update input, checked against the size limits (audit M3).
+struct OrgTextFields<'a> {
+    name: Option<&'a str>,
+    tel: Option<&'a str>,
+    email: Option<&'a str>,
+    address: Option<&'a str>,
+    description: Option<&'a str>,
+    city: Option<&'a str>,
+    website: Option<&'a str>,
+    telegram: Option<&'a str>,
+    whatsapp: Option<&'a str>,
+    timezone: Option<&'a str>,
+    services: Option<&'a [String]>,
+    languages: Option<&'a [String]>,
+    opening_hours: Option<&'a serde_json::Value>,
+}
+
+impl OrgTextFields<'_> {
+    fn validate(&self) -> Result<(), AppError> {
+        v::max_chars("name", self.name, limits::ORG_NAME)?;
+        v::max_chars("tel", self.tel, limits::PHONE)?;
+        v::max_chars("email", self.email, limits::EMAIL)?;
+        v::max_chars("address", self.address, limits::ADDRESS)?;
+        v::max_chars("description", self.description, limits::DESCRIPTION)?;
+        v::max_chars("city", self.city, limits::CITY)?;
+        v::max_chars("website", self.website, limits::URL)?;
+        v::max_chars("telegram", self.telegram, limits::HANDLE)?;
+        v::max_chars("whatsapp", self.whatsapp, limits::HANDLE)?;
+        v::max_chars("timezone", self.timezone, limits::TIMEZONE)?;
+        v::tag_list(
+            "services",
+            self.services,
+            limits::TAGS_PER_LIST,
+            limits::TAG,
+        )?;
+        v::tag_list(
+            "languages",
+            self.languages,
+            limits::TAGS_PER_LIST,
+            limits::TAG,
+        )?;
+        v::json_object(
+            "opening_hours",
+            self.opening_hours,
+            limits::JSON_DOCUMENT_BYTES,
+        )
+    }
 }
 
 /// Non-moderators may have at most this many organisations waiting for
@@ -52,23 +106,45 @@ impl OrganisationUsecase {
         organisation_presenter: Arc<dyn OrganisationPresenter>,
         moderation_repo: Arc<dyn ModerationRepository>,
         place_lookup: Option<Arc<dyn PlaceLookup>>,
+        storage: Arc<dyn StorageService>,
     ) -> Self {
         Self {
             organisation_repo,
             organisation_presenter,
             moderation_repo,
             place_lookup,
+            storage,
         }
+    }
+
+    /// `official` is a trust badge ("run by the official representative"), so
+    /// only moderators/admins — who can verify that — may give it or take it
+    /// away (audit M4). Everyone else may resend the stored value unchanged,
+    /// which is what an edit form does.
+    fn ensure_added_by_allowed(
+        is_moderator: bool,
+        stored: Option<&str>,
+        requested: Option<&str>,
+    ) -> Result<(), AppError> {
+        let official = AddedBy::Official.as_str();
+        let Some(requested) = requested else {
+            return Ok(());
+        };
+        let grants = requested == official && stored != Some(official);
+        let removes = stored == Some(official) && requested != official;
+
+        if !is_moderator && (grants || removes) {
+            return Err(AppError::Forbidden(json!({
+                "error": "Only a moderator can mark an organisation as official or change that mark"
+            })));
+        }
+        Ok(())
     }
 
     /// Per-user quotas for new submissions; moderators and admins are exempt.
     /// Runs first, before any validation that costs a query or a Google call.
-    fn ensure_submission_quota(&self, user_id: Uuid) -> Result<(), AppError> {
-        if self
-            .organisation_repo
-            .fetch_user_role(user_id)?
-            .is_moderator()
-        {
+    fn ensure_submission_quota(&self, user_id: Uuid, is_moderator: bool) -> Result<(), AppError> {
+        if is_moderator {
             return Ok(());
         }
 
@@ -241,7 +317,28 @@ impl OrganisationUsecase {
         if let Some(cost) = params.cost.as_deref() {
             Cost::try_from(cost)?;
         }
-        self.ensure_submission_quota(params.created_by)?;
+        OrgTextFields {
+            name: Some(&params.name),
+            tel: params.tel.as_deref(),
+            email: params.email.as_deref(),
+            address: params.address.as_deref(),
+            description: params.description.as_deref(),
+            city: params.city.as_deref(),
+            website: params.website.as_deref(),
+            telegram: params.telegram.as_deref(),
+            whatsapp: params.whatsapp.as_deref(),
+            timezone: params.timezone.as_deref(),
+            services: Some(&params.services),
+            languages: Some(&params.languages),
+            opening_hours: params.opening_hours.as_ref(),
+        }
+        .validate()?;
+        let is_moderator = self
+            .organisation_repo
+            .fetch_user_role(params.created_by)?
+            .is_moderator();
+        Self::ensure_added_by_allowed(is_moderator, None, params.added_by.as_deref())?;
+        self.ensure_submission_quota(params.created_by, is_moderator)?;
         let location = self
             .resolve_new_location(
                 params.google_place_id.as_deref(),
@@ -323,11 +420,35 @@ impl OrganisationUsecase {
         if let Some(cost) = params.cost.as_deref() {
             Cost::try_from(cost)?;
         }
+        if let Some(added_by) = params.added_by.as_deref() {
+            AddedBy::try_from(added_by)?;
+        }
+        OrgTextFields {
+            name: params.name.as_deref(),
+            tel: params.tel.as_deref(),
+            email: params.email.as_deref(),
+            address: params.address.as_deref(),
+            description: params.description.as_deref(),
+            city: params.city.as_deref(),
+            website: params.website.as_deref(),
+            telegram: params.telegram.as_deref(),
+            whatsapp: params.whatsapp.as_deref(),
+            timezone: params.timezone.as_deref(),
+            services: params.services.as_deref(),
+            languages: params.languages.as_deref(),
+            opening_hours: params.opening_hours.as_ref(),
+        }
+        .validate()?;
 
         Self::ensure_point_is_pair(&params.latitude, &params.longitude)?;
 
         let existing = self.organisation_repo.fetch_organisation(id)?;
         let managed_by = self.ensure_can_manage(&existing, caller_user_id)?;
+        Self::ensure_added_by_allowed(
+            managed_by == ManagedBy::Moderator,
+            existing.added_by.as_deref(),
+            params.added_by.as_deref(),
+        )?;
 
         // A point moved by hand is ours, not Google's: it is never refreshed
         // from Google again.
@@ -342,6 +463,16 @@ impl OrganisationUsecase {
         // turned into publishing anything. It returns to the queue instead.
         let back_to_moderation = managed_by == ManagedBy::Creator
             && existing.status == OrganisationStatus::Live.as_str();
+
+        // An owner's edit never rewrites the badge it merely resent, and a
+        // changed one is written only while the row still is not `official`
+        // (checked in the UPDATE itself, so a moderator's concurrent change
+        // cannot be overwritten).
+        let is_moderator = managed_by == ManagedBy::Moderator;
+        let added_by = params
+            .added_by
+            .filter(|requested| is_moderator || existing.added_by.as_deref() != Some(requested));
+        let guard_official_badge = !is_moderator && added_by.is_some();
 
         let updated_organisation = self.organisation_repo.update_organisation(
             id,
@@ -365,6 +496,8 @@ impl OrganisationUsecase {
                 opening_hours: params.opening_hours,
                 timezone: params.timezone,
                 cost: params.cost,
+                added_by,
+                guard_official_badge,
                 status: back_to_moderation
                     .then(|| OrganisationStatus::Pending.as_str().to_string()),
                 location_source,
@@ -391,6 +524,14 @@ impl OrganisationUsecase {
         &self,
         params: FetchOrganisationsUsecaseInput,
     ) -> Result<HttpResponse, AppError> {
+        for (field, value) in [
+            ("name", &params.name),
+            ("tel", &params.tel),
+            ("email", &params.email),
+            ("address", &params.address),
+        ] {
+            v::max_chars(field, value.as_deref(), limits::FILTER)?;
+        }
         let organisations =
             self.organisation_repo
                 .fetch_organisations(FetchOrganisationsRepositoryInput {
@@ -415,6 +556,14 @@ impl OrganisationUsecase {
         &self,
         params: SearchOrganisationsUsecaseInput,
     ) -> Result<HttpResponse, AppError> {
+        // `types` are organisation-type slugs (up to `SLUG` long), `languages`
+        // are language names.
+        for (field, list, max_len) in [
+            ("types", &params.type_slugs, limits::SLUG),
+            ("languages", &params.languages, limits::TAG),
+        ] {
+            v::tag_list(field, list.as_deref(), limits::FILTER_LIST_ITEMS, max_len)?;
+        }
         if let Some(added_by) = params.added_by.as_deref() {
             AddedBy::try_from(added_by)?;
         }
@@ -468,7 +617,12 @@ impl OrganisationUsecase {
         Ok(self.organisation_presenter.to_search_json(items))
     }
 
-    pub fn delete_organisation(
+    /// Deletes the organisation and its images. The rows go first (they are
+    /// the source of truth and cascade in the database); the stored objects
+    /// are removed afterwards, best-effort — the bucket is publicly readable,
+    /// so an object left behind stays reachable by its old URL until the
+    /// `orphan_images` job removes it (audit M7).
+    pub async fn delete_organisation(
         &self,
         id: Uuid,
         caller_user_id: Uuid,
@@ -476,7 +630,17 @@ impl OrganisationUsecase {
         let existing = self.organisation_repo.fetch_organisation(id)?;
         self.ensure_can_manage(&existing, caller_user_id)?;
 
+        let image_keys = self.organisation_repo.list_image_keys(id)?;
         self.organisation_repo.delete_organisation(id)?;
+
+        for key in image_keys {
+            if let Err(e) = self.storage.delete(&key).await {
+                log::error!(
+                    "organisation {id} deleted but its object `{key}` could not be removed from \
+                     storage ({e:?}); run orphan_images to clean it up"
+                );
+            }
+        }
         let response = self.organisation_presenter.to_http_res();
 
         Ok(response)
@@ -501,6 +665,9 @@ impl OrganisationUsecase {
         still_active: bool,
         tip: Option<String>,
     ) -> Result<HttpResponse, AppError> {
+        v::max_chars("tip", tip.as_deref(), limits::CHECKIN_TIP)?;
+        // A blank tip means "no tip": it must not replace a useful earlier one.
+        let tip = tip.filter(|t| !t.trim().is_empty());
         // Only live orgs accept check-ins.
         let organisation = self.organisation_repo.fetch_organisation(id)?;
         if organisation.status != OrganisationStatus::Live.as_str() {
@@ -531,6 +698,8 @@ enum ManagedBy {
 }
 
 pub struct UpdateOrganisationUsecaseInput {
+    /// Who added it: `official`, `community` or `volunteer`; only moderators/admins can set or change `official`; `None` keeps the current value.
+    pub added_by: Option<String>,
     /// Display name; `None` keeps the current value.
     pub name: Option<String>,
     /// Contact phone, free text (format is only sanity-checked into moderation flags); `None` keeps the current value.
@@ -769,6 +938,10 @@ mod tests {
             unimplemented!()
         }
 
+        fn list_image_keys(&self, _organisation_id: Uuid) -> Result<Vec<String>, AppError> {
+            unimplemented!()
+        }
+
         fn count_pending_orgs_created_by(&self, _user_id: Uuid) -> Result<i64, AppError> {
             unimplemented!()
         }
@@ -833,6 +1006,33 @@ mod tests {
         );
     }
 
+    /// Audit M4: `official` is granted and removed by moderators only;
+    /// resending the stored value is what an edit form does and is fine.
+    #[test]
+    fn test_added_by_official_truth_table() {
+        let allowed = OrganisationUsecase::ensure_added_by_allowed;
+        // (is_moderator, stored, requested, ok)
+        let cases = [
+            (false, None, None, true),
+            (false, None, Some("community"), true),
+            (false, Some("community"), Some("volunteer"), true),
+            (false, None, Some("official"), false),
+            (false, Some("community"), Some("official"), false),
+            (false, Some("official"), Some("official"), true),
+            (false, Some("official"), Some("community"), false),
+            (false, Some("official"), None, true),
+            (true, None, Some("official"), true),
+            (true, Some("official"), Some("community"), true),
+        ];
+        for (moderator, stored, requested, ok) in cases {
+            assert_eq!(
+                allowed(moderator, stored, requested).is_ok(),
+                ok,
+                "moderator={moderator} stored={stored:?} requested={requested:?}"
+            );
+        }
+    }
+
     fn test_organisation(created_by: Option<Uuid>) -> Organisation {
         Organisation {
             id: Uuid::new_v4(),
@@ -876,6 +1076,14 @@ mod tests {
     impl crate::app::features::moderation::repositories::ModerationRepository
         for UnreachableModerationRepo
     {
+        fn fetch_submitter(
+            &self,
+            _kind: crate::app::features::moderation::entities::TargetKind,
+            _target_id: Uuid,
+        ) -> Result<Option<Uuid>, AppError> {
+            unreachable!()
+        }
+
         fn record_submitted(
             &self,
             _input: crate::app::features::moderation::repositories::SubmittedEventInput,
@@ -913,11 +1121,13 @@ mod tests {
             Arc::new(OrganisationPresenterImpl::new()),
             Arc::new(UnreachableModerationRepo),
             None,
+            Arc::new(crate::utils::storage::NoOpStorageService),
         )
     }
 
     fn empty_update() -> UpdateOrganisationUsecaseInput {
         UpdateOrganisationUsecaseInput {
+            added_by: None,
             name: Some("Renamed".to_string()),
             tel: None,
             email: None,

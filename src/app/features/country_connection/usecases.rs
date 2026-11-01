@@ -6,6 +6,7 @@ use super::{
     },
 };
 use crate::error::AppError;
+use crate::utils::validation::{self as v, limits};
 use actix_web::HttpResponse;
 use serde_json::json;
 use std::sync::Arc;
@@ -78,6 +79,11 @@ impl CountryConnectionUsecase {
         params: CreateCountryConnectionUsecaseInput,
     ) -> Result<HttpResponse, AppError> {
         self.ensure_admin(caller_user_id)?;
+        v::max_chars(
+            "common_info",
+            params.common_info.as_deref(),
+            limits::COMMON_INFO,
+        )?;
 
         let new_country_connection = self.country_connection_repo.create_country_connection(
             CreateCountryConnectionRepositoryInput {
@@ -101,6 +107,11 @@ impl CountryConnectionUsecase {
         params: UpdateCountryConnectionUsecaseInput,
     ) -> Result<HttpResponse, AppError> {
         self.ensure_admin(caller_user_id)?;
+        v::max_chars(
+            "common_info",
+            params.common_info.as_deref(),
+            limits::COMMON_INFO,
+        )?;
 
         let updated_country_connection = self.country_connection_repo.update_country_connection(
             id,

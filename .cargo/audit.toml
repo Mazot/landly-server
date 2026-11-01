@@ -11,4 +11,29 @@ ignore = [
     # Remove once actix-http depends on h2 >= 0.4.16, or immediately if the
     # server ever enables HTTP/2 (bind_rustls/bind_openssl/bind_auto_h2c).
     "RUSTSEC-2026-0258",
+
+    # RUSTSEC-2026-0391, -0395 … -0406 — zstd 0.13 / zstd-safe 7.3 (13 advisories,
+    # all fixed only in zstd >= 0.14 / zstd-safe >= 8.2). The crate arrives via
+    # actix-http 3.x's `compress-zstd`, which actix-web enables by default and
+    # actix-request-reply-cache re-enables (it depends on actix-web with default
+    # features), so it cannot be switched off from our Cargo.toml.
+    # Not reachable: the server never compresses responses with zstd (no
+    # `Compress` middleware), and `middlewares/encoding.rs` answers 422 to any
+    # request body sent with `Content-Encoding: zstd`, so actix's request
+    # decoder is never entered. The rest of the advisories are about APIs
+    # (Seekable, dictionaries, context cloning, wasm) that actix-http does not call.
+    # Remove once actix-http depends on zstd >= 0.14, then drop the middleware.
+    "RUSTSEC-2026-0391",
+    "RUSTSEC-2026-0395",
+    "RUSTSEC-2026-0396",
+    "RUSTSEC-2026-0397",
+    "RUSTSEC-2026-0398",
+    "RUSTSEC-2026-0399",
+    "RUSTSEC-2026-0400",
+    "RUSTSEC-2026-0401",
+    "RUSTSEC-2026-0402",
+    "RUSTSEC-2026-0403",
+    "RUSTSEC-2026-0404",
+    "RUSTSEC-2026-0405",
+    "RUSTSEC-2026-0406",
 ]

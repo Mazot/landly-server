@@ -216,6 +216,7 @@ pub async fn update_organisation(
             opening_hours: form.opening_hours.clone(),
             timezone: form.timezone.clone(),
             cost: form.cost.clone(),
+            added_by: form.added_by.clone(),
         },
     )
 }
@@ -247,6 +248,7 @@ pub async fn delete_organisation(
         .di_container
         .organisation_usecase
         .delete_organisation(id.into_inner(), caller)
+        .await
 }
 
 // [authorship] Human-written (original codebase); extended by AI (Claude):
@@ -854,7 +856,7 @@ mod http_tests {
             Some(json!({
                 "name": format!("Rich {}", ts::unique()), "latitude": lat + 0.01, "longitude": lng,
                 "languages": ["Ukrainian"], "opening_hours": always_open(), "timezone": "UTC",
-                "cost": "paid", "added_by": "official",
+                "cost": "paid", "added_by": "community",
             })),
         )
         .await;
@@ -863,6 +865,8 @@ mod http_tests {
             .set((
                 organisations::status.eq("live"),
                 organisations::verified.eq(true),
+                // `official` is moderator-granted; the API refuses it to users.
+                organisations::added_by.eq(Some("official")),
                 organisations::rating_avg.eq(Some(4.8)),
             ))
             .execute(&mut pool.get().unwrap())
@@ -994,6 +998,8 @@ mod http_tests {
         )
         .await;
         assert_eq!(status, StatusCode::OK, "{body}");
+        // Checking in again replaces the earlier answer (it does not add a
+        // second "person") and keeps the earlier tip.
         let (_, body) = call(
             &app,
             Method::POST,
@@ -1002,9 +1008,21 @@ mod http_tests {
             Some(json!({ "still_active": false })),
         )
         .await;
+        assert_eq!(body["community"]["peopleCame"], 1);
+        assert_eq!(body["community"]["stillActivePct"], 0.0);
+        assert_eq!(body["community"]["tips"], json!(["Bring your passport"]));
+
+        let other = ts::user(&pool, "user");
+        let (_, body) = call(
+            &app,
+            Method::POST,
+            &checkin,
+            Some(&other.token),
+            Some(json!({ "still_active": true })),
+        )
+        .await;
         assert_eq!(body["community"]["peopleCame"], 2);
         assert_eq!(body["community"]["stillActivePct"], 50.0);
-        assert_eq!(body["community"]["tips"], json!(["Bring your passport"]));
 
         let pending = ts::org(
             &pool,

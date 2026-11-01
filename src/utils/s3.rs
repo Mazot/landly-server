@@ -6,6 +6,7 @@ use aws_sdk_s3::{
 use std::env;
 
 use crate::error::AppError;
+use crate::utils::orphan_cleanup::{ListFuture, ObjectLister, StoredObject};
 use crate::utils::storage::{StorageFuture, StorageService};
 
 /// Thin wrapper around the AWS SDK S3 client that is compatible with both
@@ -146,6 +147,47 @@ impl S3ClientWrapper {
 
     pub fn get_bucket(&self) -> &str {
         &self.bucket
+    }
+}
+
+impl ObjectLister for S3ClientWrapper {
+    /// Pages through `ListObjectsV2` until the listing is complete.
+    fn list_objects<'a>(&'a self, prefix: &'a str) -> ListFuture<'a> {
+        Box::pin(async move {
+            let mut objects = Vec::new();
+            let mut continuation: Option<String> = None;
+
+            loop {
+                let mut request = self
+                    .client
+                    .list_objects_v2()
+                    .bucket(&self.bucket)
+                    .prefix(prefix);
+                if let Some(token) = continuation.take() {
+                    request = request.continuation_token(token);
+                }
+                let page = request.send().await.map_err(|e| {
+                    log::error!("S3 list_objects_v2 failed: {:?}", e);
+                    AppError::InternalServerError
+                })?;
+
+                for object in page.contents() {
+                    if let Some(key) = object.key() {
+                        objects.push(StoredObject {
+                            key: key.to_string(),
+                            last_modified_unix: object.last_modified().map_or(0, |t| t.secs()),
+                        });
+                    }
+                }
+
+                match (page.is_truncated(), page.next_continuation_token()) {
+                    (Some(true), Some(token)) => continuation = Some(token.to_string()),
+                    _ => break,
+                }
+            }
+
+            Ok(objects)
+        })
     }
 }
 
@@ -334,6 +376,10 @@ mod tests {
         ));
         assert!(matches!(
             storage.download("k").await,
+            Err(AppError::InternalServerError)
+        ));
+        assert!(matches!(
+            storage.list_objects("images/").await,
             Err(AppError::InternalServerError)
         ));
     }

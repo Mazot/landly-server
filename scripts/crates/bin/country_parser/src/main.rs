@@ -1,9 +1,9 @@
-use std::collections::HashMap;
-use std::fs::File;
-use std::io::{BufReader, BufWriter};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use serde_json::{from_reader, to_writer_pretty, Value};
+use std::collections::HashMap;
+use std::fs::File;
+use std::io::{BufReader, BufWriter};
 
 #[derive(Debug, Deserialize)]
 pub struct GeoJson {
@@ -22,7 +22,7 @@ pub struct Crs {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct CrsProperties {  
+pub struct CrsProperties {
     pub name: String,
 }
 
