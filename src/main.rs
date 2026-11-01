@@ -142,6 +142,10 @@ async fn main() -> std::io::Result<()> {
             .wrap(Governor::new(&api_rate_limit))
             .wrap(cors())
             .wrap(Authentication)
+            // Outermost of the request path: a zstd body never reaches a decoder.
+            .wrap(actix_web::middleware::from_fn(
+                app::drivers::middlewares::encoding::reject_zstd_requests,
+            ))
             // API docs: Scalar UI (replaces the heavier Swagger UI, which
             // embedded the whole swagger dist via rust-embed at build time).
             .service(Scalar::with_url("/scalar", openapi.clone()))

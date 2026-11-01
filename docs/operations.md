@@ -6,7 +6,7 @@ Moved out of AGENTS.md. Read before touching `.github/workflows/`, `scripts/`, `
 
 - `rust.yml` — fmt check, build, tests, **plus a separate `scripts-workspace` job** (the scripts crates are not covered by the root build); coverage via tarpaulin → Codecov. All jobs use `Swatinem/rust-cache`.
 - `clippy.yml` — `cargo clippy --all-targets --all-features -- -D warnings`.
-- `audit.yml` — `cargo audit` for both lockfiles (root + scripts/crates), on dependency changes and weekly. Ignored advisories live in `.cargo/audit.toml`, each with a reason and an exit condition (currently `RUSTSEC-2026-0258`, h2 0.3 via actix-http — unreachable because the server is HTTP/1.x only; drop the ignore if HTTP/2 is ever enabled).
+- `audit.yml` — `cargo audit` for both lockfiles (root + scripts/crates), on dependency changes and weekly. Ignored advisories live in `.cargo/audit.toml`, each with a reason and an exit condition (currently `RUSTSEC-2026-0258`, h2 0.3 via actix-http — unreachable because the server is HTTP/1.x only; drop the ignore if HTTP/2 is ever enabled; and the 13 zstd / zstd-safe advisories `RUSTSEC-2026-0391`, `-0395…0406` — actix-http's `compress-zstd` cannot be switched off because `actix-request-reply-cache` re-enables actix-web's default features, so `middlewares/encoding.rs` rejects `Content-Encoding: zstd` request bodies and no response is zstd-compressed; remove both once actix-http moves to zstd ≥ 0.14). `aws-sdk-s3` is built without `sigv4a` on purpose (it drags in `crypto-bigint` 0.5, `RUSTSEC-2026-0387`).
 - `dependencies.yml` — weekly `cargo update` PR for both workspaces.
 - `release.yml` — builds and attaches the linux binary on `v*` tags.
 
@@ -23,7 +23,14 @@ cd scripts/crates && cargo run --bin orphan_images                 # dry run: re
 cd scripts/crates && cargo run --bin orphan_images -- --delete     # delete them
 ```
 
-Objects younger than 24 h are skipped (an upload writes the object before its row; `--min-age-hours N` changes that), and `--delete` refuses to run when the database knows no images at all — a sign of the wrong `DATABASE_URL` (`--allow-empty-db` overrides). Run it by hand or from a weekly cron; the logic lives in `src/utils/orphan_cleanup.rs` and is unit-tested. The Docker image ships the binary next to `country_loader`.
+Objects younger than 24 h are skipped (an upload writes the object before its row; `--min-age-hours N` changes that), and `--delete` refuses to run when the database knows no images at all — a sign of the wrong `DATABASE_URL` (`--allow-empty-db` overrides). On the compose stack it is the `orphan-images` service (profile `maintenance`, so `docker compose up` ignores it):
+
+```bash
+docker compose run --rm orphan-images             # dry run
+docker compose run --rm orphan-images --delete    # delete
+```
+
+A weekly cron entry on the host is enough, e.g. `0 4 * * 0 cd /srv/landly && docker compose run --rm orphan-images --delete`. Read a dry-run report once before the first `--delete`. Run it by hand or from that cron; the logic lives in `src/utils/orphan_cleanup.rs` and is unit-tested. The Docker image ships the binary next to `country_loader`.
 
 ## Docker
 

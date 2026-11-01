@@ -74,6 +74,8 @@ test would settle a question.
 - Credential-like or abuse-prone endpoints are wrapped with the shared
   `auth_rate_limit()` config; no limiter is built inside `HttpServer::new` or a
   feature (per-worker counting); `TRUST_PROXY_HEADERS` stays opt-in.
+- `Content-Encoding: zstd` request bodies stay rejected (`middlewares/encoding.rs`);
+  it is what makes the zstd ignores in `.cargo/audit.toml` honest.
 - Raw SQL (`sql_query`, `diesel::dsl::sql`) only with `.bind()`, never `format!`.
 - Pagination limits/offsets are clamped; geo scans stay capped.
 
