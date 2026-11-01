@@ -449,6 +449,7 @@ impl OrganisationRepository for OrganisationRepositoryImpl {
         let updated_organisation = Organisation::update(
             connection,
             id,
+            params.guard_official_badge,
             &UpdateOrganisation {
                 name: params.name,
                 tel: params.tel,
@@ -606,6 +607,8 @@ impl OrganisationRepository for OrganisationRepositoryImpl {
 }
 
 pub struct UpdateOrganisationRepositoryInput {
+    /// Write only if the stored `added_by` is not `official` right now (the caller is not a moderator); a lost race is a 403.
+    pub guard_official_badge: bool,
     /// Who added it: `official`, `community` or `volunteer`; only moderators/admins can set or change `official`; `None` keeps the current value.
     pub added_by: Option<String>,
     /// Display name; `None` keeps the current value.

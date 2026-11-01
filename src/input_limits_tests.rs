@@ -159,6 +159,19 @@ async fn test_organisation_update_and_filters_are_bounded() {
     .await;
     assert_limit(status, &body, "types");
 
+    // Type slugs may be as long as the slug limit; one more is refused.
+    let slug = |len: usize| "s".repeat(len);
+    let search = |len: usize| {
+        format!(
+            "/api/organisation/search?lat=1&lng=1&radius_km=5&types={}",
+            slug(len)
+        )
+    };
+    let (status, body) = call(&app, Method::GET, &search(limits::SLUG), None, None).await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let (status, body) = call(&app, Method::GET, &search(limits::SLUG + 1), None, None).await;
+    assert_limit(status, &body, "types");
+
     let (status, body) = call(
         &app,
         Method::POST,

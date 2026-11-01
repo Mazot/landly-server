@@ -184,6 +184,85 @@ async fn test_one_user_cannot_inflate_checkins() {
     );
 }
 
+/// A repeat check-in with a blank tip keeps the earlier useful tip.
+#[actix_web::test]
+#[serial(jwt_env)]
+async fn test_blank_repeat_tip_keeps_the_earlier_one() {
+    let pool = require_db!();
+    let app = test_app!(pool);
+    let user = ts::user(&pool, "user");
+    let org = ts::org(&pool, OrgSpec::default());
+    let path = format!("/api/organisation/checkin/{}", org.id);
+
+    let mut last = json!(null);
+    for tip in [json!("bring a passport"), json!(""), json!("   ")] {
+        let (status, body) = call(
+            &app,
+            Method::POST,
+            &path,
+            Some(&user.token),
+            Some(json!({ "tip": tip })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+        last = body;
+    }
+
+    assert_eq!(last["community"]["tips"], json!(["bring a passport"]));
+}
+
+/// The UPDATE itself refuses to touch the badge once a moderator made the
+/// row `official`, whatever the usecase read earlier (lost race).
+#[actix_web::test]
+#[serial(jwt_env)]
+async fn test_badge_guard_refuses_to_overwrite_official() {
+    use crate::app::features::organisation::entities::{Organisation, UpdateOrganisation};
+    use crate::error::AppError;
+
+    let pool = require_db!();
+    let org = ts::org(&pool, OrgSpec::default());
+    let conn = &mut pool.get().unwrap();
+    let change = |added_by: &str| UpdateOrganisation {
+        added_by: Some(added_by.to_string()),
+        name: None,
+        tel: None,
+        email: None,
+        address: None,
+        description: None,
+        location_country_id: None,
+        organisation_type_id: None,
+        updated_at: chrono::Utc::now().naive_utc(),
+        latitude: None,
+        longitude: None,
+        founder_country_id: None,
+        city: None,
+        website: None,
+        telegram: None,
+        whatsapp: None,
+        services: None,
+        languages: None,
+        opening_hours: None,
+        timezone: None,
+        cost: None,
+        status: None,
+        location_source: None,
+        location_refreshed_at: None,
+    };
+
+    // Not official yet: a guarded change goes through.
+    let updated = Organisation::update(conn, org.id, true, &change("volunteer")).unwrap();
+    assert_eq!(updated.added_by.as_deref(), Some("volunteer"));
+
+    // A moderator (unguarded) grants the badge...
+    Organisation::update(conn, org.id, false, &change("official")).unwrap();
+
+    // ...and the owner's stale, guarded write must not remove it.
+    let result = Organisation::update(conn, org.id, true, &change("community"));
+    assert!(matches!(result, Err(AppError::Forbidden(_))), "{result:?}");
+    let stored = Organisation::update(conn, org.id, false, &change("official")).unwrap();
+    assert_eq!(stored.added_by.as_deref(), Some("official"));
+}
+
 #[actix_web::test]
 #[serial(jwt_env)]
 async fn test_official_is_granted_by_moderators_only() {

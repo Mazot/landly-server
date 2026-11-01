@@ -2,17 +2,19 @@
 -- "still active" for a place without limit (audit M4). From now on there is
 -- one row per (organisation, user): checking in again updates it.
 
--- Keep the user's latest tip on the surviving (newest) row...
+-- Keep the user's latest non-empty tip on the surviving (newest) row. A blank
+-- tip counts as "no tip", for the survivor as well as for the donor.
 UPDATE org_checkins c
 SET tip = (
     SELECT o.tip FROM org_checkins o
     WHERE o.organisation_id = c.organisation_id
       AND o.user_id = c.user_id
       AND o.tip IS NOT NULL
+      AND btrim(o.tip) <> ''
     ORDER BY o.created_at DESC, o.id DESC
     LIMIT 1
 )
-WHERE c.tip IS NULL;
+WHERE c.tip IS NULL OR btrim(c.tip) = '';
 
 -- ...then drop the older rows of the same (organisation, user).
 DELETE FROM org_checkins c

@@ -464,6 +464,16 @@ impl OrganisationUsecase {
         let back_to_moderation = managed_by == ManagedBy::Creator
             && existing.status == OrganisationStatus::Live.as_str();
 
+        // An owner's edit never rewrites the badge it merely resent, and a
+        // changed one is written only while the row still is not `official`
+        // (checked in the UPDATE itself, so a moderator's concurrent change
+        // cannot be overwritten).
+        let is_moderator = managed_by == ManagedBy::Moderator;
+        let added_by = params
+            .added_by
+            .filter(|requested| is_moderator || existing.added_by.as_deref() != Some(requested));
+        let guard_official_badge = !is_moderator && added_by.is_some();
+
         let updated_organisation = self.organisation_repo.update_organisation(
             id,
             UpdateOrganisationRepositoryInput {
@@ -486,7 +496,8 @@ impl OrganisationUsecase {
                 opening_hours: params.opening_hours,
                 timezone: params.timezone,
                 cost: params.cost,
-                added_by: params.added_by,
+                added_by,
+                guard_official_badge,
                 status: back_to_moderation
                     .then(|| OrganisationStatus::Pending.as_str().to_string()),
                 location_source,
@@ -545,16 +556,13 @@ impl OrganisationUsecase {
         &self,
         params: SearchOrganisationsUsecaseInput,
     ) -> Result<HttpResponse, AppError> {
-        for (field, list) in [
-            ("types", &params.type_slugs),
-            ("languages", &params.languages),
+        // `types` are organisation-type slugs (up to `SLUG` long), `languages`
+        // are language names.
+        for (field, list, max_len) in [
+            ("types", &params.type_slugs, limits::SLUG),
+            ("languages", &params.languages, limits::TAG),
         ] {
-            v::tag_list(
-                field,
-                list.as_deref(),
-                limits::FILTER_LIST_ITEMS,
-                limits::TAG,
-            )?;
+            v::tag_list(field, list.as_deref(), limits::FILTER_LIST_ITEMS, max_len)?;
         }
         if let Some(added_by) = params.added_by.as_deref() {
             AddedBy::try_from(added_by)?;
@@ -658,6 +666,8 @@ impl OrganisationUsecase {
         tip: Option<String>,
     ) -> Result<HttpResponse, AppError> {
         v::max_chars("tip", tip.as_deref(), limits::CHECKIN_TIP)?;
+        // A blank tip means "no tip": it must not replace a useful earlier one.
+        let tip = tip.filter(|t| !t.trim().is_empty());
         // Only live orgs accept check-ins.
         let organisation = self.organisation_repo.fetch_organisation(id)?;
         if organisation.status != OrganisationStatus::Live.as_str() {

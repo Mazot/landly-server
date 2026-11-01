@@ -227,9 +227,28 @@ impl Organisation {
     pub fn update(
         conn: &mut PgConnection,
         organisation_id: Uuid,
+        guard_official_badge: bool,
         record: &UpdateOrganisation,
     ) -> Result<Self, AppError> {
+        use diesel::dsl::sql;
+        use diesel::sql_types::Bool;
+
         let o = organisations::table.find(organisation_id);
+        if guard_official_badge {
+            // Constant fragment, no user input. `IS DISTINCT FROM` because
+            // `added_by` is nullable.
+            let result =
+                diesel::update(o.filter(sql::<Bool>("added_by IS DISTINCT FROM 'official'")))
+                    .set(record)
+                    .get_result::<Organisation>(conn)
+                    .optional()?;
+
+            return result.ok_or_else(|| {
+                AppError::Forbidden(serde_json::json!({
+                    "error": "Only a moderator can change the official mark; it was set meanwhile"
+                }))
+            });
+        }
         let result = diesel::update(o)
             .set(record)
             .get_result::<Organisation>(conn)?;

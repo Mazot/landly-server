@@ -20,9 +20,9 @@ Usage: orphan_images [--delete] [--min-age-hours N] [--allow-empty-db]
 
 Needs DATABASE_URL and the S3_* variables.";
 
-fn parse_args() -> Result<SweepOptions, String> {
+fn parse_args(args: impl IntoIterator<Item = String>) -> Result<SweepOptions, String> {
     let mut options = SweepOptions::default();
-    let mut args = std::env::args().skip(1);
+    let mut args = args.into_iter();
 
     while let Some(arg) = args.next() {
         match arg.as_str() {
@@ -34,7 +34,9 @@ fn parse_args() -> Result<SweepOptions, String> {
                     .and_then(|v| v.parse().ok())
                     .filter(|h| *h >= 0)
                     .ok_or("--min-age-hours needs a non-negative number")?;
-                options.min_age_secs = hours * 60 * 60;
+                options.min_age_secs = hours
+                    .checked_mul(60 * 60)
+                    .ok_or("--min-age-hours is too large")?;
             }
             "--help" | "-h" => return Err(USAGE.to_string()),
             other => return Err(format!("unknown argument `{other}`\n\n{USAGE}")),
@@ -47,7 +49,7 @@ fn parse_args() -> Result<SweepOptions, String> {
 fn main() -> ExitCode {
     dotenv().ok();
 
-    let options = match parse_args() {
+    let options = match parse_args(std::env::args().skip(1)) {
         Ok(options) => options,
         Err(message) => {
             eprintln!("{message}");
@@ -75,15 +77,14 @@ fn main() -> ExitCode {
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs() as i64)
         .unwrap_or(0);
-    let report = match orphan_cleanup::block_on(orphan_cleanup::sweep(
-        &storage, &known, now, &options,
-    )) {
-        Ok(report) => report,
-        Err(e) => {
-            eprintln!("{e}");
-            return ExitCode::from(1);
-        }
-    };
+    let report =
+        match orphan_cleanup::block_on(orphan_cleanup::sweep(&storage, &known, now, &options)) {
+            Ok(report) => report,
+            Err(e) => {
+                eprintln!("{e}");
+                return ExitCode::from(1);
+            }
+        };
 
     println!(
         "bucket {}: {} objects under images/, {} in use, {} too new to judge, {} orphaned",
@@ -106,4 +107,31 @@ fn main() -> ExitCode {
     }
 
     ExitCode::SUCCESS
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn parse(args: &[&str]) -> Result<SweepOptions, String> {
+        parse_args(args.iter().map(|a| a.to_string()))
+    }
+
+    #[test]
+    fn test_min_age_hours_is_converted_to_seconds() {
+        assert_eq!(parse(&["--min-age-hours", "2"]).unwrap().min_age_secs, 7200);
+        assert_eq!(parse(&[]).unwrap().min_age_secs, 24 * 60 * 60);
+    }
+
+    /// 5124095576030431 hours * 3600 wraps to a negative cutoff in release
+    /// builds, which would make in-flight uploads look old enough to delete.
+    #[test]
+    fn test_min_age_hours_overflow_is_rejected() {
+        for hours in ["5124095576030431", "9223372036854775807", "-1", "x"] {
+            assert!(
+                parse(&["--delete", "--min-age-hours", hours]).is_err(),
+                "{hours}"
+            );
+        }
+    }
 }
