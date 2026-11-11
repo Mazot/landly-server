@@ -126,13 +126,14 @@ impl Corridor {
         Ok(())
     }
 
-    /// Counts live organisations in the destination country, grouped by org
+    /// Counts live organisations of the corridor (located in the destination, founded from the origin), grouped by org
     /// type slug, plus how many appeared during the last 7 days.
     pub fn stats(conn: &mut PgConnection, corridor: Corridor) -> Result<CorridorStats, AppError> {
         use crate::data::schema::{organisation_types, organisations};
 
         let rows: Vec<(Option<String>, i64)> = organisations::table
             .filter(organisations::location_country_id.eq(corridor.to_country_id))
+            .filter(organisations::founder_country_id.eq(corridor.from_country_id))
             .filter(organisations::status.eq("live"))
             .left_join(organisation_types::table)
             .group_by(organisation_types::slug)
@@ -145,6 +146,7 @@ impl Corridor {
         let week_ago = chrono::Utc::now().naive_utc() - chrono::Duration::days(7);
         let new_this_week = organisations::table
             .filter(organisations::location_country_id.eq(corridor.to_country_id))
+            .filter(organisations::founder_country_id.eq(corridor.from_country_id))
             .filter(organisations::status.eq("live"))
             .filter(organisations::created_at.gt(week_ago))
             .count()

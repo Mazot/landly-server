@@ -374,6 +374,8 @@ pub async fn search_organisations(
             verified_only: query.verified.unwrap_or(false),
             min_rating: query.min_rating,
             added_by: query.added_by.clone(),
+            location_country_id: query.location_country_id,
+            founder_country_id: query.founder_country_id,
             sort: query.sort.clone(),
             limit: query.limit.unwrap_or(50).clamp(0, 200),
             offset: query.offset.unwrap_or(0).max(0),
@@ -817,6 +819,89 @@ mod http_tests {
             (status, body["status"].as_str()),
             (StatusCode::OK, Some("pending"))
         );
+    }
+
+    /// A corridor's map shows only the destination country, however far the camera is pulled back.
+    #[actix_web::test]
+    #[serial(jwt_env)]
+    async fn test_search_is_limited_to_the_location_country() {
+        let pool = require_db!();
+        let app = test_app!(pool);
+        let serbia = ts::country(&pool);
+        let germany = ts::country(&pool);
+        let russia = ts::country(&pool);
+        let (lat, lng) = ts::random_point();
+        let in_serbia = ts::org(
+            &pool,
+            OrgSpec {
+                country: Some(serbia.id),
+                founder: Some(russia.id),
+                lat_lng: Some((lat, lng)),
+                ..Default::default()
+            },
+        );
+        let in_germany = ts::org(
+            &pool,
+            OrgSpec {
+                country: Some(germany.id),
+                lat_lng: Some((lat + 0.01, lng)),
+                ..Default::default()
+            },
+        );
+        // Same country, but founded from elsewhere (and by nobody known).
+        let other_founders = [Some(germany.id), None].map(|founder| {
+            ts::org(
+                &pool,
+                OrgSpec {
+                    country: Some(serbia.id),
+                    founder,
+                    lat_lng: Some((lat + 0.02, lng)),
+                    ..Default::default()
+                },
+            )
+        });
+        let base = format!("/api/organisation/search?lat={lat}&lng={lng}&radius_km=10");
+        let ids = |body: &Value| -> Vec<String> {
+            body["items"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|item| item["id"].as_str().unwrap().to_string())
+                .collect()
+        };
+
+        let (_, everywhere) = call(&app, Method::GET, &base, None, None).await;
+        assert!(ids(&everywhere).contains(&in_germany.id.to_string()));
+
+        let (status, only_serbia) = call(
+            &app,
+            Method::GET,
+            &format!("{base}&location_country_id={}", serbia.id),
+            None,
+            None,
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{only_serbia}");
+        assert!(ids(&only_serbia).contains(&in_serbia.id.to_string()));
+        assert!(!ids(&only_serbia).contains(&in_germany.id.to_string()));
+
+        // The corridor Russia → Serbia: located in Serbia AND founded from Russia, nothing else.
+        let (status, corridor) = call(
+            &app,
+            Method::GET,
+            &format!(
+                "{base}&location_country_id={}&founder_country_id={}",
+                serbia.id, russia.id
+            ),
+            None,
+            None,
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{corridor}");
+        assert_eq!(ids(&corridor), vec![in_serbia.id.to_string()]);
+        for other in other_founders {
+            assert!(!ids(&corridor).contains(&other.id.to_string()));
+        }
     }
 
     #[actix_web::test]

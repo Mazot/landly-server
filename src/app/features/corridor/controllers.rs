@@ -274,6 +274,7 @@ mod tests {
                 OrgSpec {
                     status: Some(status),
                     country: Some(dest.id),
+                    founder: Some(home.id),
                     org_type: Some(kind.id),
                     ..Default::default()
                 },
@@ -283,9 +284,21 @@ mod tests {
             &pool,
             OrgSpec {
                 country: Some(home.id),
+                founder: Some(home.id),
                 ..Default::default()
             },
         ); // other country
+        // In the destination, but not founded from the corridor's origin (or by nobody known).
+        for founder in [Some(dest.id), None] {
+            ts::org(
+                &pool,
+                OrgSpec {
+                    country: Some(dest.id),
+                    founder,
+                    ..Default::default()
+                },
+            );
+        }
 
         let (_, corridor) = call(
             &app,

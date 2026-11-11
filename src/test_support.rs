@@ -282,6 +282,8 @@ pub struct OrgSpec {
     pub created_by: Option<Uuid>,
     pub status: Option<&'static str>,
     pub country: Option<Uuid>,
+    /// Home country of the founders (`founder_country_id`).
+    pub founder: Option<Uuid>,
     pub org_type: Option<Uuid>,
     pub lat_lng: Option<(f64, f64)>,
     pub name: Option<String>,
@@ -302,7 +304,7 @@ pub fn org(pool: &DbPool, spec: OrgSpec) -> Organisation {
             organisation_type_id: spec.org_type,
             latitude: spec.lat_lng.map(|(lat, _)| decimal(lat)),
             longitude: spec.lat_lng.map(|(_, lng)| decimal(lng)),
-            founder_country_id: None,
+            founder_country_id: spec.founder,
             created_by: spec.created_by,
             status: spec.status.unwrap_or("live").to_string(),
             added_by: None,
