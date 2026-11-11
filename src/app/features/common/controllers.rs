@@ -97,6 +97,23 @@ pub async fn fetch_all_languages(
     let offset = params.offset.unwrap_or(0).max(0);
     let limit = params.limit.unwrap_or(100).clamp(0, 500);
     let name = params.name.clone();
+    let country_ids = params
+        .country_ids
+        .as_deref()
+        .map(|list| {
+            list.split(',')
+                .map(str::trim)
+                .filter(|id| !id.is_empty())
+                .map(|id| {
+                    id.parse::<uuid::Uuid>().map_err(|_| {
+                        AppError::UnprocessableEntity(
+                            serde_json::json!({ "error": "country_ids must be comma-separated UUIDs" }),
+                        )
+                    })
+                })
+                .collect::<Result<Vec<_>, _>>()
+        })
+        .transpose()?;
 
     state
         .di_container
@@ -105,6 +122,7 @@ pub async fn fetch_all_languages(
             limit,
             offset,
             name,
+            country_ids,
         })
 }
 
@@ -189,6 +207,9 @@ pub struct LanguagesListQueryParams {
     pub offset: Option<i64>,
     /// Case-insensitive substring filter on the language name.
     pub name: Option<String>,
+    /// Comma-separated country IDs: only the official languages of these countries
+    /// (e.g. a corridor's two countries).
+    pub country_ids: Option<String>,
 }
 
 /// DB-backed HTTP tests (skipped without TEST_DATABASE_URL, see test_support).
@@ -426,6 +447,74 @@ mod http_tests {
             StatusCode::OK,
             "negative paging is clamped, not a 500"
         );
+    }
+
+    #[actix_web::test]
+    #[serial(jwt_env)]
+    async fn test_languages_of_countries() {
+        use crate::data::schema::{countries_to_languages, languages};
+        use diesel::prelude::*;
+
+        let pool = require_db!();
+        let app = test_app!(pool);
+        let (home, dest, other) = (ts::country(&pool), ts::country(&pool), ts::country(&pool));
+        let marker = ts::unique();
+        let conn = &mut pool.get().unwrap();
+        let mut language = |name: &str, countries: &[uuid::Uuid]| -> uuid::Uuid {
+            let id: uuid::Uuid = diesel::insert_into(languages::table)
+                .values(languages::name.eq(format!("{name} {marker}")))
+                .returning(languages::id)
+                .get_result(conn)
+                .unwrap();
+            for country in countries {
+                diesel::insert_into(countries_to_languages::table)
+                    .values((
+                        countries_to_languages::country_id.eq(country),
+                        countries_to_languages::language_id.eq(id),
+                    ))
+                    .execute(conn)
+                    .unwrap();
+            }
+            id
+        };
+        let shared = language("A shared", &[home.id, dest.id]);
+        let home_only = language("B home", &[home.id]);
+        let elsewhere = language("C elsewhere", &[other.id]);
+
+        let (status, list) = call(
+            &app,
+            Method::GET,
+            &format!(
+                "/api/common/languages?name={marker}&country_ids={},{}",
+                home.id, dest.id
+            ),
+            None,
+            None,
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{list}");
+        let ids: Vec<&str> = list
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|l| l["id"].as_str().unwrap())
+            .collect();
+        assert_eq!(
+            ids,
+            vec![shared.to_string(), home_only.to_string()],
+            "each language once, only of the given countries"
+        );
+        assert!(!ids.contains(&elsewhere.to_string().as_str()));
+
+        let (status, _) = call(
+            &app,
+            Method::GET,
+            "/api/common/languages?country_ids=not-a-uuid",
+            None,
+            None,
+        )
+        .await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
     }
 
     #[actix_web::test]

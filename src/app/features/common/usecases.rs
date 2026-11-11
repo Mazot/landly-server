@@ -66,6 +66,7 @@ impl CommonUsecase {
                 limit: params.limit,
                 offset: params.offset,
                 name: params.name,
+                country_ids: params.country_ids,
             })?;
         let response = self.common_presenter.to_multi_language_json(languages);
 
@@ -132,6 +133,8 @@ pub struct FetchAllLanguagesUsecaseInput {
     pub offset: i64,
     /// Case-insensitive substring filter on the name.
     pub name: Option<String>,
+    /// Only the official languages of these countries.
+    pub country_ids: Option<Vec<uuid::Uuid>>,
 }
 
 pub struct CreateOrganisationTypeUsecaseInput {
