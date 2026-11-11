@@ -196,6 +196,11 @@ impl OrganisationUsecase {
     /// the coordinates they loaded; compared at the column precision
     /// (DECIMAL(_, 8), which Postgres rounds half away from zero) that is
     /// no move, so a Google point keeps its source and refresh time.
+    /// The IANA zone of a point (offline lookup); `None` without a point or a known zone.
+    fn zone_of(latitude: Option<&BigDecimal>, longitude: Option<&BigDecimal>) -> Option<String> {
+        crate::utils::timezone::time_zone_at(latitude?.to_f64()?, longitude?.to_f64()?)
+    }
+
     fn point_moved(
         existing: &Organisation,
         latitude: &Option<BigDecimal>,
@@ -347,11 +352,9 @@ impl OrganisationUsecase {
             .await?;
 
         // Not given: the zone the point lies in, so `openNow` works for every place with hours.
-        let timezone = params.timezone.or_else(|| {
-            let lat = location.latitude.as_ref()?.to_f64()?;
-            let lng = location.longitude.as_ref()?.to_f64()?;
-            crate::utils::timezone::time_zone_at(lat, lng)
-        });
+        let timezone = params
+            .timezone
+            .or_else(|| Self::zone_of(location.latitude.as_ref(), location.longitude.as_ref()));
         let new_organisation =
             self.organisation_repo
                 .create_organisation(CreateOrganisationRepositoryInput {
@@ -476,6 +479,13 @@ impl OrganisationUsecase {
             .filter(|requested| is_moderator || existing.added_by.as_deref() != Some(requested));
         let guard_official_badge = !is_moderator && added_by.is_some();
 
+        // A moved point brings its own zone unless one is sent (`None` keeps the stored one).
+        let timezone = params.timezone.or_else(|| {
+            moved
+                .then(|| Self::zone_of(params.latitude.as_ref(), params.longitude.as_ref()))
+                .flatten()
+        });
+
         let updated_organisation = self.organisation_repo.update_organisation(
             id,
             UpdateOrganisationRepositoryInput {
@@ -496,7 +506,7 @@ impl OrganisationUsecase {
                 services: params.services,
                 languages: params.languages,
                 opening_hours: params.opening_hours,
-                timezone: params.timezone,
+                timezone,
                 added_by,
                 guard_official_badge,
                 status: back_to_moderation

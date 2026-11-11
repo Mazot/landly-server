@@ -196,11 +196,25 @@ pub struct Organisation {
 /// Half the side of the box `find_similar_nearby` looks in, in degrees (~1.1 km of latitude).
 const SIMILAR_NEARBY_DEGREES: f64 = 0.01;
 
-/// `%`, `_` and `\` taken literally in an ILIKE pattern.
-fn like_escape(text: &str) -> String {
-    text.replace('\\', "\\\\")
-        .replace('%', "\\%")
-        .replace('_', "\\_")
+/// A name contained in another counts as similar only from this many characters on ("Bar" is
+/// not "Barbershop", "Kyiv Coffee" is "Kyiv Coffee Kreuzberg"); shorter names match only exactly.
+pub const MIN_CONTAINED_NAME_CHARS: usize = 4;
+
+/// `text` taken literally in a Postgres regular expression.
+fn regex_escape(text: &str) -> String {
+    let mut escaped = String::with_capacity(text.len());
+    for c in text.chars() {
+        if "\\.^$*+?()[]{}|-".contains(c) {
+            escaped.push('\\');
+        }
+        escaped.push(c);
+    }
+    escaped
+}
+
+/// A regex matching `text` as whole words (not inside a longer word), case handled by `~*`.
+fn whole_words(text: &str) -> String {
+    format!("(^|[^[:alnum:]]){}([^[:alnum:]]|$)", regex_escape(text))
 }
 
 /// What `Organisation::find_similar_nearby` looks for.
@@ -389,15 +403,17 @@ impl Organisation {
         Ok(!similar.is_empty())
     }
 
-    /// Places within ~1 km whose name is like `name`: the same name ignoring case, or one
-    /// name contained in the other ("Kyiv Coffee" ↔ "Kyiv Coffee Kreuzberg"). The moderation
-    /// flag `duplicateNearby` and the add-a-place hint (`GET /organisation/duplicates`) share it.
+    /// Places within ~1 km whose name is like `name`: the same name ignoring case, or one name
+    /// contained in the other as whole words when the contained one has at least
+    /// `MIN_CONTAINED_NAME_CHARS` characters ("Kyiv Coffee" ↔ "Kyiv Coffee Kreuzberg", but not
+    /// "Bar" ↔ "Barbershop"). The moderation flag `duplicateNearby` and the add-a-place hint
+    /// (`GET /organisation/duplicates`) share it.
     pub fn find_similar_nearby(
         conn: &mut PgConnection,
         query: SimilarNearby<'_>,
     ) -> Result<Vec<Self>, AppError> {
         use diesel::dsl::sql;
-        use diesel::sql_types::{Bool, Text};
+        use diesel::sql_types::{Bool, Integer, Text};
 
         let name = query.name.trim();
         if name.is_empty() {
@@ -412,11 +428,18 @@ impl Organisation {
             .filter(organisations::latitude.between(lat - &delta, lat + &delta))
             .filter(organisations::longitude.between(lng - &delta, lng + &delta))
             .filter(
-                organisations::name
-                    .ilike(format!("%{}%", like_escape(name)))
-                    .or(sql::<Bool>("")
-                        .bind::<Text, _>(name)
-                        .sql(" ILIKE '%' || replace(replace(replace(organisations.name, '\\', '\\\\'), '%', '\\%'), '_', '\\_') || '%'")),
+                // Same name; or the typed one inside a stored one; or a stored one inside the typed one.
+                sql::<Bool>("(lower(btrim(organisations.name)) = lower(")
+                    .bind::<Text, _>(name)
+                    .sql(") OR (")
+                    .bind::<Bool, _>(name.chars().count() >= MIN_CONTAINED_NAME_CHARS)
+                    .sql(" AND organisations.name ~* ")
+                    .bind::<Text, _>(whole_words(name))
+                    .sql(") OR (char_length(btrim(organisations.name)) >= ")
+                    .bind::<Integer, _>(MIN_CONTAINED_NAME_CHARS as i32)
+                    .sql(" AND ")
+                    .bind::<Text, _>(name)
+                    .sql(r#" ~* ('(^|[^[:alnum:]])' || regexp_replace(btrim(organisations.name), '([.^$*+?()\[\]{}|\\-])', '\\\1', 'g') || '([^[:alnum:]]|$)')))"#),
             )
             .order(organisations::created_at.asc())
             .limit(query.limit)

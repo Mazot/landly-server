@@ -285,7 +285,8 @@ GET /api/organisation/search?lat=52.5&lng=13.4&radius_km=25&sort=nearest
 #   sort:    nearest | recent | verified
 
 # Add-a-place duplicate hint (public): up to 3 places on the map (live or pending) within ~1 km whose name is
-# like `name` (same, or one contained in the other), with distanceKm from the point
+# like `name` (equal ignoring case, or one inside the other as whole words of ≥ 4 characters),
+# with distanceKm from the point
 GET /api/organisation/duplicates?name=Kyiv%20Coffee&lat=52.5&lng=13.4
 
 # Fetch one organisation (openNow computed from opening_hours + timezone)

@@ -663,6 +663,37 @@ mod http_tests {
         assert_eq!(no_point["timezone"], Value::Null);
     }
 
+    /// Moving the point moves the zone with it — unless a zone is sent along, or the point stays.
+    #[actix_web::test]
+    #[serial(jwt_env)]
+    async fn test_update_refreshes_the_time_zone_when_the_point_moves() {
+        let pool = require_db!();
+        let app = test_app!(pool);
+        let me = ts::user(&pool, "user");
+        let (_, org) = call(
+            &app,
+            Method::POST,
+            "/api/organisation/create",
+            Some(&me.token),
+            Some(json!({ "name": format!("Moving {}", ts::unique()), "latitude": 44.787, "longitude": 20.457 })),
+        )
+        .await;
+        assert_eq!(org["timezone"], "Europe/Belgrade");
+        let path = format!("/api/organisation/update/{}", org["id"].as_str().unwrap());
+        let update = |body: Value| call(&app, Method::PUT, &path, Some(&me.token), Some(body));
+
+        let (status, renamed) = update(json!({ "name": format!("Still {}", ts::unique()) })).await;
+        assert_eq!(status, StatusCode::OK, "{renamed}");
+        assert_eq!(renamed["timezone"], "Europe/Belgrade", "no move, no change");
+
+        let (_, moscow) = update(json!({ "latitude": 55.751, "longitude": 37.618 })).await;
+        assert_eq!(moscow["timezone"], "Europe/Moscow");
+
+        let (_, given) =
+            update(json!({ "latitude": 52.52, "longitude": 13.405, "timezone": "UTC" })).await;
+        assert_eq!(given["timezone"], "UTC", "a zone sent along wins");
+    }
+
     /// `longitude` used to be DECIMAL(10, 8) (max ±99.99999999): every place
     /// east of 100°E or west of 100°W — Tokyo, Bangkok, the Americas — failed
     /// with a 500 "numeric field overflow".
@@ -1002,6 +1033,71 @@ mod http_tests {
         assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
         let (status, _) = call(&app, Method::GET, &path(&"x".repeat(201)), None, None).await;
         assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    }
+
+    /// Similar names: equal ignoring case, or contained as whole words — never a short name inside a
+    /// longer word ("Bar" is not "Barbershop"); regex characters in names are literal.
+    #[actix_web::test]
+    #[serial(jwt_env)]
+    async fn test_duplicates_match_whole_words_only() {
+        let pool = require_db!();
+        let app = test_app!(pool);
+        let (lat, lng) = ts::random_point();
+        let stored = |name: &str| {
+            ts::org(
+                &pool,
+                OrgSpec {
+                    name: Some(name.to_string()),
+                    lat_lng: Some((lat, lng)),
+                    ..Default::default()
+                },
+            )
+        };
+        let bar = stored("Bar");
+        let moskva = stored("Café Moskva");
+        let pivnica = stored("Pivnica");
+        let club = stored("C++ (club) Belgrade");
+        let lavka = stored("Русская лавка");
+
+        let cases = [
+            ("bar", &bar, true, "a short name matches exactly"),
+            ("Barbershop", &bar, false, "but not inside a word"),
+            (
+                "Bar Belgrade",
+                &bar,
+                false,
+                "nor under 4 characters as a word",
+            ),
+            ("moskva", &moskva, true, "a typed word inside a stored name"),
+            ("Mosk", &moskva, false, "not part of a word"),
+            (
+                "Pivnica Dorćol",
+                &pivnica,
+                true,
+                "a stored name inside the typed one",
+            ),
+            ("C++ (club)", &club, true, "regex characters are literal"),
+            (".*", &club, false, "a pattern matches nothing"),
+            ("лавка", &lavka, true, "Cyrillic words"),
+        ];
+        for (typed, place, expected, why) in cases {
+            let encoded: String = typed.bytes().map(|b| format!("%{b:02X}")).collect();
+            let (status, body) = call(
+                &app,
+                Method::GET,
+                &format!("/api/organisation/duplicates?name={encoded}&lat={lat}&lng={lng}"),
+                None,
+                None,
+            )
+            .await;
+            assert_eq!(status, StatusCode::OK, "{typed}: {body}");
+            let found = body["items"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|item| item["id"] == json!(place.id));
+            assert_eq!(found, expected, "{typed}: {why}");
+        }
     }
 
     /// A corridor's map shows only the destination country, however far the camera is pulled back.
