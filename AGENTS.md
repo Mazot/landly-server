@@ -78,7 +78,7 @@ Every new feature touches the same shared files: `src/app/features/mod.rs`, `src
 
 ### Enum convention
 
-No SQL enums. Enum-like columns are `TEXT` with a `CHECK (col IN (...))` constraint in the migration, plus a Rust enum in the feature's `entities.rs` with `as_str()` and `TryFrom<&str>` (see `UserRole`, `OrganisationStatus`, `AddedBy`, `Cost`, `HereAs`, `Locale`). Usecases validate incoming strings through `TryFrom` before writing.
+No SQL enums. Enum-like columns are `TEXT` with a `CHECK (col IN (...))` constraint in the migration, plus a Rust enum in the feature's `entities.rs` with `as_str()` and `TryFrom<&str>` (see `UserRole`, `OrganisationStatus`, `AddedBy`, `HereAs`, `Locale`). Usecases validate incoming strings through `TryFrom` before writing.
 
 ### RBAC
 

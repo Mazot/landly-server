@@ -290,10 +290,6 @@ impl OrganisationRepository for OrganisationRepositoryImpl {
             query = query.filter(organisations::added_by.eq(added_by));
         }
 
-        if let Some(cost) = &params.cost {
-            query = query.filter(organisations::cost.eq(cost));
-        }
-
         // Deterministic scan order: without it the 500-row cap could return a
         // different subset between requests, making pagination inconsistent.
         let mut organisations = query
@@ -375,7 +371,6 @@ impl OrganisationRepository for OrganisationRepositoryImpl {
                 languages: params.languages.into_iter().map(Some).collect(),
                 opening_hours: params.opening_hours,
                 timezone: params.timezone,
-                cost: params.cost,
                 google_place_id: params.google_place_id,
                 location_source: params.location_source,
                 location_refreshed_at: params.location_refreshed_at,
@@ -469,7 +464,6 @@ impl OrganisationRepository for OrganisationRepositoryImpl {
                 languages: params.languages.map(|l| l.into_iter().map(Some).collect()),
                 opening_hours: params.opening_hours,
                 timezone: params.timezone,
-                cost: params.cost,
                 added_by: params.added_by,
                 status: params.status,
                 location_source: params.location_source,
@@ -647,8 +641,6 @@ pub struct UpdateOrganisationRepositoryInput {
     pub opening_hours: Option<serde_json::Value>,
     /// IANA timezone of the place, e.g. "Europe/Berlin"; used with `opening_hours` for `openNow`; `None` keeps the current value.
     pub timezone: Option<String>,
-    /// `free` or `paid`; `None` keeps the current value.
-    pub cost: Option<String>,
     /// Set to `pending` when the creator edits a live organisation; otherwise `None`.
     pub status: Option<String>,
     /// Set together with a moved point (`user_pin` or `moderator`); `None` keeps it.
@@ -697,8 +689,6 @@ pub struct SearchOrganisationsRepositoryInput {
     pub min_rating: Option<f64>,
     /// Only `official`, `community` or `volunteer` entries.
     pub added_by: Option<String>,
-    /// Only `free` or only `paid` places.
-    pub cost: Option<String>,
     /// Result ordering, already resolved by the usecase.
     pub sort: SearchSort,
     /// Page size (already clamped by the controller).
@@ -750,8 +740,6 @@ pub struct CreateOrganisationRepositoryInput {
     pub opening_hours: Option<serde_json::Value>,
     /// IANA timezone of the place, e.g. "Europe/Berlin"; used with `opening_hours` for `openNow`.
     pub timezone: Option<String>,
-    /// `free` or `paid`.
-    pub cost: Option<String>,
     /// Google Places ID (unique); the only Google content stored indefinitely.
     pub google_place_id: Option<String>,
     /// Where the point came from (`LocationSource::as_str`); null without a point.

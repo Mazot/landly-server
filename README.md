@@ -278,7 +278,7 @@ GET /api/organisation/list
 GET /api/organisation/search?min_lat=52&min_lng=13&max_lat=53&max_lng=14
 GET /api/organisation/search?lat=52.5&lng=13.4&radius_km=25&sort=nearest
 #   filters: types=embassy,community  open_now=true  languages=Russian,English
-#            verified=true  min_rating=4.5  added_by=volunteer  cost=free
+#            verified=true  min_rating=4.5  added_by=volunteer
 #   sort:    nearest | recent | verified
 
 # Fetch one organisation (openNow computed from opening_hours + timezone)
@@ -437,7 +437,7 @@ Violations return `401 Unauthorized` (no/invalid token) or `403 Forbidden` (insu
 - **users** - User accounts (email unique case-insensitively), authentication and profile (name, bio, city, home country, locale `en/ru/uk`, `here_as`, RBAC `role`, notification settings)
 - **user_providers** - OAuth provider linkages
 - **corridors** - User corridors (from country → to country, one default per user)
-- **organisations** - Organization entities (v2: moderation `status`, `created_by` ownership, `verified`, contacts, `services[]`/`languages[]`, `opening_hours` JSONB + `timezone`, `cost`, Google import fields, visit/rating counters)
+- **organisations** - Organization entities (v2: moderation `status`, `created_by` ownership, `verified`, contacts, `services[]`/`languages[]`, `opening_hours` JSONB + `timezone`, Google import fields, visit/rating counters)
 - **organisation_types** - Organization classifications with stable `slug` (canonical: `embassy`, `business`, `helper`, `community`, `volunteer`)
 - **countries** - Country master data (+`currency`, `phone_code`, `top_cities`)
 - **languages** - Language master data

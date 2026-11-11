@@ -215,7 +215,6 @@ pub async fn update_organisation(
             languages: form.languages.clone(),
             opening_hours: form.opening_hours.clone(),
             timezone: form.timezone.clone(),
-            cost: form.cost.clone(),
             added_by: form.added_by.clone(),
         },
     )
@@ -300,7 +299,6 @@ pub async fn create_organisation(
             languages: form.languages.clone().unwrap_or_default(),
             opening_hours: form.opening_hours.clone(),
             timezone: form.timezone.clone(),
-            cost: form.cost.clone(),
             google_place_id: form.google_place_id.clone(),
         })
         .await
@@ -376,7 +374,6 @@ pub async fn search_organisations(
             verified_only: query.verified.unwrap_or(false),
             min_rating: query.min_rating,
             added_by: query.added_by.clone(),
-            cost: query.cost.clone(),
             sort: query.sort.clone(),
             limit: query.limit.unwrap_or(50).clamp(0, 200),
             offset: query.offset.unwrap_or(0).max(0),
@@ -551,11 +548,18 @@ mod http_tests {
         let (lat, lng) = ts::random_point();
         let name = format!("Kiezladen {}", ts::unique());
 
-        let (status, org) = call(&app, Method::POST, "/api/organisation/create", Some(&me.token), Some(json!({
-            "name": name, "tel": "+49 30 1234567", "latitude": lat, "longitude": lng,
-            "location_country_id": country.id, "services": ["Help"], "languages": ["Russian"],
-            "opening_hours": always_open(), "timezone": "UTC", "cost": "free", "added_by": "community",
-        }))).await;
+        let (status, org) = call(
+            &app,
+            Method::POST,
+            "/api/organisation/create",
+            Some(&me.token),
+            Some(json!({
+                "name": name, "tel": "+49 30 1234567", "latitude": lat, "longitude": lng,
+                "location_country_id": country.id, "services": ["Help"], "languages": ["Russian"],
+                "opening_hours": always_open(), "timezone": "UTC", "added_by": "community",
+            })),
+        )
+        .await;
         assert_eq!(status, StatusCode::OK, "{org}");
         assert_eq!(org["status"], "pending");
         assert_eq!(org["createdBy"], json!(me.id));
@@ -628,7 +632,6 @@ mod http_tests {
         for body in [
             json!({ "name": "x", "latitude": 91.0, "longitude": 0.0 }),
             json!({ "name": "x", "latitude": 0.0, "longitude": 181.0 }),
-            json!({ "name": "x", "cost": "cheap" }),
             json!({ "name": "x", "added_by": "robot" }),
         ] {
             let (status, resp) = call(
@@ -856,7 +859,7 @@ mod http_tests {
             Some(json!({
                 "name": format!("Rich {}", ts::unique()), "latitude": lat + 0.01, "longitude": lng,
                 "languages": ["Ukrainian"], "opening_hours": always_open(), "timezone": "UTC",
-                "cost": "paid", "added_by": "community",
+                "added_by": "community",
             })),
         )
         .await;
@@ -904,7 +907,6 @@ mod http_tests {
             ("&open_now=true".to_string(), vec![rich_id]),
             ("&verified=true".to_string(), vec![rich_id]),
             ("&min_rating=4.5".to_string(), vec![rich_id]),
-            ("&cost=paid".to_string(), vec![rich_id]),
             ("&added_by=official".to_string(), vec![rich_id]),
         ] {
             let (_, body) = call(&app, Method::GET, &format!("{base}{filter}"), None, None).await;

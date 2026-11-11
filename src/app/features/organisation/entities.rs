@@ -73,36 +73,6 @@ impl TryFrom<&str> for AddedBy {
     }
 }
 
-/// Whether the service costs money (`organisations.cost`, TEXT + CHECK constraint).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Cost {
-    Free,
-    Paid,
-}
-
-impl Cost {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Cost::Free => "free",
-            Cost::Paid => "paid",
-        }
-    }
-}
-
-impl TryFrom<&str> for Cost {
-    type Error = AppError;
-
-    fn try_from(value: &str) -> Result<Self, Self::Error> {
-        match value {
-            "free" => Ok(Cost::Free),
-            "paid" => Ok(Cost::Paid),
-            other => Err(AppError::UnprocessableEntity(
-                json!({ "error": format!("Unknown cost value: {}", other) }),
-            )),
-        }
-    }
-}
-
 /// Where an organisation's point came from (`organisations.location_source`,
 /// TEXT + CHECK constraint). Only `Google` points are Google content: they
 /// are re-fetched before Google's caching window ends. The others are ours.
@@ -199,8 +169,6 @@ pub struct Organisation {
     pub opening_hours: Option<serde_json::Value>,
     /// IANA timezone of the place, e.g. "Europe/Berlin"; used with `opening_hours` for `openNow`.
     pub timezone: Option<String>,
-    /// `free` or `paid`.
-    pub cost: Option<String>,
     /// Google Places ID; the only Google content stored indefinitely (unique).
     pub google_place_id: Option<String>,
     /// Detail-page visit counter (POST /organisation/visit/{id}).
@@ -507,8 +475,6 @@ pub struct CreateOrganisation {
     pub opening_hours: Option<serde_json::Value>,
     /// IANA timezone of the place, e.g. "Europe/Berlin"; used with `opening_hours` for `openNow`.
     pub timezone: Option<String>,
-    /// `free` or `paid`.
-    pub cost: Option<String>,
     /// Google Places ID (unique); the only Google content stored indefinitely.
     pub google_place_id: Option<String>,
     /// Where the point came from (`LocationSource::as_str`); null without a point.
@@ -560,8 +526,6 @@ pub struct UpdateOrganisation {
     pub opening_hours: Option<serde_json::Value>,
     /// IANA timezone of the place, e.g. "Europe/Berlin"; used with `opening_hours` for `openNow`; `None` keeps the current value.
     pub timezone: Option<String>,
-    /// `free` or `paid`; `None` keeps the current value.
-    pub cost: Option<String>,
     /// Only set when an edit has to go back through moderation.
     pub status: Option<String>,
     /// Set together with a moved point: `user_pin` (creator) or `moderator`; `None` keeps the current value.
@@ -595,13 +559,6 @@ mod tests {
             assert_eq!(AddedBy::try_from(added_by.as_str()).unwrap(), added_by);
         }
         assert!(AddedBy::try_from("bot").is_err());
-    }
-
-    #[test]
-    fn test_cost_roundtrip() {
-        assert_eq!(Cost::try_from("free").unwrap(), Cost::Free);
-        assert_eq!(Cost::try_from("paid").unwrap(), Cost::Paid);
-        assert!(Cost::try_from("donation").is_err());
     }
 
     #[test]

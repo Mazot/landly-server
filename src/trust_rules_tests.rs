@@ -243,7 +243,6 @@ async fn test_badge_guard_refuses_to_overwrite_official() {
         languages: None,
         opening_hours: None,
         timezone: None,
-        cost: None,
         status: None,
         location_source: None,
         location_refreshed_at: None,

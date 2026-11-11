@@ -247,7 +247,6 @@ mod tests {
             languages: vec![],
             opening_hours: None,
             timezone: None,
-            cost: None,
             google_place_id: None,
             visits_count: 0,
             rating_avg: None,
