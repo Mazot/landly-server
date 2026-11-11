@@ -263,7 +263,7 @@ POST   /api/corridor/create            # { from_country_id, to_country_id, is_de
 GET    /api/corridor/list
 PUT    /api/corridor/set-default/{id}
 DELETE /api/corridor/delete/{id}
-GET    /api/corridor/stats/{id}        # live-place counters by org type + "new this week"
+GET    /api/corridor/stats/{id}        # counters of the places on the map (live + pending) by org type + "new this week"
 ```
 
 All corridor endpoints require authentication and operate only on the caller's corridors.
@@ -340,7 +340,7 @@ Uploads accept JPEG, PNG, WebP and GIF up to 10 MB; permissions are checked befo
 # brief=true leaves out the large `geoJson` border (null) — the full list is ~12 MB with borders
 GET /api/common/countries
 
-# Country page payload: country + live-place breakdown by org type
+# Country page payload: country + breakdown of its places on the map (live + pending) by org type
 GET /api/common/countries/{id}
 ```
 

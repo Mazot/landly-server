@@ -122,7 +122,10 @@ impl CommonRepository for CommonRepositoryImpl {
 
         let rows: Vec<(Option<String>, i64)> = organisations::table
             .filter(organisations::location_country_id.eq(id))
-            .filter(organisations::status.eq("live"))
+            // The places on the map: approved and waiting for moderation.
+            .filter(organisations::status.eq_any(
+                crate::app::features::organisation::entities::OrganisationStatus::on_the_map(),
+            ))
             .left_join(organisation_types::table)
             .group_by(organisation_types::slug)
             .select((

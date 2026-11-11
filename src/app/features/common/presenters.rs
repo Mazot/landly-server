@@ -119,11 +119,11 @@ impl From<Country> for CountryContent {
 pub struct CountryPlacesByType {
     /// Organisation type slug; "other" for types without a slug.
     pub slug: String,
-    /// Number of live organisations of this type in the country.
+    /// Number of organisations of this type on the map in the country (live + pending).
     pub count: i64,
 }
 
-/// Country page payload with live-organisation breakdown by org type
+/// Country page payload with the breakdown of its places on the map (live + pending) by org type
 /// (design: country-full.jsx).
 #[derive(Deserialize, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -131,9 +131,9 @@ pub struct CountryDetailContent {
     /// The country itself (flattened into this object).
     #[serde(flatten)]
     pub country: CountryContent,
-    /// Number of live organisations located in the country.
+    /// Number of organisations on the map (live + pending) located in the country.
     pub total_places: i64,
-    /// Live organisations per organisation type.
+    /// Organisations on the map (live + pending) per organisation type.
     pub places_by_type: Vec<CountryPlacesByType>,
 }
 

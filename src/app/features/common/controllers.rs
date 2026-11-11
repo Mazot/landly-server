@@ -62,7 +62,7 @@ pub async fn fetch_all_countries(
         ("id" = Uuid, Path, description = "Country ID")
     ),
     responses(
-        (status = 200, description = "Country with live-organisation breakdown by type", body = super::presenters::CountryDetailContent),
+        (status = 200, description = "Country with the breakdown of its places on the map (live + pending) by type", body = super::presenters::CountryDetailContent),
         (status = 404, description = "Not found", body = AppError),
         (status = 500, description = "Internal server error", body = AppError)
     ),
@@ -348,10 +348,19 @@ mod http_tests {
             &pool,
             OrgSpec {
                 country: Some(country.id),
+                org_type: Some(kind.id),
                 status: Some("pending"),
                 ..Default::default()
             },
-        );
+        ); // on the map, so counted
+        ts::org(
+            &pool,
+            OrgSpec {
+                country: Some(country.id),
+                status: Some("rejected"),
+                ..Default::default()
+            },
+        ); // never shown, never counted
 
         let suffix = country.name.rsplit(' ').next().unwrap().to_uppercase();
         let (status, list) = call(
@@ -395,14 +404,17 @@ mod http_tests {
         .await;
         assert_eq!(status, StatusCode::OK, "{detail}");
         assert_eq!(detail["name"], country.name);
-        assert_eq!(detail["totalPlaces"], 2, "only live organisations");
+        assert_eq!(
+            detail["totalPlaces"], 3,
+            "the places on the map: live and pending"
+        );
         let mut by_type: Vec<Value> = detail["placesByType"].as_array().unwrap().clone();
         by_type.sort_by_key(|t| t["slug"].as_str().unwrap().to_string());
         assert_eq!(
             by_type,
             vec![
                 json!({ "slug": "other", "count": 1 }),
-                json!({ "slug": kind.slug, "count": 1 })
+                json!({ "slug": kind.slug, "count": 2 })
             ]
         );
 

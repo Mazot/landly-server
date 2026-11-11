@@ -69,7 +69,7 @@ pub struct CorridorStatsContent {
     pub total_places: i64,
     /// Of those, how many were created during the last 7 days.
     pub new_this_week: i64,
-    /// Live organisations per organisation type.
+    /// Organisations on the map (live + pending) per organisation type.
     pub by_type: Vec<CorridorTypeCount>,
 }
 
