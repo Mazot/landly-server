@@ -123,8 +123,6 @@ pub struct OrganisationContent {
     pub timezone: Option<String>,
     /// Computed from opening_hours + timezone at response time; never stored.
     pub open_now: Option<bool>,
-    /// `free` or `paid`.
-    pub cost: Option<String>,
     /// Google Places ID: the client fetches Google's live details (hours,
     /// photos, Google rating) with it and shows them on a Google map.
     pub google_place_id: Option<String>,
@@ -203,7 +201,6 @@ impl From<Organisation> for OrganisationContent {
             opening_hours: org.opening_hours,
             timezone: org.timezone,
             open_now,
-            cost: org.cost,
             google_place_id: org.google_place_id,
             location_source: org.location_source,
             visits_count: org.visits_count,
@@ -353,7 +350,6 @@ mod tests {
             languages: vec![Some("Russian".to_string()), Some("English".to_string())],
             opening_hours: None,
             timezone: None,
-            cost: Some("free".to_string()),
             google_place_id: None,
             visits_count: 7,
             rating_avg: Some(4.5),

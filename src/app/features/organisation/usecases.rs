@@ -1,5 +1,5 @@
 use super::{
-    entities::{AddedBy, Cost, LocationSource, Organisation, OrganisationStatus},
+    entities::{AddedBy, LocationSource, Organisation, OrganisationStatus},
     presenters::OrganisationPresenter,
     repositories::{
         CreateOrganisationRepositoryInput, FetchOrganisationsRepositoryInput,
@@ -314,9 +314,6 @@ impl OrganisationUsecase {
         if let Some(added_by) = params.added_by.as_deref() {
             AddedBy::try_from(added_by)?;
         }
-        if let Some(cost) = params.cost.as_deref() {
-            Cost::try_from(cost)?;
-        }
         OrgTextFields {
             name: Some(&params.name),
             tel: params.tel.as_deref(),
@@ -372,7 +369,6 @@ impl OrganisationUsecase {
                     languages: params.languages,
                     opening_hours: params.opening_hours,
                     timezone: params.timezone,
-                    cost: params.cost,
                     google_place_id: params.google_place_id,
                     location_source: location.source.map(|s| s.as_str().to_string()),
                     location_refreshed_at: location.refreshed_at,
@@ -417,9 +413,6 @@ impl OrganisationUsecase {
         caller_user_id: Uuid,
         params: UpdateOrganisationUsecaseInput,
     ) -> Result<HttpResponse, AppError> {
-        if let Some(cost) = params.cost.as_deref() {
-            Cost::try_from(cost)?;
-        }
         if let Some(added_by) = params.added_by.as_deref() {
             AddedBy::try_from(added_by)?;
         }
@@ -495,7 +488,6 @@ impl OrganisationUsecase {
                 languages: params.languages,
                 opening_hours: params.opening_hours,
                 timezone: params.timezone,
-                cost: params.cost,
                 added_by,
                 guard_official_badge,
                 status: back_to_moderation
@@ -567,9 +559,6 @@ impl OrganisationUsecase {
         if let Some(added_by) = params.added_by.as_deref() {
             AddedBy::try_from(added_by)?;
         }
-        if let Some(cost) = params.cost.as_deref() {
-            Cost::try_from(cost)?;
-        }
 
         let sort = match params.sort.as_deref() {
             None => {
@@ -608,7 +597,6 @@ impl OrganisationUsecase {
                     verified_only: params.verified_only,
                     min_rating: params.min_rating,
                     added_by: params.added_by,
-                    cost: params.cost,
                     sort,
                     limit: params.limit,
                     offset: params.offset,
@@ -736,8 +724,6 @@ pub struct UpdateOrganisationUsecaseInput {
     pub opening_hours: Option<serde_json::Value>,
     /// IANA timezone of the place, e.g. "Europe/Berlin"; used with `opening_hours` for `openNow`; `None` keeps the current value.
     pub timezone: Option<String>,
-    /// `free` or `paid`; `None` keeps the current value.
-    pub cost: Option<String>,
 }
 
 pub struct CreateOrganisationUsecaseInput {
@@ -781,8 +767,6 @@ pub struct CreateOrganisationUsecaseInput {
     pub opening_hours: Option<serde_json::Value>,
     /// IANA timezone of the place, e.g. "Europe/Berlin"; used with `opening_hours` for `openNow`.
     pub timezone: Option<String>,
-    /// `free` or `paid`.
-    pub cost: Option<String>,
     /// Google Places ID when imported from Google.
     pub google_place_id: Option<String>,
 }
@@ -827,8 +811,6 @@ pub struct SearchOrganisationsUsecaseInput {
     pub min_rating: Option<f64>,
     /// Only `official`, `community` or `volunteer` entries.
     pub added_by: Option<String>,
-    /// Only `free` or only `paid` places.
-    pub cost: Option<String>,
     /// `nearest` (default with an origin), `recent` (default without), or `verified`.
     pub sort: Option<String>,
     /// Page size (already clamped by the controller).
@@ -1061,7 +1043,6 @@ mod tests {
             languages: vec![],
             opening_hours: None,
             timezone: None,
-            cost: None,
             google_place_id: None,
             visits_count: 0,
             rating_avg: None,
@@ -1146,7 +1127,6 @@ mod tests {
             languages: None,
             opening_hours: None,
             timezone: None,
-            cost: None,
         }
     }
 

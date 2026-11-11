@@ -146,7 +146,6 @@ diesel::table! {
         languages -> Array<Nullable<Text>>,
         opening_hours -> Nullable<Jsonb>,
         timezone -> Nullable<Text>,
-        cost -> Nullable<Text>,
         google_place_id -> Nullable<Text>,
         visits_count -> Int8,
         rating_avg -> Nullable<Float8>,

@@ -40,8 +40,6 @@ pub struct CreateOrganisationRequest {
     pub opening_hours: Option<serde_json::Value>,
     /// IANA timezone name used to compute `openNow`, e.g. "Europe/Berlin"
     pub timezone: Option<String>,
-    /// `free` or `paid`.
-    pub cost: Option<String>,
     /// Who added it: `official`, `community` or `volunteer`.
     pub added_by: Option<String>,
     /// Google Places ID when imported from Google.
@@ -89,8 +87,6 @@ pub struct UpdateOrganisationRequest {
     pub opening_hours: Option<serde_json::Value>,
     /// IANA timezone of the place, e.g. "Europe/Berlin"; used with `opening_hours` for `openNow`; omit to keep the current value.
     pub timezone: Option<String>,
-    /// `free` or `paid`; omit to keep the current value.
-    pub cost: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize, ToSchema)]
@@ -131,8 +127,6 @@ pub struct SearchOrganisationsQueryRequest {
     pub min_rating: Option<f64>,
     /// `official`, `community` or `volunteer`.
     pub added_by: Option<String>,
-    /// `free` or `paid`.
-    pub cost: Option<String>,
     /// One of: nearest (default when origin given), recent, verified
     pub sort: Option<String>,
     /// Page size (default 50, max 200). At most 500 rows are scanned per search.
@@ -188,7 +182,6 @@ mod tests {
             languages: Some(vec!["Russian".to_string(), "German".to_string()]),
             opening_hours: None,
             timezone: Some("Europe/Berlin".to_string()),
-            cost: Some("free".to_string()),
             added_by: Some("community".to_string()),
             google_place_id: None,
         };
@@ -241,7 +234,6 @@ mod tests {
             languages: None,
             opening_hours: None,
             timezone: None,
-            cost: None,
         };
 
         let json = serde_json::to_string(&request).unwrap();
@@ -270,7 +262,6 @@ mod tests {
             languages: None,
             opening_hours: None,
             timezone: None,
-            cost: None,
         };
 
         assert_eq!(request.name, Some("Updated Name".to_string()));

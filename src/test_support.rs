@@ -314,7 +314,6 @@ pub fn org(pool: &DbPool, spec: OrgSpec) -> Organisation {
             languages: vec![],
             opening_hours: None,
             timezone: None,
-            cost: None,
             google_place_id: None,
             location_source: spec.lat_lng.map(|_| "user_pin".to_string()),
             location_refreshed_at: None,
