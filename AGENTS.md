@@ -123,6 +123,10 @@ When adding a mutating endpoint: put it in `AUTH_REQUIRED_ROUTES`, then decide i
 - `saved_items`/`reports` are polymorphic (`kind` + `target_id`, no FK) — clean up in the owning delete usecases when that becomes relevant.
 - Community check-in signals (`community` block) are computed on fetch and only attached to the detail payload, never to list/search.
 
+### No hardcoded data
+
+Reference data the clients show (organisation types, countries, languages, limits, statuses) lives in the database or in one named constant/enum (`entities.rs`, `utils/validation.rs::limits`, `constants.rs`) and reaches the client through the API — never a second copy in a handler or a presenter. If a client needs a list it cannot get, add an endpoint or a field for it. Environment-specific values (origins, URLs, keys) come from env vars (`docs/environment.md`), with any dev default as one named constant.
+
 ### Dependency injection
 
 `src/utils/di.rs` contains `DiContainer`, which is constructed once at startup in `AppState::new` (`src/app/drivers/middlewares/state.rs`). It holds all usecase instances (each wrapping `Arc<dyn Repository>` + `Arc<dyn Presenter>`), the cache service, and the storage service. `AppState` is shared via `web::Data<AppState>`.

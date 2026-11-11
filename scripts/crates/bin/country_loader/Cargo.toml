@@ -11,6 +11,10 @@ path = "src/main.rs"
 name = "country_loader"
 path = "src/main.rs"
 
+[[bin]]
+name = "language_loader"
+path = "src/language_loader.rs"
+
 [dependencies]
 landly-server.workspace = true
 country_parser.workspace = true
@@ -18,3 +22,4 @@ serde.workspace = true
 serde_json.workspace = true
 uuid.workspace = true
 dotenv.workspace = true
+diesel.workspace = true
