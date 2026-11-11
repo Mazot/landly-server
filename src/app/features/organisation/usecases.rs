@@ -598,6 +598,7 @@ impl OrganisationUsecase {
                     min_rating: params.min_rating,
                     added_by: params.added_by,
                     location_country_id: params.location_country_id,
+                    founder_country_id: params.founder_country_id,
                     sort,
                     limit: params.limit,
                     offset: params.offset,
@@ -814,6 +815,8 @@ pub struct SearchOrganisationsUsecaseInput {
     pub added_by: Option<String>,
     /// Only places located in this country (the corridor's destination).
     pub location_country_id: Option<Uuid>,
+    /// Only places founded by people from this country (the corridor's origin).
+    pub founder_country_id: Option<Uuid>,
     /// `nearest` (default with an origin), `recent` (default without), or `verified`.
     pub sort: Option<String>,
     /// Page size (already clamped by the controller).

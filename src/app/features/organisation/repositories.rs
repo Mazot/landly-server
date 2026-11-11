@@ -294,6 +294,10 @@ impl OrganisationRepository for OrganisationRepositoryImpl {
             query = query.filter(organisations::location_country_id.eq(country_id));
         }
 
+        if let Some(country_id) = params.founder_country_id {
+            query = query.filter(organisations::founder_country_id.eq(country_id));
+        }
+
         // Deterministic scan order: without it the 500-row cap could return a
         // different subset between requests, making pagination inconsistent.
         let mut organisations = query
@@ -695,6 +699,8 @@ pub struct SearchOrganisationsRepositoryInput {
     pub added_by: Option<String>,
     /// Only places located in this country (the corridor's destination).
     pub location_country_id: Option<Uuid>,
+    /// Only places founded by people from this country (the corridor's origin).
+    pub founder_country_id: Option<Uuid>,
     /// Result ordering, already resolved by the usecase.
     pub sort: SearchSort,
     /// Page size (already clamped by the controller).
