@@ -127,6 +127,8 @@ pub struct SearchOrganisationsQueryRequest {
     pub min_rating: Option<f64>,
     /// `official`, `community` or `volunteer`.
     pub added_by: Option<String>,
+    /// Only places located in this country (a corridor's destination).
+    pub location_country_id: Option<Uuid>,
     /// One of: nearest (default when origin given), recent, verified
     pub sort: Option<String>,
     /// Page size (default 50, max 200). At most 500 rows are scanned per search.
