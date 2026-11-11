@@ -4,7 +4,7 @@ use super::requests::{
     SignInRequest, SignUpRequest, UpdateNotificationSettingsRequest, UpdateProfileRequest,
 };
 use super::usecases::{SignUpUsecaseInput, UpdateProfileUsecaseInput};
-use crate::{app::drivers::middlewares::state::AppState, constants::env_key, error::AppError};
+use crate::{app::drivers::middlewares::state::AppState, error::AppError};
 use actix_web::{
     HttpMessage, HttpRequest, HttpResponse,
     web::{Data, Json, Path, Query},
@@ -301,8 +301,7 @@ pub async fn oauth_google_callback(
         .user_usecase
         .oauth_google_upsert_content(email, user_info.sub)?;
 
-    let frontend_origin = std::env::var(env_key::FRONTEND_ORIGIN)
-        .unwrap_or_else(|_| "http://localhost:5173".to_string());
+    let frontend_origin = crate::app::drivers::middlewares::cors::frontend_origin();
 
     // Only a single-use code travels in the URL; the frontend trades it for
     // the session via POST /user/oauth/google/exchange.
