@@ -1754,6 +1754,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "geometry-rs"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "794fbaf8ce24464265e001a7a1dc819e401a303127c0cb714538e21ebe077c77"
+dependencies = [
+ "rtree_rs",
+]
+
+[[package]]
 name = "getrandom"
 version = "0.2.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2333,6 +2342,7 @@ dependencies = [
  "serde_json",
  "serial_test",
  "thiserror 2.0.21",
+ "tzf-rs",
  "urlencoding",
  "utoipa",
  "utoipa-scalar",
@@ -2758,6 +2768,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "pqueue"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a2145d14f09d5fc7fe7134b556146599c2929af5b1f1e3a0ecc9d582a9b85e4d"
+
+[[package]]
 name = "proc-macro2"
 version = "1.0.107"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2794,7 +2810,7 @@ dependencies = [
  "quinn-udp",
  "rustc-hash",
  "rustls",
- "socket2 0.5.10",
+ "socket2 0.6.5",
  "thiserror 2.0.21",
  "tokio",
  "tracing",
@@ -2832,7 +2848,7 @@ dependencies = [
  "cfg_aliases",
  "libc",
  "once_cell",
- "socket2 0.5.10",
+ "socket2 0.6.5",
  "tracing",
  "windows-sys 0.61.2",
 ]
@@ -3124,6 +3140,15 @@ checksum = "72f81bee8c8ef9b577d1681a70ebbc962c232461e397b22c208c43c04b67a155"
 dependencies = [
  "rmp",
  "serde",
+]
+
+[[package]]
+name = "rtree_rs"
+version = "0.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7787960e978c1c675fd6b8eb7d56b9c7162aec55c41d368add6f3ff39251b96e"
+dependencies = [
+ "pqueue",
 ]
 
 [[package]]
@@ -3608,7 +3633,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
 dependencies = [
  "fastrand",
- "getrandom 0.3.4",
+ "getrandom 0.4.3",
  "once_cell",
  "rustix",
  "windows-sys 0.61.2",
@@ -3881,6 +3906,23 @@ name = "typenum"
 version = "1.20.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b6f5e870be6c3b371b77fe0ee0bafb859fa4964b4404c27de1d380043c4dda20"
+
+[[package]]
+name = "tzf-dist"
+version = "0.0.2026-f"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3633c44cb5e44c1224f82d306c9eb179880996a070cdfe1ecb1b4db6f9fa39c2"
+
+[[package]]
+name = "tzf-rs"
+version = "2.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4fdf8262c938adb6613ceb1871ce43857cabd26d74d4c38313c20f9223459eda"
+dependencies = [
+ "geometry-rs",
+ "rustc-hash",
+ "tzf-dist",
+]
 
 [[package]]
 name = "unicode-ident"

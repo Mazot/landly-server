@@ -85,11 +85,13 @@ impl OrgTextFields<'_> {
             limits::TAGS_PER_LIST,
             limits::TAG,
         )?;
+        v::time_zone("timezone", self.timezone)?;
         v::json_object(
             "opening_hours",
             self.opening_hours,
             limits::JSON_DOCUMENT_BYTES,
-        )
+        )?;
+        v::opening_hours("opening_hours", self.opening_hours)
     }
 }
 
@@ -344,6 +346,12 @@ impl OrganisationUsecase {
             )
             .await?;
 
+        // Not given: the zone the point lies in, so `openNow` works for every place with hours.
+        let timezone = params.timezone.or_else(|| {
+            let lat = location.latitude.as_ref()?.to_f64()?;
+            let lng = location.longitude.as_ref()?.to_f64()?;
+            crate::utils::timezone::time_zone_at(lat, lng)
+        });
         let new_organisation =
             self.organisation_repo
                 .create_organisation(CreateOrganisationRepositoryInput {
@@ -368,7 +376,8 @@ impl OrganisationUsecase {
                     services: params.services,
                     languages: params.languages,
                     opening_hours: params.opening_hours,
-                    timezone: params.timezone,
+                    // Not given: the zone the point lies in, so `openNow` works for every place with hours.
+                    timezone,
                     google_place_id: params.google_place_id,
                     location_source: location.source.map(|s| s.as_str().to_string()),
                     location_refreshed_at: location.refreshed_at,

@@ -81,6 +81,35 @@ pub async fn fetch_country_detail(
 // [authorship] AI-generated (Claude).
 #[utoipa::path(
     get,
+    path = "/common/timezone",
+    context_path = "/api",
+    params(TimeZoneQueryParams),
+    responses(
+        (status = 200, description = "IANA time zone of the point (null where none is known)", body = super::presenters::TimeZoneContent),
+        (status = 422, description = "Coordinates out of range", body = AppError),
+    ),
+    tag = "Common"
+)]
+pub async fn fetch_time_zone(
+    state: Data<AppState>,
+    params: Query<TimeZoneQueryParams>,
+) -> Result<HttpResponse, AppError> {
+    let in_range = |value: f64, limit: f64| value.is_finite() && (-limit..=limit).contains(&value);
+    if !in_range(params.lat, 90.0) || !in_range(params.lng, 180.0) {
+        return Err(AppError::UnprocessableEntity(
+            json!({ "error": "lat must be within [-90, 90] and lng within [-180, 180]" }),
+        ));
+    }
+
+    state
+        .di_container
+        .common_usecase
+        .time_zone_at(params.lat, params.lng)
+}
+
+// [authorship] AI-generated (Claude).
+#[utoipa::path(
+    get,
     path = "/common/languages",
     context_path = "/api",
     params(LanguagesListQueryParams),
@@ -210,6 +239,14 @@ pub struct LanguagesListQueryParams {
     /// Comma-separated country IDs: only the official languages of these countries
     /// (e.g. a corridor's two countries).
     pub country_ids: Option<String>,
+}
+
+#[derive(Deserialize, ToSchema, IntoParams)]
+pub struct TimeZoneQueryParams {
+    /// Latitude (-90..90).
+    pub lat: f64,
+    /// Longitude (-180..180).
+    pub lng: f64,
 }
 
 /// DB-backed HTTP tests (skipped without TEST_DATABASE_URL, see test_support).
@@ -447,6 +484,34 @@ mod http_tests {
             StatusCode::OK,
             "negative paging is clamped, not a 500"
         );
+    }
+
+    #[actix_web::test]
+    #[serial(jwt_env)]
+    async fn test_time_zone_of_a_point() {
+        let pool = require_db!();
+        let app = test_app!(pool);
+        let (status, body) = call(
+            &app,
+            Method::GET,
+            "/api/common/timezone?lat=44.787&lng=20.457",
+            None,
+            None,
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+        assert_eq!(body, json!({ "timezone": "Europe/Belgrade" }));
+        for bad in ["lat=91&lng=0", "lat=0&lng=181", "lat=x&lng=0", "lng=0"] {
+            let (status, _) = call(
+                &app,
+                Method::GET,
+                &format!("/api/common/timezone?{bad}"),
+                None,
+                None,
+            )
+            .await;
+            assert_ne!(status, StatusCode::OK, "{bad}");
+        }
     }
 
     #[actix_web::test]

@@ -1,6 +1,6 @@
 use super::controllers::{
     create_organisation_type, fetch_all_countries, fetch_all_languages,
-    fetch_all_organisation_types, fetch_country_detail,
+    fetch_all_organisation_types, fetch_country_detail, fetch_time_zone,
 };
 use crate::utils::redis::make_common_get_request_cache;
 use actix_web::{Route, web, web::ServiceConfig};
@@ -36,6 +36,7 @@ fn configure_services(cfg: &mut ServiceConfig, redis_url: Option<&str>) {
                 ),
             )
             .route("/countries/{id}", web::get().to(fetch_country_detail))
+            .route("/timezone", web::get().to(fetch_time_zone))
             .route(
                 "/languages",
                 cached(

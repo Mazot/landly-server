@@ -13,6 +13,7 @@ pub trait CommonPresenter: Send + Sync + 'static {
     fn to_multi_country_json(&self, item: Vec<Country>) -> HttpResponse;
     fn to_multi_organization_type_json(&self, item: Vec<OrganisationType>) -> HttpResponse;
     fn to_multi_language_json(&self, item: Vec<Language>) -> HttpResponse;
+    fn to_time_zone_json(&self, timezone: Option<String>) -> HttpResponse;
 }
 
 #[derive(Clone)]
@@ -23,6 +24,10 @@ impl CommonPresenterImpl {
     }
 }
 impl CommonPresenter for CommonPresenterImpl {
+    fn to_time_zone_json(&self, timezone: Option<String>) -> HttpResponse {
+        HttpResponse::Ok().json(TimeZoneContent { timezone })
+    }
+
     fn to_http_res(&self) -> HttpResponse {
         HttpResponse::Ok().json("OK")
     }
@@ -332,4 +337,12 @@ mod tests {
         let presenter = CommonPresenterImpl::new();
         let _cloned = presenter.clone();
     }
+}
+
+/// `GET /common/timezone`: the IANA time zone a point lies in.
+#[derive(Deserialize, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct TimeZoneContent {
+    /// e.g. "Europe/Belgrade"; null where no zone is known (open sea).
+    pub timezone: Option<String>,
 }

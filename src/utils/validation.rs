@@ -120,9 +120,108 @@ pub fn json_object(field: &str, value: Option<&Value>, max_bytes: usize) -> Resu
     Ok(())
 }
 
+/// Weekday keys of `opening_hours`, Monday first (the order `compute_open_now` reads them in).
+pub const WEEKDAYS: [&str; 7] = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
+
+/// Whether `text` is a `"HH:MM"` time of day; `"24:00"` only as a closing time.
+fn is_time(text: &str, closing: bool) -> bool {
+    let bytes = text.as_bytes();
+    if bytes.len() != 5 || bytes[2] != b':' || !text.is_char_boundary(2) {
+        return false;
+    }
+    let (Ok(hours), Ok(minutes)) = (text[..2].parse::<u8>(), text[3..].parse::<u8>()) else {
+        return false;
+    };
+    if !bytes[..2].iter().chain(&bytes[3..]).all(u8::is_ascii_digit) {
+        return false;
+    }
+    (hours < 24 && minutes < 60) || (closing && hours == 24 && minutes == 0)
+}
+
+/// `opening_hours` as `compute_open_now` reads it: `{"mon": [["09:00", "13:00"], ...], ...}` —
+/// weekday keys only, each a list of `[open, close]` `"HH:MM"` pairs with open before close
+/// (`"24:00"` closes at midnight). A day that is missing or empty is closed.
+pub fn opening_hours(field: &str, value: Option<&Value>) -> Result<(), AppError> {
+    let Some(days) = value.and_then(Value::as_object) else {
+        return Ok(()); // absence and non-objects are `json_object`'s concern
+    };
+    for (day, intervals) in days {
+        if !WEEKDAYS.contains(&day.as_str()) {
+            return Err(unprocessable(format!(
+                "{field}: unknown day \"{day}\" (expected one of {})",
+                WEEKDAYS.join(", ")
+            )));
+        }
+        let Some(intervals) = intervals.as_array() else {
+            return Err(unprocessable(format!(
+                "{field}.{day} must be a list of [open, close] pairs"
+            )));
+        };
+        for interval in intervals {
+            let pair = interval.as_array().map(|pair| {
+                (
+                    pair.first().and_then(Value::as_str),
+                    pair.get(1).and_then(Value::as_str),
+                    pair.len(),
+                )
+            });
+            let Some((Some(open), Some(close), 2)) = pair else {
+                return Err(unprocessable(format!(
+                    "{field}.{day} must be a list of [open, close] pairs"
+                )));
+            };
+            if !is_time(open, false) || !is_time(close, true) || open >= close {
+                return Err(unprocessable(format!(
+                    "{field}.{day}: \"{open}\"–\"{close}\" must be HH:MM times with the opening first"
+                )));
+            }
+        }
+    }
+    Ok(())
+}
+
+/// An IANA time zone name chrono-tz knows (e.g. "Europe/Berlin").
+pub fn time_zone(field: &str, value: Option<&str>) -> Result<(), AppError> {
+    match value {
+        Some(name) if name.parse::<chrono_tz::Tz>().is_err() => Err(unprocessable(format!(
+            "{field} must be an IANA time zone such as Europe/Berlin"
+        ))),
+        _ => Ok(()),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_opening_hours_shape() {
+        let ok = json!({ "mon": [["09:00", "13:00"], ["14:00", "24:00"]], "sun": [] });
+        assert!(opening_hours("opening_hours", Some(&ok)).is_ok());
+        assert!(opening_hours("opening_hours", None).is_ok());
+        for bad in [
+            json!({ "monday": [] }),
+            json!({ "mon": "09:00-18:00" }),
+            json!({ "mon": [["09:00"]] }),
+            json!({ "mon": [["09:00", "18:00", "20:00"]] }),
+            json!({ "mon": [["9:00", "18:00"]] }),
+            json!({ "mon": [["18:00", "09:00"]] }),
+            json!({ "mon": [["24:00", "24:00"]] }),
+            json!({ "mon": [["09:60", "18:00"]] }),
+            json!({ "mon": [["0a:00", "18:00"]] }),
+            json!({ "mon": [[9, 18]] }),
+        ] {
+            assert!(is_422(opening_hours("opening_hours", Some(&bad))), "{bad}");
+        }
+    }
+
+    #[test]
+    fn test_time_zone_must_be_iana() {
+        assert!(time_zone("timezone", Some("Europe/Belgrade")).is_ok());
+        assert!(time_zone("timezone", None).is_ok());
+        assert!(is_422(time_zone("timezone", Some("Mars/Olympus"))));
+        assert!(is_422(time_zone("timezone", Some("GMT+3 Moscow"))));
+    }
 
     fn is_422<T>(result: Result<T, AppError>) -> bool {
         matches!(result, Err(AppError::UnprocessableEntity(_)))

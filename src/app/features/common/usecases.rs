@@ -56,6 +56,13 @@ impl CommonUsecase {
         Ok(response)
     }
 
+    /// The time zone of a point (offline lookup), for the add-a-place form's hours.
+    pub fn time_zone_at(&self, latitude: f64, longitude: f64) -> Result<HttpResponse, AppError> {
+        let timezone = crate::utils::timezone::time_zone_at(latitude, longitude);
+
+        Ok(self.common_presenter.to_time_zone_json(timezone))
+    }
+
     pub fn fetch_all_languages(
         &self,
         params: FetchAllLanguagesUsecaseInput,

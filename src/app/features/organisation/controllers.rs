@@ -626,6 +626,43 @@ mod http_tests {
         assert_eq!(flags.unwrap()["duplicateNearby"], true);
     }
 
+    /// Without a timezone the place gets the one its point lies in, so `openNow` works.
+    #[actix_web::test]
+    #[serial(jwt_env)]
+    async fn test_create_fills_the_time_zone_from_the_point() {
+        let pool = require_db!();
+        let app = test_app!(pool);
+        let me = ts::user(&pool, "user");
+        let create = |body: Value| {
+            call(
+                &app,
+                Method::POST,
+                "/api/organisation/create",
+                Some(&me.token),
+                Some(body),
+            )
+        };
+
+        let (status, belgrade) = create(json!({
+            "name": format!("Belgrade {}", ts::unique()), "latitude": 44.787, "longitude": 20.457,
+            "opening_hours": always_open(),
+        }))
+        .await;
+        assert_eq!(status, StatusCode::OK, "{belgrade}");
+        assert_eq!(belgrade["timezone"], "Europe/Belgrade");
+        assert_eq!(belgrade["openNow"], true);
+
+        let (_, given) = create(json!({
+            "name": format!("Given {}", ts::unique()), "latitude": 44.787, "longitude": 20.457,
+            "timezone": "UTC",
+        }))
+        .await;
+        assert_eq!(given["timezone"], "UTC", "a given zone is kept");
+
+        let (_, no_point) = create(json!({ "name": format!("Online {}", ts::unique()) })).await;
+        assert_eq!(no_point["timezone"], Value::Null);
+    }
+
     /// `longitude` used to be DECIMAL(10, 8) (max ±99.99999999): every place
     /// east of 100°E or west of 100°W — Tokyo, Bangkok, the Americas — failed
     /// with a 500 "numeric field overflow".
@@ -664,6 +701,9 @@ mod http_tests {
             json!({ "name": "x", "latitude": 91.0, "longitude": 0.0 }),
             json!({ "name": "x", "latitude": 0.0, "longitude": 181.0 }),
             json!({ "name": "x", "added_by": "robot" }),
+            json!({ "name": "x", "timezone": "Mars/Olympus" }),
+            json!({ "name": "x", "opening_hours": { "monday": [["09:00", "18:00"]] } }),
+            json!({ "name": "x", "opening_hours": { "mon": [["18:00", "09:00"]] } }),
         ] {
             let (status, resp) = call(
                 &app,
