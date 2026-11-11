@@ -279,7 +279,12 @@ GET /api/organisation/search?min_lat=52&min_lng=13&max_lat=53&max_lng=14
 GET /api/organisation/search?lat=52.5&lng=13.4&radius_km=25&sort=nearest
 #   filters: types=embassy,community  open_now=true  languages=Russian,English
 #            verified=true  min_rating=4.5  added_by=volunteer
+#            location_country_id=<to>  founder_country_id=<from>  (a corridor's map)
 #   sort:    nearest | recent | verified
+
+# Add-a-place duplicate hint (public): up to 3 live places within ~1 km whose name is
+# like `name` (same, or one contained in the other), with distanceKm from the point
+GET /api/organisation/duplicates?name=Kyiv%20Coffee&lat=52.5&lng=13.4
 
 # Fetch one organisation (openNow computed from opening_hours + timezone)
 GET /api/organisation/fetch/{id}
@@ -288,6 +293,8 @@ GET /api/organisation/fetch/{id}
 POST /api/organisation/create
 Authorization: Bearer <jwt_token>
 #   { name, google_place_id?, latitude?, longitude?, ... }
+#   opening_hours must be {"mon": [["09:00","18:00"]], ...} (weekday keys, open before close,
+#   "24:00" closes at midnight); timezone must be IANA — omitted, it is filled from the point
 #   latitude/longitude come as a pair. With google_place_id the server takes the
 #   point from Google (when GOOGLE_PLACES_API_KEY is set); one organisation per place.
 #   Responses carry locationSource: google | user_pin | moderator.
@@ -338,10 +345,15 @@ GET /api/common/countries/{id}
 ### Languages
 
 ```http
-# public; ?name= (case-insensitive substring), limit (default 100, max 500), offset
-# → [{ id, name, symbol }] ordered by name; `id` is what people's `language_ids`
-#   and POST/DELETE /api/user/languages `languages_ids` reference
+# public; ?name= (case-insensitive substring), limit (default 100, max 500), offset,
+# country_ids=a,b (only those countries' official languages)
+# → [{ id, name, symbol }] ordered by name (symbol = ISO 639-3); `id` is what people's
+#   `language_ids` and POST/DELETE /api/user/languages `languages_ids` reference.
+#   Seeded by scripts/crates language_loader from merged_countries.json.
 GET /api/common/languages
+
+# IANA time zone of a point (public, offline lookup) → { timezone: "Europe/Belgrade" | null }
+GET /api/common/timezone?lat=44.8&lng=20.46
 ```
 
 ### Organisation types & Country connections
