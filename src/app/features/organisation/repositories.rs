@@ -81,8 +81,8 @@ pub trait OrganisationRepository: Send + Sync + 'static {
         latitude: Option<&BigDecimal>,
         longitude: Option<&BigDecimal>,
     ) -> Result<bool, AppError>;
-    /// Live places near the point with a name like `name` (`Organisation::find_similar_nearby`).
-    fn find_similar_live_nearby(
+    /// Places on the map near the point with a name like `name` (`Organisation::find_similar_nearby`).
+    fn find_similar_nearby_on_the_map(
         &self,
         name: &str,
         latitude: f64,
@@ -239,8 +239,9 @@ impl OrganisationRepository for OrganisationRepositoryImpl {
 
         let connection = &mut self.pool.get()?;
 
+        // The map shows places waiting for moderation too (muted by the client); never rejected ones.
         let mut query = organisations::table
-            .filter(organisations::status.eq(OrganisationStatus::Live.as_str()))
+            .filter(organisations::status.eq_any(OrganisationStatus::on_the_map()))
             .filter(organisations::latitude.is_not_null())
             .filter(organisations::longitude.is_not_null())
             .into_boxed();
@@ -551,7 +552,7 @@ impl OrganisationRepository for OrganisationRepositoryImpl {
         Organisation::has_duplicate_nearby(connection, exclude_id, name, latitude, longitude)
     }
 
-    fn find_similar_live_nearby(
+    fn find_similar_nearby_on_the_map(
         &self,
         name: &str,
         latitude: f64,
@@ -569,7 +570,7 @@ impl OrganisationRepository for OrganisationRepositoryImpl {
                 name,
                 latitude: decimal(latitude)?,
                 longitude: decimal(longitude)?,
-                live_only: true,
+                on_the_map_only: true,
                 limit,
             },
         )

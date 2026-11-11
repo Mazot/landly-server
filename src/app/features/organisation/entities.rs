@@ -16,6 +16,16 @@ pub enum OrganisationStatus {
 }
 
 impl OrganisationStatus {
+    /// Shown on the map (`GET /organisation/search`, the duplicate hint): approved places and the
+    /// ones waiting for moderation — the client draws those muted. Rejected ones never are.
+    pub const ON_THE_MAP: [OrganisationStatus; 2] =
+        [OrganisationStatus::Live, OrganisationStatus::Pending];
+
+    /// `ON_THE_MAP` as the stored strings, for SQL filters.
+    pub fn on_the_map() -> [&'static str; 2] {
+        Self::ON_THE_MAP.map(|status| status.as_str())
+    }
+
     pub fn as_str(&self) -> &'static str {
         match self {
             OrganisationStatus::Pending => "pending",
@@ -200,8 +210,8 @@ pub struct SimilarNearby<'a> {
     pub name: &'a str,
     pub latitude: BigDecimal,
     pub longitude: BigDecimal,
-    /// Only `live` places (what a submitter may see); moderation looks at every status.
-    pub live_only: bool,
+    /// Only places on the map (`OrganisationStatus::ON_THE_MAP`); moderation looks at every status.
+    pub on_the_map_only: bool,
     pub limit: i64,
 }
 
@@ -371,7 +381,7 @@ impl Organisation {
                 name,
                 latitude: lat.clone(),
                 longitude: lng.clone(),
-                live_only: false,
+                on_the_map_only: false,
                 limit: 1,
             },
         )?;
@@ -414,8 +424,8 @@ impl Organisation {
         if let Some(exclude_id) = query.exclude_id {
             rows = rows.filter(organisations::id.ne(exclude_id));
         }
-        if query.live_only {
-            rows = rows.filter(organisations::status.eq(OrganisationStatus::Live.as_str()));
+        if query.on_the_map_only {
+            rows = rows.filter(organisations::status.eq_any(OrganisationStatus::on_the_map()));
         }
 
         Ok(rows.load::<Organisation>(conn)?)

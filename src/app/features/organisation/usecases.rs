@@ -308,7 +308,7 @@ impl OrganisationUsecase {
     }
 
     /// Creates a community submission: validated, owned by the caller and
-    /// entered into moderation as `pending` (invisible to list/search).
+    /// entered into moderation as `pending` (on the map at once, shown as not yet reviewed; not in `/list`).
     pub async fn create_organisation(
         &self,
         params: CreateOrganisationUsecaseInput,
@@ -553,14 +553,14 @@ impl OrganisationUsecase {
 
     /// Map geo-search. Sort defaults to `nearest` when an origin point is
     /// given, otherwise `recent`; `sort=nearest` without an origin is a 422.
-    /// Live places near a point with a name like the one being typed: the add-a-place form
-    /// warns before a duplicate is submitted. Pending submissions of others stay private.
+    /// Places on the map (live or waiting for moderation) near a point with a name like the one
+    /// being typed: the add-a-place form warns before a duplicate is submitted.
     pub fn find_duplicates(
         &self,
         params: FindDuplicatesUsecaseInput,
     ) -> Result<HttpResponse, AppError> {
         v::max_chars("name", Some(&params.name), limits::ORG_NAME)?;
-        let similar = self.organisation_repo.find_similar_live_nearby(
+        let similar = self.organisation_repo.find_similar_nearby_on_the_map(
             &params.name,
             params.latitude,
             params.longitude,
@@ -970,7 +970,7 @@ mod tests {
             unimplemented!()
         }
 
-        fn find_similar_live_nearby(
+        fn find_similar_nearby_on_the_map(
             &self,
             _name: &str,
             _latitude: f64,

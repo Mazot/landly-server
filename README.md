@@ -274,7 +274,9 @@ All corridor endpoints require authentication and operate only on the caller's c
 # List organisations (only status=live)
 GET /api/organisation/list
 
-# Geo search for the map: bbox or origin+radius, filters and sorting
+# Geo search for the map: bbox or origin+radius, filters and sorting.
+# Returns live places and places waiting for moderation (status=pending, shown muted by the
+# client); rejected ones never
 GET /api/organisation/search?min_lat=52&min_lng=13&max_lat=53&max_lng=14
 GET /api/organisation/search?lat=52.5&lng=13.4&radius_km=25&sort=nearest
 #   filters: types=embassy,community  open_now=true  languages=Russian,English
@@ -282,7 +284,7 @@ GET /api/organisation/search?lat=52.5&lng=13.4&radius_km=25&sort=nearest
 #            location_country_id=<to>  founder_country_id=<from>  (a corridor's map)
 #   sort:    nearest | recent | verified
 
-# Add-a-place duplicate hint (public): up to 3 live places within ~1 km whose name is
+# Add-a-place duplicate hint (public): up to 3 places on the map (live or pending) within ~1 km whose name is
 # like `name` (same, or one contained in the other), with distanceKm from the point
 GET /api/organisation/duplicates?name=Kyiv%20Coffee&lat=52.5&lng=13.4
 

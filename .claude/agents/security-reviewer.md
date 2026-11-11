@@ -40,7 +40,9 @@ test would settle a question.
   multipart body, and enforce the size cap while streaming.
 - A creator editing a `live` organisation sends it back to `pending`; a
   moderator editing keeps it live. New org/person submissions start `pending`;
-  list/search/fetch-by-public-endpoints never expose non-live/non-public rows.
+  `/organisation/list` exposes only `live` rows; the map (`/organisation/search`) and the
+  duplicate hint show `live` + `pending` (`OrganisationStatus::ON_THE_MAP`, by product decision —
+  the client marks pending ones), never `rejected`; people stay hidden until public.
 - Person claim: confirm only from `awaiting`, never by the recommender's own
   account (`Person::ensure_claimable`).
 

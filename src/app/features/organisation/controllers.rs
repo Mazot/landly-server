@@ -310,7 +310,7 @@ pub async fn create_organisation(
     path = "/organisation/duplicates",
     context_path = "/api",
     responses(
-        (status = 200, description = "Live places within ~1 km whose name is like `name` (at most 3, with `distanceKm` from the point)", body = super::presenters::MultipleOrganisationsResponse),
+        (status = 200, description = "Places on the map (live or pending) within ~1 km whose name is like `name` (at most 3, with `distanceKm` from the point)", body = super::presenters::MultipleOrganisationsResponse),
         (status = 422, description = "Name too long or coordinates out of range", body = AppError),
         (status = 500, description = "Internal server error", body = AppError)
     ),
@@ -339,7 +339,7 @@ pub async fn find_duplicates(
     path = "/organisation/search",
     context_path = "/api",
     responses(
-        (status = 200, description = "Geo search results", body = super::presenters::MultipleOrganisationsResponse),
+        (status = 200, description = "Geo search results: live places and places waiting for moderation (`status` tells them apart; never rejected ones)", body = super::presenters::MultipleOrganisationsResponse),
         (status = 422, description = "Unprocessable entity", body = AppError),
         (status = 500, description = "Internal server error", body = AppError)
     ),
@@ -890,7 +890,7 @@ mod http_tests {
         );
     }
 
-    /// The add-a-place hint: live places nearby with a like name; not pending ones, not far ones.
+    /// The add-a-place hint: places on the map (live or pending) nearby with a like name; not rejected or far ones.
     #[actix_web::test]
     #[serial(jwt_env)]
     async fn test_duplicates_hint() {
@@ -916,6 +916,7 @@ mod http_tests {
         );
         let same = named(&format!("kyiv coffee {marker}"), (lat, lng + 0.001), "live");
         let pending = named(&format!("Kyiv Coffee {marker}"), (lat, lng), "pending");
+        let rejected = named(&format!("Kyiv Coffee {marker}"), (lat, lng), "rejected");
         let far = named(&format!("Kyiv Coffee {marker}"), (lat + 0.2, lng), "live");
         let other = named(&format!("Bakery {marker}"), (lat, lng), "live");
 
@@ -948,7 +949,11 @@ mod http_tests {
             ids.contains(&same.id.to_string()),
             "the same name, any case"
         );
-        for hidden in [&pending, &far, &other] {
+        assert!(
+            ids.contains(&pending.id.to_string()),
+            "a place waiting for moderation is on the map, so it counts"
+        );
+        for hidden in [&rejected, &far, &other] {
             assert!(!ids.contains(&hidden.id.to_string()), "{}", hidden.name);
         }
         let near = body["items"]
@@ -1105,11 +1110,19 @@ mod http_tests {
                 ..Default::default()
             },
         ); // ~5.5 km north
+        let pending = ts::org(
+            &pool,
+            OrgSpec {
+                lat_lng: Some((lat + 0.02, lng)),
+                status: Some("pending"),
+                ..Default::default()
+            },
+        );
         ts::org(
             &pool,
             OrgSpec {
                 lat_lng: Some((lat, lng)),
-                status: Some("pending"),
+                status: Some("rejected"),
                 ..Default::default()
             },
         );
@@ -1143,9 +1156,15 @@ mod http_tests {
         assert_eq!(status, StatusCode::OK, "{all}");
         assert_eq!(
             ids(&all),
-            vec![near.id.to_string(), rich_id.to_string(), far.id.to_string()],
-            "nearest first, pending hidden"
+            vec![
+                near.id.to_string(),
+                rich_id.to_string(),
+                pending.id.to_string(),
+                far.id.to_string()
+            ],
+            "nearest first; places waiting for moderation shown, rejected ones never"
         );
+        assert_eq!(all["items"][2]["status"], "pending");
         assert!(all["items"][0]["distanceKm"].as_f64().unwrap() < 0.01);
 
         let (_, small) = call(

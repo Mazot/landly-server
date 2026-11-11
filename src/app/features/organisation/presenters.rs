@@ -101,7 +101,7 @@ pub struct OrganisationContent {
     pub created_by: Option<Uuid>,
     /// Verified badge. No API sets it — only changed directly in the database.
     pub verified: bool,
-    /// Moderation status: `pending`, `live` or `rejected`. Only `live` rows appear in list/search.
+    /// Moderation status: `pending`, `live` or `rejected`. `/list` returns only `live` rows; `/search` (the map) `live` and `pending` ones.
     pub status: String,
     /// Who added it: `official`, `community` or `volunteer`.
     pub added_by: Option<String>,
