@@ -1,10 +1,10 @@
 use super::{
     requests::{
-        CheckinRequest, CreateOrganisationRequest, OrganisationsListQueryRequest,
-        SearchOrganisationsQueryRequest, UpdateOrganisationRequest,
+        CheckinRequest, CreateOrganisationRequest, FindDuplicatesQueryRequest,
+        OrganisationsListQueryRequest, SearchOrganisationsQueryRequest, UpdateOrganisationRequest,
     },
     usecases::{
-        CreateOrganisationUsecaseInput, FetchOrganisationsUsecaseInput,
+        CreateOrganisationUsecaseInput, FetchOrganisationsUsecaseInput, FindDuplicatesUsecaseInput,
         SearchOrganisationsUsecaseInput, UpdateOrganisationUsecaseInput,
     },
 };
@@ -302,6 +302,35 @@ pub async fn create_organisation(
             google_place_id: form.google_place_id.clone(),
         })
         .await
+}
+
+// [authorship] AI-generated (Claude).
+#[utoipa::path(
+    get,
+    path = "/organisation/duplicates",
+    context_path = "/api",
+    responses(
+        (status = 200, description = "Live places within ~1 km whose name is like `name` (at most 3, with `distanceKm` from the point)", body = super::presenters::MultipleOrganisationsResponse),
+        (status = 422, description = "Name too long or coordinates out of range", body = AppError),
+        (status = 500, description = "Internal server error", body = AppError)
+    ),
+    params(FindDuplicatesQueryRequest),
+    tag = "Organisation"
+)]
+pub async fn find_duplicates(
+    state: Data<AppState>,
+    query: Query<FindDuplicatesQueryRequest>,
+) -> Result<HttpResponse, AppError> {
+    ensure_coordinate_ranges(&[("lat", query.lat), ("lng", query.lng)])?;
+
+    state
+        .di_container
+        .organisation_usecase
+        .find_duplicates(FindDuplicatesUsecaseInput {
+            name: query.name.clone(),
+            latitude: query.lat,
+            longitude: query.lng,
+        })
 }
 
 // [authorship] AI-generated (Claude).
@@ -819,6 +848,115 @@ mod http_tests {
             (status, body["status"].as_str()),
             (StatusCode::OK, Some("pending"))
         );
+    }
+
+    /// The add-a-place hint: live places nearby with a like name; not pending ones, not far ones.
+    #[actix_web::test]
+    #[serial(jwt_env)]
+    async fn test_duplicates_hint() {
+        let pool = require_db!();
+        let app = test_app!(pool);
+        let (lat, lng) = ts::random_point();
+        let marker = ts::unique();
+        let named = |name: &str, lat_lng: (f64, f64), status: &'static str| {
+            ts::org(
+                &pool,
+                OrgSpec {
+                    name: Some(name.to_string()),
+                    lat_lng: Some(lat_lng),
+                    status: Some(status),
+                    ..Default::default()
+                },
+            )
+        };
+        let longer = named(
+            &format!("Kyiv Coffee {marker} Kreuzberg"),
+            (lat + 0.004, lng),
+            "live",
+        );
+        let same = named(&format!("kyiv coffee {marker}"), (lat, lng + 0.001), "live");
+        let pending = named(&format!("Kyiv Coffee {marker}"), (lat, lng), "pending");
+        let far = named(&format!("Kyiv Coffee {marker}"), (lat + 0.2, lng), "live");
+        let other = named(&format!("Bakery {marker}"), (lat, lng), "live");
+
+        let path = |name: &str| {
+            format!(
+                "/api/organisation/duplicates?name={}&lat={lat}&lng={lng}",
+                name.replace(' ', "%20")
+            )
+        };
+        let (status, body) = call(
+            &app,
+            Method::GET,
+            &path(&format!("Kyiv Coffee {marker}")),
+            None,
+            None,
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+        let ids: Vec<String> = body["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|item| item["id"].as_str().unwrap().to_string())
+            .collect();
+        assert!(
+            ids.contains(&longer.id.to_string()),
+            "a longer name contains the typed one"
+        );
+        assert!(
+            ids.contains(&same.id.to_string()),
+            "the same name, any case"
+        );
+        for hidden in [&pending, &far, &other] {
+            assert!(!ids.contains(&hidden.id.to_string()), "{}", hidden.name);
+        }
+        let near = body["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|i| i["id"] == json!(same.id))
+            .unwrap();
+        assert!(near["distanceKm"].as_f64().unwrap() < 0.2);
+
+        // A typed name contained in a stored one counts the other way round too.
+        let (_, shorter) = call(
+            &app,
+            Method::GET,
+            &path(&format!("Kyiv Coffee {marker} Kreuzberg Mitte")),
+            None,
+            None,
+        )
+        .await;
+        assert!(
+            shorter["items"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|i| i["id"] == json!(longer.id))
+        );
+
+        // LIKE wildcards in the typed name are taken literally.
+        let (_, wildcard) = call(&app, Method::GET, &path("%25"), None, None).await;
+        assert!(
+            !wildcard["items"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|i| i["id"] == json!(other.id))
+        );
+
+        let (status, _) = call(
+            &app,
+            Method::GET,
+            "/api/organisation/duplicates?name=x&lat=91&lng=0",
+            None,
+            None,
+        )
+        .await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+        let (status, _) = call(&app, Method::GET, &path(&"x".repeat(201)), None, None).await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
     }
 
     /// A corridor's map shows only the destination country, however far the camera is pulled back.

@@ -14,7 +14,7 @@ use crate::utils::google_places::{PlaceLookup, validate_place_id};
 use crate::utils::storage::StorageService;
 use crate::utils::validation::{self as v, limits};
 use actix_web::HttpResponse;
-use bigdecimal::{BigDecimal, FromPrimitive, RoundingMode};
+use bigdecimal::{BigDecimal, FromPrimitive, RoundingMode, ToPrimitive};
 use chrono::NaiveDateTime;
 use serde_json::json;
 use std::sync::Arc;
@@ -544,6 +544,40 @@ impl OrganisationUsecase {
 
     /// Map geo-search. Sort defaults to `nearest` when an origin point is
     /// given, otherwise `recent`; `sort=nearest` without an origin is a 422.
+    /// Live places near a point with a name like the one being typed: the add-a-place form
+    /// warns before a duplicate is submitted. Pending submissions of others stay private.
+    pub fn find_duplicates(
+        &self,
+        params: FindDuplicatesUsecaseInput,
+    ) -> Result<HttpResponse, AppError> {
+        v::max_chars("name", Some(&params.name), limits::ORG_NAME)?;
+        let similar = self.organisation_repo.find_similar_live_nearby(
+            &params.name,
+            params.latitude,
+            params.longitude,
+            DUPLICATE_HINTS,
+        )?;
+        let items = similar
+            .into_iter()
+            .map(|organisation| {
+                let distance = organisation
+                    .latitude
+                    .as_ref()
+                    .zip(organisation.longitude.as_ref())
+                    .and_then(|(lat, lng)| Some((lat.to_f64()?, lng.to_f64()?)))
+                    .map(|point| {
+                        super::repositories::haversine_km(
+                            (params.latitude, params.longitude),
+                            point,
+                        )
+                    });
+                (organisation, distance)
+            })
+            .collect();
+
+        Ok(self.organisation_presenter.to_search_json(items))
+    }
+
     pub fn search_organisations(
         &self,
         params: SearchOrganisationsUsecaseInput,
@@ -794,6 +828,17 @@ pub struct FetchOrganisationsUsecaseInput {
     pub offset: i64,
 }
 
+/// How many similar places the duplicate hint lists at most.
+const DUPLICATE_HINTS: i64 = 3;
+
+pub struct FindDuplicatesUsecaseInput {
+    /// The name being typed.
+    pub name: String,
+    /// Where the new place is (validated by the controller).
+    pub latitude: f64,
+    pub longitude: f64,
+}
+
 pub struct SearchOrganisationsUsecaseInput {
     /// (min_lat, min_lng, max_lat, max_lng), validated by the controller.
     pub bbox: Option<(f64, f64, f64, f64)>,
@@ -913,6 +958,16 @@ mod tests {
             _id: Uuid,
         ) -> Result<crate::app::features::organisation::entities::CommunitySignals, AppError>
         {
+            unimplemented!()
+        }
+
+        fn find_similar_live_nearby(
+            &self,
+            _name: &str,
+            _latitude: f64,
+            _longitude: f64,
+            _limit: i64,
+        ) -> Result<Vec<Organisation>, AppError> {
             unimplemented!()
         }
 

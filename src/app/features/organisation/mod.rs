@@ -14,6 +14,7 @@ use utoipa::OpenApi;
     paths(
         controllers::list_organisations,
         controllers::search_organisations,
+        controllers::find_duplicates,
         controllers::fetch_organisation,
         controllers::create_organisation,
         controllers::delete_organisation,
@@ -24,6 +25,7 @@ use utoipa::OpenApi;
     components(schemas(
         requests::OrganisationsListQueryRequest,
         requests::SearchOrganisationsQueryRequest,
+        requests::FindDuplicatesQueryRequest,
         requests::CreateOrganisationRequest,
         requests::UpdateOrganisationRequest,
         presenters::OrganisationContent,

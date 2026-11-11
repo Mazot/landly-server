@@ -183,6 +183,28 @@ pub struct Organisation {
     pub location_refreshed_at: Option<NaiveDateTime>,
 }
 
+/// Half the side of the box `find_similar_nearby` looks in, in degrees (~1.1 km of latitude).
+const SIMILAR_NEARBY_DEGREES: f64 = 0.01;
+
+/// `%`, `_` and `\` taken literally in an ILIKE pattern.
+fn like_escape(text: &str) -> String {
+    text.replace('\\', "\\\\")
+        .replace('%', "\\%")
+        .replace('_', "\\_")
+}
+
+/// What `Organisation::find_similar_nearby` looks for.
+pub struct SimilarNearby<'a> {
+    /// The place itself, when it is already stored.
+    pub exclude_id: Option<Uuid>,
+    pub name: &'a str,
+    pub latitude: BigDecimal,
+    pub longitude: BigDecimal,
+    /// Only `live` places (what a submitter may see); moderation looks at every status.
+    pub live_only: bool,
+    pub limit: i64,
+}
+
 impl Organisation {
     pub fn create(conn: &mut PgConnection, record: &CreateOrganisation) -> Result<Self, AppError> {
         let result = diesel::insert_into(organisations::table)
@@ -342,19 +364,61 @@ impl Organisation {
         let (Some(lat), Some(lng)) = (latitude, longitude) else {
             return Ok(false);
         };
+        let similar = Self::find_similar_nearby(
+            conn,
+            SimilarNearby {
+                exclude_id: Some(exclude_id),
+                name,
+                latitude: lat.clone(),
+                longitude: lng.clone(),
+                live_only: false,
+                limit: 1,
+            },
+        )?;
 
+        Ok(!similar.is_empty())
+    }
+
+    /// Places within ~1 km whose name is like `name`: the same name ignoring case, or one
+    /// name contained in the other ("Kyiv Coffee" ↔ "Kyiv Coffee Kreuzberg"). The moderation
+    /// flag `duplicateNearby` and the add-a-place hint (`GET /organisation/duplicates`) share it.
+    pub fn find_similar_nearby(
+        conn: &mut PgConnection,
+        query: SimilarNearby<'_>,
+    ) -> Result<Vec<Self>, AppError> {
+        use diesel::dsl::sql;
+        use diesel::sql_types::{Bool, Text};
+
+        let name = query.name.trim();
+        if name.is_empty() {
+            return Ok(Vec::new());
+        }
         // ~1 km box around the point (1 degree latitude ≈ 111 km).
-        let delta = BigDecimal::try_from(0.01).map_err(|_| AppError::InternalServerError)?;
+        let delta = BigDecimal::try_from(SIMILAR_NEARBY_DEGREES)
+            .map_err(|_| AppError::InternalServerError)?;
+        let (lat, lng) = (&query.latitude, &query.longitude);
 
-        let count = organisations::table
-            .filter(organisations::id.ne(exclude_id))
-            .filter(organisations::name.ilike(name))
+        let mut rows = organisations::table
             .filter(organisations::latitude.between(lat - &delta, lat + &delta))
             .filter(organisations::longitude.between(lng - &delta, lng + &delta))
-            .count()
-            .get_result::<i64>(conn)?;
+            .filter(
+                organisations::name
+                    .ilike(format!("%{}%", like_escape(name)))
+                    .or(sql::<Bool>("")
+                        .bind::<Text, _>(name)
+                        .sql(" ILIKE '%' || replace(replace(replace(organisations.name, '\\', '\\\\'), '%', '\\%'), '_', '\\_') || '%'")),
+            )
+            .order(organisations::created_at.asc())
+            .limit(query.limit)
+            .into_boxed();
+        if let Some(exclude_id) = query.exclude_id {
+            rows = rows.filter(organisations::id.ne(exclude_id));
+        }
+        if query.live_only {
+            rows = rows.filter(organisations::status.eq(OrganisationStatus::Live.as_str()));
+        }
 
-        Ok(count > 0)
+        Ok(rows.load::<Organisation>(conn)?)
     }
 
     pub fn increment_visits(
