@@ -56,6 +56,13 @@ impl CommonUsecase {
         Ok(response)
     }
 
+    /// The time zone of a point (offline lookup), for the add-a-place form's hours.
+    pub fn time_zone_at(&self, latitude: f64, longitude: f64) -> Result<HttpResponse, AppError> {
+        let timezone = crate::utils::timezone::time_zone_at(latitude, longitude);
+
+        Ok(self.common_presenter.to_time_zone_json(timezone))
+    }
+
     pub fn fetch_all_languages(
         &self,
         params: FetchAllLanguagesUsecaseInput,
@@ -66,6 +73,7 @@ impl CommonUsecase {
                 limit: params.limit,
                 offset: params.offset,
                 name: params.name,
+                country_ids: params.country_ids,
             })?;
         let response = self.common_presenter.to_multi_language_json(languages);
 
@@ -132,6 +140,8 @@ pub struct FetchAllLanguagesUsecaseInput {
     pub offset: i64,
     /// Case-insensitive substring filter on the name.
     pub name: Option<String>,
+    /// Only the official languages of these countries.
+    pub country_ids: Option<Vec<uuid::Uuid>>,
 }
 
 pub struct CreateOrganisationTypeUsecaseInput {

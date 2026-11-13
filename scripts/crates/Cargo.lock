@@ -1182,6 +1182,7 @@ name = "country_loader"
 version = "0.1.0"
 dependencies = [
  "country_parser",
+ "diesel",
  "dotenv",
  "landly-server",
  "serde",

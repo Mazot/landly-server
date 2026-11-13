@@ -9,6 +9,7 @@ tools share its models, database pool and S3 client, but `cargo build` /
 |---|---|---|
 | [`country_parser`](#country_parser) | Builds `merged_countries.json` from two public datasets | local files only |
 | [`country_loader`](#country_loader) | Loads `merged_countries.json` into the `countries` table | Postgres |
+| [`language_loader`](#language_loader) | Loads the countries' languages into `languages` + `countries_to_languages` (idempotent) | Postgres |
 | [`orphan_images`](#orphan_images) | Finds (and optionally deletes) image objects no database row points to | Postgres (read) + S3 |
 
 ```bash
@@ -74,6 +75,20 @@ cargo run --bin country_loader -- ../data/merged_countries.json
 
 In Docker, `scripts/start.sh` runs it once on first boot, when the `countries`
 table is empty (the file ships in the image as `/app/country_data/`).
+
+## language_loader
+
+Loads the languages of a `merged_countries.json` (`country_parser` keeps each country's
+official languages from `countries.json`: ISO 639-3 code + English name) into `languages`
+(code in `symbol`) and links them in `countries_to_languages`. Idempotent — a language is
+matched by its code and existing links are kept — so it is safe to re-run. Countries are
+matched by name, so run `country_loader` first. `start.sh` runs it on boot when `languages`
+is empty. `GET /api/common/languages` is cached for an hour (`common:languages:*`): after a
+manual load on a running stack, delete those keys or wait.
+
+```bash
+cargo run --bin language_loader -- ../data/merged_countries.json
+```
 
 ## orphan_images
 

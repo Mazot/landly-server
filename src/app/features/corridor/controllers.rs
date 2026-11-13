@@ -262,13 +262,13 @@ mod tests {
 
     #[actix_web::test]
     #[serial(jwt_env)]
-    async fn test_corridor_stats_count_only_live_orgs_in_the_destination() {
+    async fn test_corridor_stats_count_the_places_on_the_map_in_the_destination() {
         let pool = require_db!();
         let app = test_app!(pool);
         let me = ts::user(&pool, "user");
         let (home, dest) = (ts::country(&pool), ts::country(&pool));
         let kind = ts::org_type(&pool);
-        for status in ["live", "live", "pending"] {
+        for status in ["live", "live", "pending", "rejected"] {
             ts::org(
                 &pool,
                 OrgSpec {
@@ -319,9 +319,10 @@ mod tests {
         )
         .await;
         assert_eq!(status, StatusCode::OK, "{stats}");
-        assert_eq!(stats["totalPlaces"], 2);
-        assert_eq!(stats["newThisWeek"], 2);
-        assert_eq!(stats["byType"], json!([{ "slug": kind.slug, "count": 2 }]));
+        // Live and pending (on the map); the rejected one is not counted.
+        assert_eq!(stats["totalPlaces"], 3);
+        assert_eq!(stats["newThisWeek"], 3);
+        assert_eq!(stats["byType"], json!([{ "slug": kind.slug, "count": 3 }]));
     }
 
     #[actix_web::test]

@@ -1,10 +1,10 @@
 use super::{
     requests::{
-        CheckinRequest, CreateOrganisationRequest, OrganisationsListQueryRequest,
-        SearchOrganisationsQueryRequest, UpdateOrganisationRequest,
+        CheckinRequest, CreateOrganisationRequest, FindDuplicatesQueryRequest,
+        OrganisationsListQueryRequest, SearchOrganisationsQueryRequest, UpdateOrganisationRequest,
     },
     usecases::{
-        CreateOrganisationUsecaseInput, FetchOrganisationsUsecaseInput,
+        CreateOrganisationUsecaseInput, FetchOrganisationsUsecaseInput, FindDuplicatesUsecaseInput,
         SearchOrganisationsUsecaseInput, UpdateOrganisationUsecaseInput,
     },
 };
@@ -307,10 +307,39 @@ pub async fn create_organisation(
 // [authorship] AI-generated (Claude).
 #[utoipa::path(
     get,
+    path = "/organisation/duplicates",
+    context_path = "/api",
+    responses(
+        (status = 200, description = "Places on the map (live or pending) within ~1 km whose name is like `name` (at most 3, with `distanceKm` from the point)", body = super::presenters::MultipleOrganisationsResponse),
+        (status = 422, description = "Name too long or coordinates out of range", body = AppError),
+        (status = 500, description = "Internal server error", body = AppError)
+    ),
+    params(FindDuplicatesQueryRequest),
+    tag = "Organisation"
+)]
+pub async fn find_duplicates(
+    state: Data<AppState>,
+    query: Query<FindDuplicatesQueryRequest>,
+) -> Result<HttpResponse, AppError> {
+    ensure_coordinate_ranges(&[("lat", query.lat), ("lng", query.lng)])?;
+
+    state
+        .di_container
+        .organisation_usecase
+        .find_duplicates(FindDuplicatesUsecaseInput {
+            name: query.name.clone(),
+            latitude: query.lat,
+            longitude: query.lng,
+        })
+}
+
+// [authorship] AI-generated (Claude).
+#[utoipa::path(
+    get,
     path = "/organisation/search",
     context_path = "/api",
     responses(
-        (status = 200, description = "Geo search results", body = super::presenters::MultipleOrganisationsResponse),
+        (status = 200, description = "Geo search results: live places and places waiting for moderation (`status` tells them apart; never rejected ones)", body = super::presenters::MultipleOrganisationsResponse),
         (status = 422, description = "Unprocessable entity", body = AppError),
         (status = 500, description = "Internal server error", body = AppError)
     ),
@@ -597,6 +626,74 @@ mod http_tests {
         assert_eq!(flags.unwrap()["duplicateNearby"], true);
     }
 
+    /// Without a timezone the place gets the one its point lies in, so `openNow` works.
+    #[actix_web::test]
+    #[serial(jwt_env)]
+    async fn test_create_fills_the_time_zone_from_the_point() {
+        let pool = require_db!();
+        let app = test_app!(pool);
+        let me = ts::user(&pool, "user");
+        let create = |body: Value| {
+            call(
+                &app,
+                Method::POST,
+                "/api/organisation/create",
+                Some(&me.token),
+                Some(body),
+            )
+        };
+
+        let (status, belgrade) = create(json!({
+            "name": format!("Belgrade {}", ts::unique()), "latitude": 44.787, "longitude": 20.457,
+            "opening_hours": always_open(),
+        }))
+        .await;
+        assert_eq!(status, StatusCode::OK, "{belgrade}");
+        assert_eq!(belgrade["timezone"], "Europe/Belgrade");
+        assert_eq!(belgrade["openNow"], true);
+
+        let (_, given) = create(json!({
+            "name": format!("Given {}", ts::unique()), "latitude": 44.787, "longitude": 20.457,
+            "timezone": "UTC",
+        }))
+        .await;
+        assert_eq!(given["timezone"], "UTC", "a given zone is kept");
+
+        let (_, no_point) = create(json!({ "name": format!("Online {}", ts::unique()) })).await;
+        assert_eq!(no_point["timezone"], Value::Null);
+    }
+
+    /// Moving the point moves the zone with it — unless a zone is sent along, or the point stays.
+    #[actix_web::test]
+    #[serial(jwt_env)]
+    async fn test_update_refreshes_the_time_zone_when_the_point_moves() {
+        let pool = require_db!();
+        let app = test_app!(pool);
+        let me = ts::user(&pool, "user");
+        let (_, org) = call(
+            &app,
+            Method::POST,
+            "/api/organisation/create",
+            Some(&me.token),
+            Some(json!({ "name": format!("Moving {}", ts::unique()), "latitude": 44.787, "longitude": 20.457 })),
+        )
+        .await;
+        assert_eq!(org["timezone"], "Europe/Belgrade");
+        let path = format!("/api/organisation/update/{}", org["id"].as_str().unwrap());
+        let update = |body: Value| call(&app, Method::PUT, &path, Some(&me.token), Some(body));
+
+        let (status, renamed) = update(json!({ "name": format!("Still {}", ts::unique()) })).await;
+        assert_eq!(status, StatusCode::OK, "{renamed}");
+        assert_eq!(renamed["timezone"], "Europe/Belgrade", "no move, no change");
+
+        let (_, moscow) = update(json!({ "latitude": 55.751, "longitude": 37.618 })).await;
+        assert_eq!(moscow["timezone"], "Europe/Moscow");
+
+        let (_, given) =
+            update(json!({ "latitude": 52.52, "longitude": 13.405, "timezone": "UTC" })).await;
+        assert_eq!(given["timezone"], "UTC", "a zone sent along wins");
+    }
+
     /// `longitude` used to be DECIMAL(10, 8) (max ±99.99999999): every place
     /// east of 100°E or west of 100°W — Tokyo, Bangkok, the Americas — failed
     /// with a 500 "numeric field overflow".
@@ -635,6 +732,9 @@ mod http_tests {
             json!({ "name": "x", "latitude": 91.0, "longitude": 0.0 }),
             json!({ "name": "x", "latitude": 0.0, "longitude": 181.0 }),
             json!({ "name": "x", "added_by": "robot" }),
+            json!({ "name": "x", "timezone": "Mars/Olympus" }),
+            json!({ "name": "x", "opening_hours": { "monday": [["09:00", "18:00"]] } }),
+            json!({ "name": "x", "opening_hours": { "mon": [["18:00", "09:00"]] } }),
         ] {
             let (status, resp) = call(
                 &app,
@@ -821,6 +921,185 @@ mod http_tests {
         );
     }
 
+    /// The add-a-place hint: places on the map (live or pending) nearby with a like name; not rejected or far ones.
+    #[actix_web::test]
+    #[serial(jwt_env)]
+    async fn test_duplicates_hint() {
+        let pool = require_db!();
+        let app = test_app!(pool);
+        let (lat, lng) = ts::random_point();
+        let marker = ts::unique();
+        let named = |name: &str, lat_lng: (f64, f64), status: &'static str| {
+            ts::org(
+                &pool,
+                OrgSpec {
+                    name: Some(name.to_string()),
+                    lat_lng: Some(lat_lng),
+                    status: Some(status),
+                    ..Default::default()
+                },
+            )
+        };
+        let longer = named(
+            &format!("Kyiv Coffee {marker} Kreuzberg"),
+            (lat + 0.004, lng),
+            "live",
+        );
+        let same = named(&format!("kyiv coffee {marker}"), (lat, lng + 0.001), "live");
+        let pending = named(&format!("Kyiv Coffee {marker}"), (lat, lng), "pending");
+        let rejected = named(&format!("Kyiv Coffee {marker}"), (lat, lng), "rejected");
+        let far = named(&format!("Kyiv Coffee {marker}"), (lat + 0.2, lng), "live");
+        let other = named(&format!("Bakery {marker}"), (lat, lng), "live");
+
+        let path = |name: &str| {
+            format!(
+                "/api/organisation/duplicates?name={}&lat={lat}&lng={lng}",
+                name.replace(' ', "%20")
+            )
+        };
+        let (status, body) = call(
+            &app,
+            Method::GET,
+            &path(&format!("Kyiv Coffee {marker}")),
+            None,
+            None,
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+        let ids: Vec<String> = body["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|item| item["id"].as_str().unwrap().to_string())
+            .collect();
+        assert!(
+            ids.contains(&longer.id.to_string()),
+            "a longer name contains the typed one"
+        );
+        assert!(
+            ids.contains(&same.id.to_string()),
+            "the same name, any case"
+        );
+        assert!(
+            ids.contains(&pending.id.to_string()),
+            "a place waiting for moderation is on the map, so it counts"
+        );
+        for hidden in [&rejected, &far, &other] {
+            assert!(!ids.contains(&hidden.id.to_string()), "{}", hidden.name);
+        }
+        let near = body["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|i| i["id"] == json!(same.id))
+            .unwrap();
+        assert!(near["distanceKm"].as_f64().unwrap() < 0.2);
+
+        // A typed name contained in a stored one counts the other way round too.
+        let (_, shorter) = call(
+            &app,
+            Method::GET,
+            &path(&format!("Kyiv Coffee {marker} Kreuzberg Mitte")),
+            None,
+            None,
+        )
+        .await;
+        assert!(
+            shorter["items"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|i| i["id"] == json!(longer.id))
+        );
+
+        // LIKE wildcards in the typed name are taken literally.
+        let (_, wildcard) = call(&app, Method::GET, &path("%25"), None, None).await;
+        assert!(
+            !wildcard["items"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|i| i["id"] == json!(other.id))
+        );
+
+        let (status, _) = call(
+            &app,
+            Method::GET,
+            "/api/organisation/duplicates?name=x&lat=91&lng=0",
+            None,
+            None,
+        )
+        .await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+        let (status, _) = call(&app, Method::GET, &path(&"x".repeat(201)), None, None).await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    }
+
+    /// Similar names: equal ignoring case, or contained as whole words — never a short name inside a
+    /// longer word ("Bar" is not "Barbershop"); regex characters in names are literal.
+    #[actix_web::test]
+    #[serial(jwt_env)]
+    async fn test_duplicates_match_whole_words_only() {
+        let pool = require_db!();
+        let app = test_app!(pool);
+        let (lat, lng) = ts::random_point();
+        let stored = |name: &str| {
+            ts::org(
+                &pool,
+                OrgSpec {
+                    name: Some(name.to_string()),
+                    lat_lng: Some((lat, lng)),
+                    ..Default::default()
+                },
+            )
+        };
+        let bar = stored("Bar");
+        let moskva = stored("Café Moskva");
+        let pivnica = stored("Pivnica");
+        let club = stored("C++ (club) Belgrade");
+        let lavka = stored("Русская лавка");
+
+        let cases = [
+            ("bar", &bar, true, "a short name matches exactly"),
+            ("Barbershop", &bar, false, "but not inside a word"),
+            (
+                "Bar Belgrade",
+                &bar,
+                false,
+                "nor under 4 characters as a word",
+            ),
+            ("moskva", &moskva, true, "a typed word inside a stored name"),
+            ("Mosk", &moskva, false, "not part of a word"),
+            (
+                "Pivnica Dorćol",
+                &pivnica,
+                true,
+                "a stored name inside the typed one",
+            ),
+            ("C++ (club)", &club, true, "regex characters are literal"),
+            (".*", &club, false, "a pattern matches nothing"),
+            ("лавка", &lavka, true, "Cyrillic words"),
+        ];
+        for (typed, place, expected, why) in cases {
+            let encoded: String = typed.bytes().map(|b| format!("%{b:02X}")).collect();
+            let (status, body) = call(
+                &app,
+                Method::GET,
+                &format!("/api/organisation/duplicates?name={encoded}&lat={lat}&lng={lng}"),
+                None,
+                None,
+            )
+            .await;
+            assert_eq!(status, StatusCode::OK, "{typed}: {body}");
+            let found = body["items"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|item| item["id"] == json!(place.id));
+            assert_eq!(found, expected, "{typed}: {why}");
+        }
+    }
+
     /// A corridor's map shows only the destination country, however far the camera is pulled back.
     #[actix_web::test]
     #[serial(jwt_env)]
@@ -927,11 +1206,19 @@ mod http_tests {
                 ..Default::default()
             },
         ); // ~5.5 km north
+        let pending = ts::org(
+            &pool,
+            OrgSpec {
+                lat_lng: Some((lat + 0.02, lng)),
+                status: Some("pending"),
+                ..Default::default()
+            },
+        );
         ts::org(
             &pool,
             OrgSpec {
                 lat_lng: Some((lat, lng)),
-                status: Some("pending"),
+                status: Some("rejected"),
                 ..Default::default()
             },
         );
@@ -965,9 +1252,15 @@ mod http_tests {
         assert_eq!(status, StatusCode::OK, "{all}");
         assert_eq!(
             ids(&all),
-            vec![near.id.to_string(), rich_id.to_string(), far.id.to_string()],
-            "nearest first, pending hidden"
+            vec![
+                near.id.to_string(),
+                rich_id.to_string(),
+                pending.id.to_string(),
+                far.id.to_string()
+            ],
+            "nearest first; places waiting for moderation shown, rejected ones never"
         );
+        assert_eq!(all["items"][2]["status"], "pending");
         assert!(all["items"][0]["distanceKm"].as_f64().unwrap() < 0.01);
 
         let (_, small) = call(

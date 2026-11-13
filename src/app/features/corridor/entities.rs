@@ -46,7 +46,7 @@ pub struct CorridorStats {
     pub total_places: i64,
     /// Of those, how many were created during the last 7 days.
     pub new_this_week: i64,
-    /// Live organisations per organisation type slug (`"other"` when the type has no slug).
+    /// Organisations on the map (live + pending) per organisation type slug (`"other"` when the type has no slug).
     pub by_type: Vec<(String, i64)>,
 }
 
@@ -126,7 +126,8 @@ impl Corridor {
         Ok(())
     }
 
-    /// Counts live organisations of the corridor (located in the destination, founded from the origin), grouped by org
+    /// Counts the corridor's organisations on the map — live and waiting for moderation, located in the
+    /// destination, founded from the origin — grouped by org
     /// type slug, plus how many appeared during the last 7 days.
     pub fn stats(conn: &mut PgConnection, corridor: Corridor) -> Result<CorridorStats, AppError> {
         use crate::data::schema::{organisation_types, organisations};
@@ -134,7 +135,9 @@ impl Corridor {
         let rows: Vec<(Option<String>, i64)> = organisations::table
             .filter(organisations::location_country_id.eq(corridor.to_country_id))
             .filter(organisations::founder_country_id.eq(corridor.from_country_id))
-            .filter(organisations::status.eq("live"))
+            .filter(organisations::status.eq_any(
+                crate::app::features::organisation::entities::OrganisationStatus::on_the_map(),
+            ))
             .left_join(organisation_types::table)
             .group_by(organisation_types::slug)
             .select((
@@ -147,7 +150,9 @@ impl Corridor {
         let new_this_week = organisations::table
             .filter(organisations::location_country_id.eq(corridor.to_country_id))
             .filter(organisations::founder_country_id.eq(corridor.from_country_id))
-            .filter(organisations::status.eq("live"))
+            .filter(organisations::status.eq_any(
+                crate::app::features::organisation::entities::OrganisationStatus::on_the_map(),
+            ))
             .filter(organisations::created_at.gt(week_ago))
             .count()
             .get_result::<i64>(conn)?;

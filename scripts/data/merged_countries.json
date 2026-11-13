@@ -1953,7 +1953,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "fra",
+        "name": "French"
+      }
+    ]
   },
   {
     "name": "Georgia",
@@ -4097,7 +4103,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "kat",
+        "name": "Georgian"
+      }
+    ]
   },
   {
     "name": "Vanuatu",
@@ -8275,7 +8287,21 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "bis",
+        "name": "Bislama"
+      },
+      {
+        "code": "eng",
+        "name": "English"
+      },
+      {
+        "code": "fra",
+        "name": "French"
+      }
+    ]
   },
   {
     "name": "Kyrgyzstan",
@@ -13117,7 +13143,17 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "kir",
+        "name": "Kyrgyz"
+      },
+      {
+        "code": "rus",
+        "name": "Russian"
+      }
+    ]
   },
   {
     "name": "Niger",
@@ -17297,7 +17333,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "fra",
+        "name": "French"
+      }
+    ]
   },
   {
     "name": "China",
@@ -74059,7 +74101,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "zho",
+        "name": "Chinese"
+      }
+    ]
   },
   {
     "name": "Tuvalu",
@@ -74381,7 +74429,17 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "eng",
+        "name": "English"
+      },
+      {
+        "code": "tvl",
+        "name": "Tuvaluan"
+      }
+    ]
   },
   {
     "name": "Comoros",
@@ -74911,7 +74969,21 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "ara",
+        "name": "Arabic"
+      },
+      {
+        "code": "fra",
+        "name": "French"
+      },
+      {
+        "code": "zdj",
+        "name": "Comorian"
+      }
+    ]
   },
   {
     "name": "Bosnia and Herzegovina",
@@ -77387,7 +77459,21 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "bos",
+        "name": "Bosnian"
+      },
+      {
+        "code": "hrv",
+        "name": "Croatian"
+      },
+      {
+        "code": "srp",
+        "name": "Serbian"
+      }
+    ]
   },
   {
     "name": "Bahrain",
@@ -78013,7 +78099,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "ara",
+        "name": "Arabic"
+      }
+    ]
   },
   {
     "name": "Somalia",
@@ -80697,7 +80789,17 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "ara",
+        "name": "Arabic"
+      },
+      {
+        "code": "som",
+        "name": "Somali"
+      }
+    ]
   },
   {
     "name": "Saint Barthélemy",
@@ -80753,7 +80855,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "fra",
+        "name": "French"
+      }
+    ]
   },
   {
     "name": "Latvia",
@@ -82937,7 +83045,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "lav",
+        "name": "Latvian"
+      }
+    ]
   },
   {
     "name": "Cayman Islands",
@@ -83283,7 +83397,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "eng",
+        "name": "English"
+      }
+    ]
   },
   {
     "name": "Netherlands",
@@ -86757,7 +86877,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "nld",
+        "name": "Dutch"
+      }
+    ]
   },
   {
     "name": "Lesotho",
@@ -88065,7 +88191,17 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "eng",
+        "name": "English"
+      },
+      {
+        "code": "sot",
+        "name": "Sotho"
+      }
+    ]
   },
   {
     "name": "Venezuela",
@@ -100995,7 +101131,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "spa",
+        "name": "Spanish"
+      }
+    ]
   },
   {
     "name": "Kenya",
@@ -104517,7 +104659,17 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "eng",
+        "name": "English"
+      },
+      {
+        "code": "swa",
+        "name": "Swahili"
+      }
+    ]
   },
   {
     "name": "Turkey",
@@ -119111,7 +119263,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "tur",
+        "name": "Turkish"
+      }
+    ]
   },
   {
     "name": "Fiji",
@@ -125201,7 +125359,21 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "eng",
+        "name": "English"
+      },
+      {
+        "code": "fij",
+        "name": "Fijian"
+      },
+      {
+        "code": "hif",
+        "name": "Fiji Hindi"
+      }
+    ]
   },
   {
     "name": "Trinidad and Tobago",
@@ -126003,7 +126175,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "eng",
+        "name": "English"
+      }
+    ]
   },
   {
     "name": "Honduras",
@@ -130777,7 +130955,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "spa",
+        "name": "Spanish"
+      }
+    ]
   },
   {
     "name": "Jersey",
@@ -130977,7 +131161,21 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "eng",
+        "name": "English"
+      },
+      {
+        "code": "fra",
+        "name": "French"
+      },
+      {
+        "code": "nrf",
+        "name": "Jèrriais"
+      }
+    ]
   },
   {
     "name": "Djibouti",
@@ -131825,7 +132023,17 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "ara",
+        "name": "Arabic"
+      },
+      {
+        "code": "fra",
+        "name": "French"
+      }
+    ]
   },
   {
     "name": "Eswatini",
@@ -132177,7 +132385,17 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "eng",
+        "name": "English"
+      },
+      {
+        "code": "ssw",
+        "name": "Swazi"
+      }
+    ]
   },
   {
     "name": "Tajikistan",
@@ -137227,7 +137445,17 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "rus",
+        "name": "Russian"
+      },
+      {
+        "code": "tgk",
+        "name": "Tajik"
+      }
+    ]
   },
   {
     "name": "Saudi Arabia",
@@ -146753,7 +146981,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "ara",
+        "name": "Arabic"
+      }
+    ]
   },
   {
     "name": "Bermuda",
@@ -147111,7 +147345,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "eng",
+        "name": "English"
+      }
+    ]
   },
   {
     "name": "New Zealand",
@@ -165353,7 +165593,21 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "eng",
+        "name": "English"
+      },
+      {
+        "code": "mri",
+        "name": "Māori"
+      },
+      {
+        "code": "nzs",
+        "name": "New Zealand Sign Language"
+      }
+    ]
   },
   {
     "name": "Belarus",
@@ -170057,7 +170311,17 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "bel",
+        "name": "Belarusian"
+      },
+      {
+        "code": "rus",
+        "name": "Russian"
+      }
+    ]
   },
   {
     "name": "Gambia",
@@ -171693,7 +171957,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "eng",
+        "name": "English"
+      }
+    ]
   },
   {
     "name": "French Polynesia",
@@ -176227,7 +176497,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "fra",
+        "name": "French"
+      }
+    ]
   },
   {
     "name": "DR Congo",
@@ -187717,7 +187993,29 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "fra",
+        "name": "French"
+      },
+      {
+        "code": "kon",
+        "name": "Kikongo"
+      },
+      {
+        "code": "lin",
+        "name": "Lingala"
+      },
+      {
+        "code": "lua",
+        "name": "Tshiluba"
+      },
+      {
+        "code": "swa",
+        "name": "Swahili"
+      }
+    ]
   },
   {
     "name": "Costa Rica",
@@ -191051,7 +191349,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "spa",
+        "name": "Spanish"
+      }
+    ]
   },
   {
     "name": "Malawi",
@@ -194333,7 +194637,17 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "eng",
+        "name": "English"
+      },
+      {
+        "code": "nya",
+        "name": "Chewa"
+      }
+    ]
   },
   {
     "name": "Republic of the Congo",
@@ -199725,7 +200039,21 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "fra",
+        "name": "French"
+      },
+      {
+        "code": "kon",
+        "name": "Kikongo"
+      },
+      {
+        "code": "lin",
+        "name": "Lingala"
+      }
+    ]
   },
   {
     "name": "Oman",
@@ -203893,7 +204221,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "ara",
+        "name": "Arabic"
+      }
+    ]
   },
   {
     "name": "Iraq",
@@ -207269,7 +207603,21 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "ara",
+        "name": "Arabic"
+      },
+      {
+        "code": "arc",
+        "name": "Aramaic"
+      },
+      {
+        "code": "ckb",
+        "name": "Sorani"
+      }
+    ]
   },
   {
     "name": "Niue",
@@ -207425,7 +207773,17 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "eng",
+        "name": "English"
+      },
+      {
+        "code": "niu",
+        "name": "Niuean"
+      }
+    ]
   },
   {
     "name": "Senegal",
@@ -212949,7 +213307,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "fra",
+        "name": "French"
+      }
+    ]
   },
   {
     "name": "Lebanon",
@@ -214209,7 +214573,17 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "ara",
+        "name": "Arabic"
+      },
+      {
+        "code": "fra",
+        "name": "French"
+      }
+    ]
   },
   {
     "name": "Angola",
@@ -220803,7 +221177,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "por",
+        "name": "Portuguese"
+      }
+    ]
   },
   {
     "name": "Iran",
@@ -231773,7 +232153,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "fas",
+        "name": "Persian (Farsi)"
+      }
+    ]
   },
   {
     "name": "Ecuador",
@@ -237899,7 +238285,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "spa",
+        "name": "Spanish"
+      }
+    ]
   },
   {
     "name": "Laos",
@@ -244955,7 +245347,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "lao",
+        "name": "Lao"
+      }
+    ]
   },
   {
     "name": "Sri Lanka",
@@ -248469,7 +248867,17 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "sin",
+        "name": "Sinhala"
+      },
+      {
+        "code": "tam",
+        "name": "Tamil"
+      }
+    ]
   },
   {
     "name": "Aruba",
@@ -248585,7 +248993,17 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "nld",
+        "name": "Dutch"
+      },
+      {
+        "code": "pap",
+        "name": "Papiamento"
+      }
+    ]
   },
   {
     "name": "São Tomé and Príncipe",
@@ -248987,7 +249405,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "por",
+        "name": "Portuguese"
+      }
+    ]
   },
   {
     "name": "Grenada",
@@ -249261,7 +249685,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "eng",
+        "name": "English"
+      }
+    ]
   },
   {
     "name": "Montserrat",
@@ -249365,7 +249795,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "eng",
+        "name": "English"
+      }
+    ]
   },
   {
     "name": "Western Sahara",
@@ -250529,7 +250965,21 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "ber",
+        "name": "Berber"
+      },
+      {
+        "code": "mey",
+        "name": "Hassaniya"
+      },
+      {
+        "code": "spa",
+        "name": "Spanish"
+      }
+    ]
   },
   {
     "name": "Guinea",
@@ -257053,7 +257503,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "fra",
+        "name": "French"
+      }
+    ]
   },
   {
     "name": "British Virgin Islands",
@@ -257459,7 +257915,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "eng",
+        "name": "English"
+      }
+    ]
   },
   {
     "name": "Panama",
@@ -265525,7 +265987,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "spa",
+        "name": "Spanish"
+      }
+    ]
   },
   {
     "name": "Yemen",
@@ -269687,7 +270155,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "ara",
+        "name": "Arabic"
+      }
+    ]
   },
   {
     "name": "Estonia",
@@ -273905,7 +274379,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "est",
+        "name": "Estonian"
+      }
+    ]
   },
   {
     "name": "Guyana",
@@ -278407,7 +278887,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "eng",
+        "name": "English"
+      }
+    ]
   },
   {
     "name": "Luxembourg",
@@ -279207,7 +279693,21 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "deu",
+        "name": "German"
+      },
+      {
+        "code": "fra",
+        "name": "French"
+      },
+      {
+        "code": "ltz",
+        "name": "Luxembourgish"
+      }
+    ]
   },
   {
     "name": "Namibia",
@@ -283951,7 +284451,45 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "afr",
+        "name": "Afrikaans"
+      },
+      {
+        "code": "deu",
+        "name": "German"
+      },
+      {
+        "code": "eng",
+        "name": "English"
+      },
+      {
+        "code": "her",
+        "name": "Herero"
+      },
+      {
+        "code": "hgm",
+        "name": "Khoekhoe"
+      },
+      {
+        "code": "kwn",
+        "name": "Kwangali"
+      },
+      {
+        "code": "loz",
+        "name": "Lozi"
+      },
+      {
+        "code": "ndo",
+        "name": "Ndonga"
+      },
+      {
+        "code": "tsn",
+        "name": "Tswana"
+      }
+    ]
   },
   {
     "name": "New Caledonia",
@@ -287949,7 +288487,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "fra",
+        "name": "French"
+      }
+    ]
   },
   {
     "name": "Saint Pierre and Miquelon",
@@ -288295,7 +288839,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "fra",
+        "name": "French"
+      }
+    ]
   },
   {
     "name": "Libya",
@@ -290947,7 +291497,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "ara",
+        "name": "Arabic"
+      }
+    ]
   },
   {
     "name": "Myanmar",
@@ -309521,7 +310077,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "mya",
+        "name": "Burmese"
+      }
+    ]
   },
   {
     "name": "Israel",
@@ -311417,7 +311979,17 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "ara",
+        "name": "Arabic"
+      },
+      {
+        "code": "heb",
+        "name": "Hebrew"
+      }
+    ]
   },
   {
     "name": "Mali",
@@ -318417,7 +318989,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "fra",
+        "name": "French"
+      }
+    ]
   },
   {
     "name": "Argentina",
@@ -337155,7 +337733,17 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "grn",
+        "name": "Guaraní"
+      },
+      {
+        "code": "spa",
+        "name": "Spanish"
+      }
+    ]
   },
   {
     "name": "Uganda",
@@ -339611,7 +340199,17 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "eng",
+        "name": "English"
+      },
+      {
+        "code": "swa",
+        "name": "Swahili"
+      }
+    ]
   },
   {
     "name": "Malaysia",
@@ -349889,7 +350487,17 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "eng",
+        "name": "English"
+      },
+      {
+        "code": "msa",
+        "name": "Malay"
+      }
+    ]
   },
   {
     "name": "Zambia",
@@ -355933,7 +356541,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "eng",
+        "name": "English"
+      }
+    ]
   },
   {
     "name": "Micronesia",
@@ -357039,7 +357653,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "eng",
+        "name": "English"
+      }
+    ]
   },
   {
     "name": "Slovakia",
@@ -359339,7 +359959,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "slk",
+        "name": "Slovak"
+      }
+    ]
   },
   {
     "name": "Burundi",
@@ -360579,7 +361205,17 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "fra",
+        "name": "French"
+      },
+      {
+        "code": "run",
+        "name": "Kirundi"
+      }
+    ]
   },
   {
     "name": "Serbia",
@@ -364351,7 +364987,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "srp",
+        "name": "Serbian"
+      }
+    ]
   },
   {
     "name": "Turkmenistan",
@@ -371029,7 +371671,17 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "rus",
+        "name": "Russian"
+      },
+      {
+        "code": "tuk",
+        "name": "Turkmen"
+      }
+    ]
   },
   {
     "name": "South Africa",
@@ -379881,7 +380533,53 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "afr",
+        "name": "Afrikaans"
+      },
+      {
+        "code": "eng",
+        "name": "English"
+      },
+      {
+        "code": "nbl",
+        "name": "Southern Ndebele"
+      },
+      {
+        "code": "nso",
+        "name": "Northern Sotho"
+      },
+      {
+        "code": "sot",
+        "name": "Southern Sotho"
+      },
+      {
+        "code": "ssw",
+        "name": "Swazi"
+      },
+      {
+        "code": "tsn",
+        "name": "Tswana"
+      },
+      {
+        "code": "tso",
+        "name": "Tsonga"
+      },
+      {
+        "code": "ven",
+        "name": "Venda"
+      },
+      {
+        "code": "xho",
+        "name": "Xhosa"
+      },
+      {
+        "code": "zul",
+        "name": "Zulu"
+      }
+    ]
   },
   {
     "name": "Kazakhstan",
@@ -396761,7 +397459,17 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "kaz",
+        "name": "Kazakh"
+      },
+      {
+        "code": "rus",
+        "name": "Russian"
+      }
+    ]
   },
   {
     "name": "Canada",
@@ -671191,7 +671899,17 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "eng",
+        "name": "English"
+      },
+      {
+        "code": "fra",
+        "name": "French"
+      }
+    ]
   },
   {
     "name": "Poland",
@@ -676531,7 +677249,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "pol",
+        "name": "Polish"
+      }
+    ]
   },
   {
     "name": "Puerto Rico",
@@ -677769,7 +678493,17 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "eng",
+        "name": "English"
+      },
+      {
+        "code": "spa",
+        "name": "Spanish"
+      }
+    ]
   },
   {
     "name": "San Marino",
@@ -677857,7 +678591,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "ita",
+        "name": "Italian"
+      }
+    ]
   },
   {
     "name": "American Samoa",
@@ -678131,7 +678871,17 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "eng",
+        "name": "English"
+      },
+      {
+        "code": "smo",
+        "name": "Samoan"
+      }
+    ]
   },
   {
     "name": "Qatar",
@@ -679107,7 +679857,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "ara",
+        "name": "Arabic"
+      }
+    ]
   },
   {
     "name": "Gibraltar",
@@ -679147,7 +679903,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "eng",
+        "name": "English"
+      }
+    ]
   },
   {
     "name": "Croatia",
@@ -688621,7 +689383,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "hrv",
+        "name": "Croatian"
+      }
+    ]
   },
   {
     "name": "Isle of Man",
@@ -688925,7 +689693,17 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "eng",
+        "name": "English"
+      },
+      {
+        "code": "glv",
+        "name": "Manx"
+      }
+    ]
   },
   {
     "name": "Palestine",
@@ -689879,7 +690657,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "ara",
+        "name": "Arabic"
+      }
+    ]
   },
   {
     "name": "Mauritius",
@@ -690353,7 +691137,21 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "eng",
+        "name": "English"
+      },
+      {
+        "code": "fra",
+        "name": "French"
+      },
+      {
+        "code": "mfe",
+        "name": "Mauritian Creole"
+      }
+    ]
   },
   {
     "name": "Saint Martin",
@@ -690453,7 +691251,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "fra",
+        "name": "French"
+      }
+    ]
   },
   {
     "name": "Sierra Leone",
@@ -693251,7 +694055,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "eng",
+        "name": "English"
+      }
+    ]
   },
   {
     "name": "Saint Kitts and Nevis",
@@ -693441,7 +694251,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "eng",
+        "name": "English"
+      }
+    ]
   },
   {
     "name": "Iceland",
@@ -705939,7 +706755,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "isl",
+        "name": "Icelandic"
+      }
+    ]
   },
   {
     "name": "Heard Island and McDonald Islands",
@@ -706167,7 +706989,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "eng",
+        "name": "English"
+      }
+    ]
   },
   {
     "name": "Kuwait",
@@ -707185,7 +708013,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "ara",
+        "name": "Arabic"
+      }
+    ]
   },
   {
     "name": "Taiwan",
@@ -709471,7 +710305,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "zho",
+        "name": "Chinese"
+      }
+    ]
   },
   {
     "name": "Cameroon",
@@ -715307,7 +716147,17 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "eng",
+        "name": "English"
+      },
+      {
+        "code": "fra",
+        "name": "French"
+      }
+    ]
   },
   {
     "name": "El Salvador",
@@ -716849,7 +717699,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "spa",
+        "name": "Spanish"
+      }
+    ]
   },
   {
     "name": "Macau",
@@ -717235,7 +718091,17 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "por",
+        "name": "Portuguese"
+      },
+      {
+        "code": "zho",
+        "name": "Chinese"
+      }
+    ]
   },
   {
     "name": "Cuba",
@@ -728197,7 +729063,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "spa",
+        "name": "Spanish"
+      }
+    ]
   },
   {
     "name": "Brazil",
@@ -772863,7 +773735,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "por",
+        "name": "Portuguese"
+      }
+    ]
   },
   {
     "name": "Solomon Islands",
@@ -781773,7 +782651,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "eng",
+        "name": "English"
+      }
+    ]
   },
   {
     "name": "Greece",
@@ -806463,7 +807347,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "ell",
+        "name": "Greek"
+      }
+    ]
   },
   {
     "name": "Jamaica",
@@ -807491,7 +808381,17 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "eng",
+        "name": "English"
+      },
+      {
+        "code": "jam",
+        "name": "Jamaican Patois"
+      }
+    ]
   },
   {
     "name": "Tanzania",
@@ -814577,7 +815477,17 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "eng",
+        "name": "English"
+      },
+      {
+        "code": "swa",
+        "name": "Swahili"
+      }
+    ]
   },
   {
     "name": "Bolivia",
@@ -820553,7 +821463,25 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "aym",
+        "name": "Aymara"
+      },
+      {
+        "code": "grn",
+        "name": "Guaraní"
+      },
+      {
+        "code": "que",
+        "name": "Quechua"
+      },
+      {
+        "code": "spa",
+        "name": "Spanish"
+      }
+    ]
   },
   {
     "name": "Cyprus",
@@ -821783,7 +822711,17 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "ell",
+        "name": "Greek"
+      },
+      {
+        "code": "tur",
+        "name": "Turkish"
+      }
+    ]
   },
   {
     "name": "Mongolia",
@@ -827771,7 +828709,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "mon",
+        "name": "Mongolian"
+      }
+    ]
   },
   {
     "name": "Monaco",
@@ -827831,7 +828775,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "fra",
+        "name": "French"
+      }
+    ]
   },
   {
     "name": "Tunisia",
@@ -830657,7 +831607,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "ara",
+        "name": "Arabic"
+      }
+    ]
   },
   {
     "name": "French Southern and Antarctic Lands",
@@ -832871,7 +833827,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "fra",
+        "name": "French"
+      }
+    ]
   },
   {
     "name": "Syria",
@@ -835247,7 +836209,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "ara",
+        "name": "Arabic"
+      }
+    ]
   },
   {
     "name": "Chile",
@@ -904697,7 +905665,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "spa",
+        "name": "Spanish"
+      }
+    ]
   },
   {
     "name": "Azerbaijan",
@@ -908561,7 +909535,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "aze",
+        "name": "Azerbaijani"
+      }
+    ]
   },
   {
     "name": "South Korea",
@@ -921023,7 +922003,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "kor",
+        "name": "Korean"
+      }
+    ]
   },
   {
     "name": "Ghana",
@@ -924347,7 +925333,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "eng",
+        "name": "English"
+      }
+    ]
   },
   {
     "name": "Denmark",
@@ -933137,7 +934129,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "dan",
+        "name": "Danish"
+      }
+    ]
   },
   {
     "name": "Sint Maarten",
@@ -933185,7 +934183,21 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "eng",
+        "name": "English"
+      },
+      {
+        "code": "fra",
+        "name": "French"
+      },
+      {
+        "code": "nld",
+        "name": "Dutch"
+      }
+    ]
   },
   {
     "name": "Andorra",
@@ -933401,7 +934413,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "cat",
+        "name": "Catalan"
+      }
+    ]
   },
   {
     "name": "Curaçao",
@@ -933589,7 +934607,21 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "eng",
+        "name": "English"
+      },
+      {
+        "code": "nld",
+        "name": "Dutch"
+      },
+      {
+        "code": "pap",
+        "name": "Papiamento"
+      }
+    ]
   },
   {
     "name": "Switzerland",
@@ -936597,7 +937629,25 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "fra",
+        "name": "French"
+      },
+      {
+        "code": "gsw",
+        "name": "Swiss German"
+      },
+      {
+        "code": "ita",
+        "name": "Italian"
+      },
+      {
+        "code": "roh",
+        "name": "Romansh"
+      }
+    ]
   },
   {
     "name": "North Macedonia",
@@ -938061,7 +939111,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "mkd",
+        "name": "Macedonian"
+      }
+    ]
   },
   {
     "name": "South Sudan",
@@ -942705,7 +943761,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "eng",
+        "name": "English"
+      }
+    ]
   },
   {
     "name": "Haiti",
@@ -945343,7 +946405,17 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "fra",
+        "name": "French"
+      },
+      {
+        "code": "hat",
+        "name": "Haitian Creole"
+      }
+    ]
   },
   {
     "name": "Peru",
@@ -955057,7 +956129,21 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "aym",
+        "name": "Aymara"
+      },
+      {
+        "code": "que",
+        "name": "Quechua"
+      },
+      {
+        "code": "spa",
+        "name": "Spanish"
+      }
+    ]
   },
   {
     "name": "Guinea-Bissau",
@@ -960247,7 +961333,17 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "por",
+        "name": "Portuguese"
+      },
+      {
+        "code": "pov",
+        "name": "Upper Guinea Creole"
+      }
+    ]
   },
   {
     "name": "Czechia",
@@ -963947,7 +965043,17 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "ces",
+        "name": "Czech"
+      },
+      {
+        "code": "slk",
+        "name": "Slovak"
+      }
+    ]
   },
   {
     "name": "Portugal",
@@ -969045,7 +970151,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "por",
+        "name": "Portuguese"
+      }
+    ]
   },
   {
     "name": "Gabon",
@@ -974915,7 +976027,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "fra",
+        "name": "French"
+      }
+    ]
   },
   {
     "name": "Mexico",
@@ -1004805,7 +1005923,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "spa",
+        "name": "Spanish"
+      }
+    ]
   },
   {
     "name": "Italy",
@@ -1018379,7 +1019503,17 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "cat",
+        "name": "Catalan"
+      },
+      {
+        "code": "ita",
+        "name": "Italian"
+      }
+    ]
   },
   {
     "name": "Finland",
@@ -1031457,7 +1032591,17 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "fin",
+        "name": "Finnish"
+      },
+      {
+        "code": "swe",
+        "name": "Swedish"
+      }
+    ]
   },
   {
     "name": "Zimbabwe",
@@ -1034533,7 +1035677,69 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "bwg",
+        "name": "Chibarwe"
+      },
+      {
+        "code": "eng",
+        "name": "English"
+      },
+      {
+        "code": "kck",
+        "name": "Kalanga"
+      },
+      {
+        "code": "khi",
+        "name": "Khoisan"
+      },
+      {
+        "code": "ndc",
+        "name": "Ndau"
+      },
+      {
+        "code": "nde",
+        "name": "Northern Ndebele"
+      },
+      {
+        "code": "nya",
+        "name": "Chewa"
+      },
+      {
+        "code": "sna",
+        "name": "Shona"
+      },
+      {
+        "code": "sot",
+        "name": "Sotho"
+      },
+      {
+        "code": "toi",
+        "name": "Tonga"
+      },
+      {
+        "code": "tsn",
+        "name": "Tswana"
+      },
+      {
+        "code": "tso",
+        "name": "Tsonga"
+      },
+      {
+        "code": "ven",
+        "name": "Venda"
+      },
+      {
+        "code": "xho",
+        "name": "Xhosa"
+      },
+      {
+        "code": "zib",
+        "name": "Zimbabwean Sign Language"
+      }
+    ]
   },
   {
     "name": "Spain",
@@ -1046547,7 +1047753,25 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "cat",
+        "name": "Catalan"
+      },
+      {
+        "code": "eus",
+        "name": "Basque"
+      },
+      {
+        "code": "glc",
+        "name": "Galician"
+      },
+      {
+        "code": "spa",
+        "name": "Spanish"
+      }
+    ]
   },
   {
     "name": "Japan",
@@ -1074801,7 +1076025,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "jpn",
+        "name": "Japanese"
+      }
+    ]
   },
   {
     "name": "Seychelles",
@@ -1076235,7 +1077465,21 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "crs",
+        "name": "Seychellois Creole"
+      },
+      {
+        "code": "eng",
+        "name": "English"
+      },
+      {
+        "code": "fra",
+        "name": "French"
+      }
+    ]
   },
   {
     "name": "Albania",
@@ -1078463,7 +1079707,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "sqi",
+        "name": "Albanian"
+      }
+    ]
   },
   {
     "name": "Moldova",
@@ -1081359,7 +1082609,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "ron",
+        "name": "Romanian"
+      }
+    ]
   },
   {
     "name": "Guatemala",
@@ -1083207,7 +1084463,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "spa",
+        "name": "Spanish"
+      }
+    ]
   },
   {
     "name": "Germany",
@@ -1095413,7 +1096675,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "deu",
+        "name": "German"
+      }
+    ]
   },
   {
     "name": "Bulgaria",
@@ -1098941,7 +1100209,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "bul",
+        "name": "Bulgarian"
+      }
+    ]
   },
   {
     "name": "Paraguay",
@@ -1103509,7 +1104783,17 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "grn",
+        "name": "Guaraní"
+      },
+      {
+        "code": "spa",
+        "name": "Spanish"
+      }
+    ]
   },
   {
     "name": "Eritrea",
@@ -1107571,7 +1108855,21 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "ara",
+        "name": "Arabic"
+      },
+      {
+        "code": "eng",
+        "name": "English"
+      },
+      {
+        "code": "tir",
+        "name": "Tigrinya"
+      }
+    ]
   },
   {
     "name": "Sudan",
@@ -1112301,7 +1113599,17 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "ara",
+        "name": "Arabic"
+      },
+      {
+        "code": "eng",
+        "name": "English"
+      }
+    ]
   },
   {
     "name": "Equatorial Guinea",
@@ -1113327,7 +1114635,21 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "fra",
+        "name": "French"
+      },
+      {
+        "code": "por",
+        "name": "Portuguese"
+      },
+      {
+        "code": "spa",
+        "name": "Spanish"
+      }
+    ]
   },
   {
     "name": "Colombia",
@@ -1126525,7 +1127847,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "spa",
+        "name": "Spanish"
+      }
+    ]
   },
   {
     "name": "Nigeria",
@@ -1133635,7 +1134963,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "eng",
+        "name": "English"
+      }
+    ]
   },
   {
     "name": "Montenegro",
@@ -1135079,7 +1136413,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "cnr",
+        "name": "Montenegrin"
+      }
+    ]
   },
   {
     "name": "Nepal",
@@ -1139175,7 +1140515,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "nep",
+        "name": "Nepali"
+      }
+    ]
   },
   {
     "name": "Brunei",
@@ -1139817,7 +1141163,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "msa",
+        "name": "Malay"
+      }
+    ]
   },
   {
     "name": "Austria",
@@ -1144205,7 +1145557,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "deu",
+        "name": "German"
+      }
+    ]
   },
   {
     "name": "Turks and Caicos Islands",
@@ -1145115,7 +1146473,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "eng",
+        "name": "English"
+      }
+    ]
   },
   {
     "name": "Bahamas",
@@ -1151817,7 +1153181,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "eng",
+        "name": "English"
+      }
+    ]
   },
   {
     "name": "United Kingdom",
@@ -1180507,7 +1181877,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "eng",
+        "name": "English"
+      }
+    ]
   },
   {
     "name": "British Indian Ocean Territory",
@@ -1180965,7 +1182341,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "eng",
+        "name": "English"
+      }
+    ]
   },
   {
     "name": "Liberia",
@@ -1183769,7 +1185151,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "eng",
+        "name": "English"
+      }
+    ]
   },
   {
     "name": "Anguilla",
@@ -1184059,7 +1185447,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "eng",
+        "name": "English"
+      }
+    ]
   },
   {
     "name": "Central African Republic",
@@ -1191239,7 +1192633,17 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "fra",
+        "name": "French"
+      },
+      {
+        "code": "sag",
+        "name": "Sango"
+      }
+    ]
   },
   {
     "name": "Algeria",
@@ -1196247,7 +1197651,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "ara",
+        "name": "Arabic"
+      }
+    ]
   },
   {
     "name": "Saint Lucia",
@@ -1196459,7 +1197869,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "eng",
+        "name": "English"
+      }
+    ]
   },
   {
     "name": "Romania",
@@ -1201263,7 +1202679,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "ron",
+        "name": "Romanian"
+      }
+    ]
   },
   {
     "name": "United Arab Emirates",
@@ -1204507,7 +1205929,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "ara",
+        "name": "Arabic"
+      }
+    ]
   },
   {
     "name": "Morocco",
@@ -1208595,7 +1210023,17 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "ara",
+        "name": "Arabic"
+      },
+      {
+        "code": "ber",
+        "name": "Berber"
+      }
+    ]
   },
   {
     "name": "Northern Mariana Islands",
@@ -1209385,7 +1210823,21 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "cal",
+        "name": "Carolinian"
+      },
+      {
+        "code": "cha",
+        "name": "Chamorro"
+      },
+      {
+        "code": "eng",
+        "name": "English"
+      }
+    ]
   },
   {
     "name": "United States Minor Outlying Islands",
@@ -1209935,7 +1211387,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "eng",
+        "name": "English"
+      }
+    ]
   },
   {
     "name": "Botswana",
@@ -1213771,7 +1215229,17 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "eng",
+        "name": "English"
+      },
+      {
+        "code": "tsn",
+        "name": "Tswana"
+      }
+    ]
   },
   {
     "name": "Lithuania",
@@ -1216037,7 +1217505,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "lit",
+        "name": "Lithuanian"
+      }
+    ]
   },
   {
     "name": "Cape Verde",
@@ -1217823,7 +1219297,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "por",
+        "name": "Portuguese"
+      }
+    ]
   },
   {
     "name": "United States",
@@ -1363133,7 +1364613,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "eng",
+        "name": "English"
+      }
+    ]
   },
   {
     "name": "Australia",
@@ -1418119,7 +1419605,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "eng",
+        "name": "English"
+      }
+    ]
   },
   {
     "name": "Guam",
@@ -1418327,7 +1419819,21 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "cha",
+        "name": "Chamorro"
+      },
+      {
+        "code": "eng",
+        "name": "English"
+      },
+      {
+        "code": "spa",
+        "name": "Spanish"
+      }
+    ]
   },
   {
     "name": "Tonga",
@@ -1419225,7 +1420731,17 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "eng",
+        "name": "English"
+      },
+      {
+        "code": "ton",
+        "name": "Tongan"
+      }
+    ]
   },
   {
     "name": "Afghanistan",
@@ -1425357,7 +1426873,21 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "prs",
+        "name": "Dari"
+      },
+      {
+        "code": "pus",
+        "name": "Pashto"
+      },
+      {
+        "code": "tuk",
+        "name": "Turkmen"
+      }
+    ]
   },
   {
     "name": "Falkland Islands",
@@ -1430787,7 +1432317,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "eng",
+        "name": "English"
+      }
+    ]
   },
   {
     "name": "Nauru",
@@ -1430835,7 +1432371,17 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "eng",
+        "name": "English"
+      },
+      {
+        "code": "nau",
+        "name": "Nauru"
+      }
+    ]
   },
   {
     "name": "Cook Islands",
@@ -1431421,7 +1432967,17 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "eng",
+        "name": "English"
+      },
+      {
+        "code": "rar",
+        "name": "Cook Islands Māori"
+      }
+    ]
   },
   {
     "name": "Hungary",
@@ -1434825,7 +1436381,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "hun",
+        "name": "Hungarian"
+      }
+    ]
   },
   {
     "name": "Mauritania",
@@ -1439439,7 +1441001,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "ara",
+        "name": "Arabic"
+      }
+    ]
   },
   {
     "name": "Slovenia",
@@ -1441527,7 +1443095,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "slv",
+        "name": "Slovene"
+      }
+    ]
   },
   {
     "name": "Chad",
@@ -1446403,7 +1447977,17 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "ara",
+        "name": "Arabic"
+      },
+      {
+        "code": "fra",
+        "name": "French"
+      }
+    ]
   },
   {
     "name": "Vatican City",
@@ -1446443,7 +1448027,17 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "ita",
+        "name": "Italian"
+      },
+      {
+        "code": "lat",
+        "name": "Latin"
+      }
+    ]
   },
   {
     "name": "Benin",
@@ -1448919,7 +1450513,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "fra",
+        "name": "French"
+      }
+    ]
   },
   {
     "name": "Singapore",
@@ -1449091,7 +1450691,25 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "eng",
+        "name": "English"
+      },
+      {
+        "code": "msa",
+        "name": "Malay"
+      },
+      {
+        "code": "tam",
+        "name": "Tamil"
+      },
+      {
+        "code": "zho",
+        "name": "Chinese"
+      }
+    ]
   },
   {
     "name": "Malta",
@@ -1449329,7 +1450947,17 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "eng",
+        "name": "English"
+      },
+      {
+        "code": "mlt",
+        "name": "Maltese"
+      }
+    ]
   },
   {
     "name": "Saint Vincent and the Grenadines",
@@ -1449691,7 +1451319,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "eng",
+        "name": "English"
+      }
+    ]
   },
   {
     "name": "Marshall Islands",
@@ -1450633,7 +1452267,17 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "eng",
+        "name": "English"
+      },
+      {
+        "code": "mah",
+        "name": "Marshallese"
+      }
+    ]
   },
   {
     "name": "Thailand",
@@ -1463991,7 +1465635,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "tha",
+        "name": "Thai"
+      }
+    ]
   },
   {
     "name": "Liechtenstein",
@@ -1464119,7 +1465769,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "deu",
+        "name": "German"
+      }
+    ]
   },
   {
     "name": "Ireland",
@@ -1473733,7 +1475389,17 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "eng",
+        "name": "English"
+      },
+      {
+        "code": "gle",
+        "name": "Irish"
+      }
+    ]
   },
   {
     "name": "Maldives",
@@ -1480263,7 +1481929,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "div",
+        "name": "Maldivian"
+      }
+    ]
   },
   {
     "name": "Vietnam",
@@ -1497037,7 +1498709,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "vie",
+        "name": "Vietnamese"
+      }
+    ]
   },
   {
     "name": "Armenia",
@@ -1498795,7 +1500473,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "hye",
+        "name": "Armenian"
+      }
+    ]
   },
   {
     "name": "Pakistan",
@@ -1507377,7 +1509061,17 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "eng",
+        "name": "English"
+      },
+      {
+        "code": "urd",
+        "name": "Urdu"
+      }
+    ]
   },
   {
     "name": "Ivory Coast",
@@ -1513791,7 +1515485,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "fra",
+        "name": "French"
+      }
+    ]
   },
   {
     "name": "Russia",
@@ -1661681,7 +1663381,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "rus",
+        "name": "Russian"
+      }
+    ]
   },
   {
     "name": "Timor-Leste",
@@ -1662819,7 +1664525,17 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "por",
+        "name": "Portuguese"
+      },
+      {
+        "code": "tet",
+        "name": "Tetum"
+      }
+    ]
   },
   {
     "name": "Nicaragua",
@@ -1666597,7 +1668313,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "spa",
+        "name": "Spanish"
+      }
+    ]
   },
   {
     "name": "Papua New Guinea",
@@ -1686019,7 +1687741,21 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "eng",
+        "name": "English"
+      },
+      {
+        "code": "hmo",
+        "name": "Hiri Motu"
+      },
+      {
+        "code": "tpi",
+        "name": "Tok Pisin"
+      }
+    ]
   },
   {
     "name": "Egypt",
@@ -1693807,7 +1695543,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "ara",
+        "name": "Arabic"
+      }
+    ]
   },
   {
     "name": "Jordan",
@@ -1695275,7 +1697017,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "ara",
+        "name": "Arabic"
+      }
+    ]
   },
   {
     "name": "Uruguay",
@@ -1697623,7 +1699371,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "spa",
+        "name": "Spanish"
+      }
+    ]
   },
   {
     "name": "Burkina Faso",
@@ -1702075,7 +1703829,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "fra",
+        "name": "French"
+      }
+    ]
   },
   {
     "name": "Cambodia",
@@ -1706945,7 +1708705,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "khm",
+        "name": "Khmer"
+      }
+    ]
   },
   {
     "name": "Ethiopia",
@@ -1711253,7 +1713019,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "amh",
+        "name": "Amharic"
+      }
+    ]
   },
   {
     "name": "Kiribati",
@@ -1714239,7 +1716011,17 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "eng",
+        "name": "English"
+      },
+      {
+        "code": "gil",
+        "name": "Gilbertese"
+      }
+    ]
   },
   {
     "name": "Bhutan",
@@ -1715559,7 +1717341,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "dzo",
+        "name": "Dzongkha"
+      }
+    ]
   },
   {
     "name": "Dominican Republic",
@@ -1717901,7 +1719689,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "spa",
+        "name": "Spanish"
+      }
+    ]
   },
   {
     "name": "Suriname",
@@ -1720861,7 +1722655,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "nld",
+        "name": "Dutch"
+      }
+    ]
   },
   {
     "name": "Bangladesh",
@@ -1730079,7 +1731879,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "ben",
+        "name": "Bengali"
+      }
+    ]
   },
   {
     "name": "Barbados",
@@ -1730231,7 +1732037,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "eng",
+        "name": "English"
+      }
+    ]
   },
   {
     "name": "North Korea",
@@ -1737409,7 +1739221,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "kor",
+        "name": "Korean"
+      }
+    ]
   },
   {
     "name": "Greenland",
@@ -1818463,7 +1820281,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "kal",
+        "name": "Greenlandic"
+      }
+    ]
   },
   {
     "name": "Belgium",
@@ -1821067,7 +1822891,21 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "deu",
+        "name": "German"
+      },
+      {
+        "code": "fra",
+        "name": "French"
+      },
+      {
+        "code": "nld",
+        "name": "Dutch"
+      }
+    ]
   },
   {
     "name": "Palau",
@@ -1821773,7 +1823611,17 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "eng",
+        "name": "English"
+      },
+      {
+        "code": "pau",
+        "name": "Palauan"
+      }
+    ]
   },
   {
     "name": "Norfolk Island",
@@ -1821889,7 +1823737,17 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "eng",
+        "name": "English"
+      },
+      {
+        "code": "pih",
+        "name": "Norfuk"
+      }
+    ]
   },
   {
     "name": "South Georgia",
@@ -1824291,7 +1826149,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "eng",
+        "name": "English"
+      }
+    ]
   },
   {
     "name": "Philippines",
@@ -1854313,7 +1856177,17 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "eng",
+        "name": "English"
+      },
+      {
+        "code": "fil",
+        "name": "Filipino"
+      }
+    ]
   },
   {
     "name": "India",
@@ -1885411,7 +1887285,21 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "eng",
+        "name": "English"
+      },
+      {
+        "code": "hin",
+        "name": "Hindi"
+      },
+      {
+        "code": "tam",
+        "name": "Tamil"
+      }
+    ]
   },
   {
     "name": "Indonesia",
@@ -1964737,7 +1966625,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "ind",
+        "name": "Indonesian"
+      }
+    ]
   },
   {
     "name": "United States Virgin Islands",
@@ -1965043,7 +1966937,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "eng",
+        "name": "English"
+      }
+    ]
   },
   {
     "name": "Dominica",
@@ -1965355,7 +1967255,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "eng",
+        "name": "English"
+      }
+    ]
   },
   {
     "name": "Rwanda",
@@ -1966651,7 +1968557,21 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "eng",
+        "name": "English"
+      },
+      {
+        "code": "fra",
+        "name": "French"
+      },
+      {
+        "code": "kin",
+        "name": "Kinyarwanda"
+      }
+    ]
   },
   {
     "name": "Madagascar",
@@ -1973269,7 +1975189,17 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "fra",
+        "name": "French"
+      },
+      {
+        "code": "mlg",
+        "name": "Malagasy"
+      }
+    ]
   },
   {
     "name": "Hong Kong",
@@ -1974887,7 +1976817,17 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "eng",
+        "name": "English"
+      },
+      {
+        "code": "zho",
+        "name": "Chinese"
+      }
+    ]
   },
   {
     "name": "Samoa",
@@ -1975433,7 +1977373,17 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "eng",
+        "name": "English"
+      },
+      {
+        "code": "smo",
+        "name": "Samoan"
+      }
+    ]
   },
   {
     "name": "Faroe Islands",
@@ -1977427,7 +1979377,17 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "dan",
+        "name": "Danish"
+      },
+      {
+        "code": "fao",
+        "name": "Faroese"
+      }
+    ]
   },
   {
     "name": "Pitcairn Islands",
@@ -1977605,7 +1979565,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "eng",
+        "name": "English"
+      }
+    ]
   },
   {
     "name": "Antigua and Barbuda",
@@ -1978099,7 +1980065,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "eng",
+        "name": "English"
+      }
+    ]
   },
   {
     "name": "Åland Islands",
@@ -1980061,7 +1982033,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "swe",
+        "name": "Swedish"
+      }
+    ]
   },
   {
     "name": "Sweden",
@@ -1998895,7 +2000873,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "swe",
+        "name": "Swedish"
+      }
+    ]
   },
   {
     "name": "Mozambique",
@@ -2008265,7 +2010249,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "por",
+        "name": "Portuguese"
+      }
+    ]
   },
   {
     "name": "Uzbekistan",
@@ -2014953,7 +2016943,17 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "rus",
+        "name": "Russian"
+      },
+      {
+        "code": "uzb",
+        "name": "Uzbek"
+      }
+    ]
   },
   {
     "name": "Antarctica",
@@ -2110939,7 +2112939,8 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": []
   },
   {
     "name": "Wallis and Futuna",
@@ -2111109,7 +2113110,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "fra",
+        "name": "French"
+      }
+    ]
   },
   {
     "name": "Ukraine",
@@ -2121771,7 +2123778,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "ukr",
+        "name": "Ukrainian"
+      }
+    ]
   },
   {
     "name": "Belize",
@@ -2123793,7 +2125806,21 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "bjz",
+        "name": "Belizean Creole"
+      },
+      {
+        "code": "eng",
+        "name": "English"
+      },
+      {
+        "code": "spa",
+        "name": "Spanish"
+      }
+    ]
   },
   {
     "name": "Saint Helena, Ascension and Tristan da Cunha",
@@ -2124151,7 +2126178,13 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "eng",
+        "name": "English"
+      }
+    ]
   },
   {
     "name": "Guernsey",
@@ -2124413,6 +2126446,20 @@
           ]
         ]
       ]
-    }
+    },
+    "languages": [
+      {
+        "code": "eng",
+        "name": "English"
+      },
+      {
+        "code": "fra",
+        "name": "French"
+      },
+      {
+        "code": "nfr",
+        "name": "Guernésiais"
+      }
+    ]
   }
 ]

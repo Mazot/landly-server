@@ -60,6 +60,7 @@ mime = "0.3"
 actix-multipart = "0.7"
 urlencoding = "2.1"
 actix-governor = "0.10.0"
+tzf-rs = { version = "2.3", default-features = false, features = ["bundled"] }
 
 [dev-dependencies]
 actix-http = "3"

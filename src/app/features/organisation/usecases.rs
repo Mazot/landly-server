@@ -14,7 +14,7 @@ use crate::utils::google_places::{PlaceLookup, validate_place_id};
 use crate::utils::storage::StorageService;
 use crate::utils::validation::{self as v, limits};
 use actix_web::HttpResponse;
-use bigdecimal::{BigDecimal, FromPrimitive, RoundingMode};
+use bigdecimal::{BigDecimal, FromPrimitive, RoundingMode, ToPrimitive};
 use chrono::NaiveDateTime;
 use serde_json::json;
 use std::sync::Arc;
@@ -85,11 +85,13 @@ impl OrgTextFields<'_> {
             limits::TAGS_PER_LIST,
             limits::TAG,
         )?;
+        v::time_zone("timezone", self.timezone)?;
         v::json_object(
             "opening_hours",
             self.opening_hours,
             limits::JSON_DOCUMENT_BYTES,
-        )
+        )?;
+        v::opening_hours("opening_hours", self.opening_hours)
     }
 }
 
@@ -194,6 +196,11 @@ impl OrganisationUsecase {
     /// the coordinates they loaded; compared at the column precision
     /// (DECIMAL(_, 8), which Postgres rounds half away from zero) that is
     /// no move, so a Google point keeps its source and refresh time.
+    /// The IANA zone of a point (offline lookup); `None` without a point or a known zone.
+    fn zone_of(latitude: Option<&BigDecimal>, longitude: Option<&BigDecimal>) -> Option<String> {
+        crate::utils::timezone::time_zone_at(latitude?.to_f64()?, longitude?.to_f64()?)
+    }
+
     fn point_moved(
         existing: &Organisation,
         latitude: &Option<BigDecimal>,
@@ -306,7 +313,7 @@ impl OrganisationUsecase {
     }
 
     /// Creates a community submission: validated, owned by the caller and
-    /// entered into moderation as `pending` (invisible to list/search).
+    /// entered into moderation as `pending` (on the map at once, shown as not yet reviewed; not in `/list`).
     pub async fn create_organisation(
         &self,
         params: CreateOrganisationUsecaseInput,
@@ -344,6 +351,10 @@ impl OrganisationUsecase {
             )
             .await?;
 
+        // Not given: the zone the point lies in, so `openNow` works for every place with hours.
+        let timezone = params
+            .timezone
+            .or_else(|| Self::zone_of(location.latitude.as_ref(), location.longitude.as_ref()));
         let new_organisation =
             self.organisation_repo
                 .create_organisation(CreateOrganisationRepositoryInput {
@@ -368,7 +379,8 @@ impl OrganisationUsecase {
                     services: params.services,
                     languages: params.languages,
                     opening_hours: params.opening_hours,
-                    timezone: params.timezone,
+                    // Not given: the zone the point lies in, so `openNow` works for every place with hours.
+                    timezone,
                     google_place_id: params.google_place_id,
                     location_source: location.source.map(|s| s.as_str().to_string()),
                     location_refreshed_at: location.refreshed_at,
@@ -467,6 +479,13 @@ impl OrganisationUsecase {
             .filter(|requested| is_moderator || existing.added_by.as_deref() != Some(requested));
         let guard_official_badge = !is_moderator && added_by.is_some();
 
+        // A moved point brings its own zone unless one is sent (`None` keeps the stored one).
+        let timezone = params.timezone.or_else(|| {
+            moved
+                .then(|| Self::zone_of(params.latitude.as_ref(), params.longitude.as_ref()))
+                .flatten()
+        });
+
         let updated_organisation = self.organisation_repo.update_organisation(
             id,
             UpdateOrganisationRepositoryInput {
@@ -487,7 +506,7 @@ impl OrganisationUsecase {
                 services: params.services,
                 languages: params.languages,
                 opening_hours: params.opening_hours,
-                timezone: params.timezone,
+                timezone,
                 added_by,
                 guard_official_badge,
                 status: back_to_moderation
@@ -544,6 +563,40 @@ impl OrganisationUsecase {
 
     /// Map geo-search. Sort defaults to `nearest` when an origin point is
     /// given, otherwise `recent`; `sort=nearest` without an origin is a 422.
+    /// Places on the map (live or waiting for moderation) near a point with a name like the one
+    /// being typed: the add-a-place form warns before a duplicate is submitted.
+    pub fn find_duplicates(
+        &self,
+        params: FindDuplicatesUsecaseInput,
+    ) -> Result<HttpResponse, AppError> {
+        v::max_chars("name", Some(&params.name), limits::ORG_NAME)?;
+        let similar = self.organisation_repo.find_similar_nearby_on_the_map(
+            &params.name,
+            params.latitude,
+            params.longitude,
+            DUPLICATE_HINTS,
+        )?;
+        let items = similar
+            .into_iter()
+            .map(|organisation| {
+                let distance = organisation
+                    .latitude
+                    .as_ref()
+                    .zip(organisation.longitude.as_ref())
+                    .and_then(|(lat, lng)| Some((lat.to_f64()?, lng.to_f64()?)))
+                    .map(|point| {
+                        super::repositories::haversine_km(
+                            (params.latitude, params.longitude),
+                            point,
+                        )
+                    });
+                (organisation, distance)
+            })
+            .collect();
+
+        Ok(self.organisation_presenter.to_search_json(items))
+    }
+
     pub fn search_organisations(
         &self,
         params: SearchOrganisationsUsecaseInput,
@@ -794,6 +847,17 @@ pub struct FetchOrganisationsUsecaseInput {
     pub offset: i64,
 }
 
+/// How many similar places the duplicate hint lists at most.
+const DUPLICATE_HINTS: i64 = 3;
+
+pub struct FindDuplicatesUsecaseInput {
+    /// The name being typed.
+    pub name: String,
+    /// Where the new place is (validated by the controller).
+    pub latitude: f64,
+    pub longitude: f64,
+}
+
 pub struct SearchOrganisationsUsecaseInput {
     /// (min_lat, min_lng, max_lat, max_lng), validated by the controller.
     pub bbox: Option<(f64, f64, f64, f64)>,
@@ -913,6 +977,16 @@ mod tests {
             _id: Uuid,
         ) -> Result<crate::app::features::organisation::entities::CommunitySignals, AppError>
         {
+            unimplemented!()
+        }
+
+        fn find_similar_nearby_on_the_map(
+            &self,
+            _name: &str,
+            _latitude: f64,
+            _longitude: f64,
+            _limit: i64,
+        ) -> Result<Vec<Organisation>, AppError> {
             unimplemented!()
         }
 

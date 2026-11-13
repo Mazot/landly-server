@@ -139,6 +139,17 @@ pub struct SearchOrganisationsQueryRequest {
     pub offset: Option<i64>,
 }
 
+/// The add-a-place duplicate hint: a name and where the new place is.
+#[derive(Deserialize, Serialize, Debug, ToSchema, IntoParams)]
+pub struct FindDuplicatesQueryRequest {
+    /// The name being typed (up to 200 characters).
+    pub name: String,
+    /// Latitude of the new place (-90..90).
+    pub lat: f64,
+    /// Longitude of the new place (-180..180).
+    pub lng: f64,
+}
+
 #[derive(Deserialize, Serialize, Debug, ToSchema, IntoParams)]
 pub struct OrganisationsListQueryRequest {
     /// Case-insensitive substring filter on the name.

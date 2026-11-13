@@ -122,7 +122,10 @@ impl CommonRepository for CommonRepositoryImpl {
 
         let rows: Vec<(Option<String>, i64)> = organisations::table
             .filter(organisations::location_country_id.eq(id))
-            .filter(organisations::status.eq("live"))
+            // The places on the map: approved and waiting for moderation.
+            .filter(organisations::status.eq_any(
+                crate::app::features::organisation::entities::OrganisationStatus::on_the_map(),
+            ))
             .left_join(organisation_types::table)
             .group_by(organisation_types::slug)
             .select((
@@ -146,7 +149,7 @@ impl CommonRepository for CommonRepositoryImpl {
         use crate::data::schema::languages;
         use diesel::prelude::*;
 
-        // Languages are seeded outside the API (scripts/crates country_parser),
+        // Languages are seeded outside the API (scripts/crates language_loader),
         // so there is no write path here to invalidate
         // `CacheKeys::common_languages_pattern()` from; the cached
         // GET /common/languages response expires with its TTL.
@@ -156,6 +159,17 @@ impl CommonRepository for CommonRepositoryImpl {
         if let Some(ref name) = params.name {
             let pattern = format!("%{}%", name);
             query = query.filter(languages::name.ilike(pattern));
+        }
+
+        if let Some(ref country_ids) = params.country_ids {
+            use crate::data::schema::countries_to_languages;
+            query = query.filter(
+                languages::id.eq_any(
+                    countries_to_languages::table
+                        .filter(countries_to_languages::country_id.eq_any(country_ids))
+                        .select(countries_to_languages::language_id),
+                ),
+            );
         }
 
         let languages_list = query
@@ -237,6 +251,8 @@ pub struct GetAllLanguagesRepositoryInput {
     pub offset: i64,
     /// Case-insensitive substring filter on the name.
     pub name: Option<String>,
+    /// Only the official languages of these countries.
+    pub country_ids: Option<Vec<uuid::Uuid>>,
 }
 
 pub struct CreateOrganisationTypeRepositoryInput {

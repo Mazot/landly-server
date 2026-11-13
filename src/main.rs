@@ -148,12 +148,14 @@ async fn main() -> std::io::Result<()> {
             .wrap(request_log::request_logger())
             // Inside CORS so that 429 responses still carry CORS headers.
             .wrap(Governor::new(&api_rate_limit))
-            .wrap(cors())
             .wrap(Authentication)
-            // Outermost of the request path: a zstd body never reaches a decoder.
+            // A zstd body is refused before anything decodes it.
             .wrap(actix_web::middleware::from_fn(
                 app::drivers::middlewares::encoding::reject_zstd_requests,
             ))
+            // Outermost: every response, the auth middleware's 401 included, gets the CORS headers
+            // (inside it, a 401 reached the browser as a CORS error and the client never saw it).
+            .wrap(cors())
             // API docs: Scalar UI (replaces the heavier Swagger UI, which
             // embedded the whole swagger dist via rust-embed at build time).
             .service(Scalar::with_url("/scalar", openapi.clone()))

@@ -13,6 +13,7 @@ use utoipa::OpenApi;
         controllers::fetch_all_countries,
         controllers::fetch_country_detail,
         controllers::fetch_all_languages,
+        controllers::fetch_time_zone,
         controllers::fetch_all_organisation_types,
         controllers::create_organisation_type,
     ),
@@ -22,8 +23,10 @@ use utoipa::OpenApi;
         presenters::CountryPlacesByType,
         presenters::OrganisationTypeContent,
         presenters::LanguageContent,
+        presenters::TimeZoneContent,
         controllers::CountriesListQueryParams,
         controllers::LanguagesListQueryParams,
+        controllers::TimeZoneQueryParams,
         controllers::CreateOrganisationTypeRequest,
     )),
     tags((name = "Common", description = "Common reference data: countries, languages, organisation types."))

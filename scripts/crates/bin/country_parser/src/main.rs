@@ -72,6 +72,29 @@ pub struct MergedCountry {
     pub capital: Option<String>,
     pub flag: String,
     pub geo_json: Geometry,
+    /// Official languages, sorted by code. Missing in files written before languages were kept.
+    #[serde(default)]
+    pub languages: Vec<MergedLanguage>,
+}
+
+/// A language of a country: ISO 639-3 code (`languages.symbol`) and English name.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MergedLanguage {
+    pub code: String,
+    pub name: String,
+}
+
+/// The languages of `countries.json` (`{"rus": "Russian"}`) as a list sorted by code.
+pub fn languages_of(languages: &HashMap<String, String>) -> Vec<MergedLanguage> {
+    let mut list: Vec<MergedLanguage> = languages
+        .iter()
+        .map(|(code, name)| MergedLanguage {
+            code: code.clone(),
+            name: name.clone(),
+        })
+        .collect();
+    list.sort_by(|a, b| a.code.cmp(&b.code));
+    list
 }
 
 fn main() -> Result<()> {
@@ -102,6 +125,7 @@ fn main() -> Result<()> {
                 capital: country.capital.and_then(|v| v.into_iter().next()),
                 flag: country.flag,
                 geo_json: geo.geometry.clone(),
+                languages: languages_of(&country.languages),
             });
         }
     }
@@ -112,4 +136,31 @@ fn main() -> Result<()> {
     println!("Merged {} countries", merged.len());
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn languages_are_listed_by_code() {
+        let source = HashMap::from([
+            ("srp".to_string(), "Serbian".to_string()),
+            ("hun".to_string(), "Hungarian".to_string()),
+        ]);
+        assert_eq!(
+            languages_of(&source),
+            vec![
+                MergedLanguage { code: "hun".into(), name: "Hungarian".into() },
+                MergedLanguage { code: "srp".into(), name: "Serbian".into() },
+            ]
+        );
+    }
+
+    #[test]
+    fn a_merged_file_without_languages_still_reads() {
+        let old = r#"{"name":"Togo","capital":"Lomé","flag":"🇹🇬","geo_json":{"type":"Polygon","coordinates":[]}}"#;
+        let country: MergedCountry = serde_json::from_str(old).unwrap();
+        assert!(country.languages.is_empty());
+    }
 }

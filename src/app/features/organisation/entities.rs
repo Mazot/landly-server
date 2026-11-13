@@ -16,6 +16,16 @@ pub enum OrganisationStatus {
 }
 
 impl OrganisationStatus {
+    /// Shown on the map (`GET /organisation/search`, the duplicate hint): approved places and the
+    /// ones waiting for moderation — the client draws those muted. Rejected ones never are.
+    pub const ON_THE_MAP: [OrganisationStatus; 2] =
+        [OrganisationStatus::Live, OrganisationStatus::Pending];
+
+    /// `ON_THE_MAP` as the stored strings, for SQL filters.
+    pub fn on_the_map() -> [&'static str; 2] {
+        Self::ON_THE_MAP.map(|status| status.as_str())
+    }
+
     pub fn as_str(&self) -> &'static str {
         match self {
             OrganisationStatus::Pending => "pending",
@@ -183,6 +193,42 @@ pub struct Organisation {
     pub location_refreshed_at: Option<NaiveDateTime>,
 }
 
+/// Half the side of the box `find_similar_nearby` looks in, in degrees (~1.1 km of latitude).
+const SIMILAR_NEARBY_DEGREES: f64 = 0.01;
+
+/// A name contained in another counts as similar only from this many characters on ("Bar" is
+/// not "Barbershop", "Kyiv Coffee" is "Kyiv Coffee Kreuzberg"); shorter names match only exactly.
+pub const MIN_CONTAINED_NAME_CHARS: usize = 4;
+
+/// `text` taken literally in a Postgres regular expression.
+fn regex_escape(text: &str) -> String {
+    let mut escaped = String::with_capacity(text.len());
+    for c in text.chars() {
+        if "\\.^$*+?()[]{}|-".contains(c) {
+            escaped.push('\\');
+        }
+        escaped.push(c);
+    }
+    escaped
+}
+
+/// A regex matching `text` as whole words (not inside a longer word), case handled by `~*`.
+fn whole_words(text: &str) -> String {
+    format!("(^|[^[:alnum:]]){}([^[:alnum:]]|$)", regex_escape(text))
+}
+
+/// What `Organisation::find_similar_nearby` looks for.
+pub struct SimilarNearby<'a> {
+    /// The place itself, when it is already stored.
+    pub exclude_id: Option<Uuid>,
+    pub name: &'a str,
+    pub latitude: BigDecimal,
+    pub longitude: BigDecimal,
+    /// Only places on the map (`OrganisationStatus::ON_THE_MAP`); moderation looks at every status.
+    pub on_the_map_only: bool,
+    pub limit: i64,
+}
+
 impl Organisation {
     pub fn create(conn: &mut PgConnection, record: &CreateOrganisation) -> Result<Self, AppError> {
         let result = diesel::insert_into(organisations::table)
@@ -342,19 +388,70 @@ impl Organisation {
         let (Some(lat), Some(lng)) = (latitude, longitude) else {
             return Ok(false);
         };
+        let similar = Self::find_similar_nearby(
+            conn,
+            SimilarNearby {
+                exclude_id: Some(exclude_id),
+                name,
+                latitude: lat.clone(),
+                longitude: lng.clone(),
+                on_the_map_only: false,
+                limit: 1,
+            },
+        )?;
 
+        Ok(!similar.is_empty())
+    }
+
+    /// Places within ~1 km whose name is like `name`: the same name ignoring case, or one name
+    /// contained in the other as whole words when the contained one has at least
+    /// `MIN_CONTAINED_NAME_CHARS` characters ("Kyiv Coffee" ↔ "Kyiv Coffee Kreuzberg", but not
+    /// "Bar" ↔ "Barbershop"). The moderation flag `duplicateNearby` and the add-a-place hint
+    /// (`GET /organisation/duplicates`) share it.
+    pub fn find_similar_nearby(
+        conn: &mut PgConnection,
+        query: SimilarNearby<'_>,
+    ) -> Result<Vec<Self>, AppError> {
+        use diesel::dsl::sql;
+        use diesel::sql_types::{Bool, Integer, Text};
+
+        let name = query.name.trim();
+        if name.is_empty() {
+            return Ok(Vec::new());
+        }
         // ~1 km box around the point (1 degree latitude ≈ 111 km).
-        let delta = BigDecimal::try_from(0.01).map_err(|_| AppError::InternalServerError)?;
+        let delta = BigDecimal::try_from(SIMILAR_NEARBY_DEGREES)
+            .map_err(|_| AppError::InternalServerError)?;
+        let (lat, lng) = (&query.latitude, &query.longitude);
 
-        let count = organisations::table
-            .filter(organisations::id.ne(exclude_id))
-            .filter(organisations::name.ilike(name))
+        let mut rows = organisations::table
             .filter(organisations::latitude.between(lat - &delta, lat + &delta))
             .filter(organisations::longitude.between(lng - &delta, lng + &delta))
-            .count()
-            .get_result::<i64>(conn)?;
+            .filter(
+                // Same name; or the typed one inside a stored one; or a stored one inside the typed one.
+                sql::<Bool>("(lower(btrim(organisations.name)) = lower(")
+                    .bind::<Text, _>(name)
+                    .sql(") OR (")
+                    .bind::<Bool, _>(name.chars().count() >= MIN_CONTAINED_NAME_CHARS)
+                    .sql(" AND organisations.name ~* ")
+                    .bind::<Text, _>(whole_words(name))
+                    .sql(") OR (char_length(btrim(organisations.name)) >= ")
+                    .bind::<Integer, _>(MIN_CONTAINED_NAME_CHARS as i32)
+                    .sql(" AND ")
+                    .bind::<Text, _>(name)
+                    .sql(r#" ~* ('(^|[^[:alnum:]])' || regexp_replace(btrim(organisations.name), '([.^$*+?()\[\]{}|\\-])', '\\\1', 'g') || '([^[:alnum:]]|$)')))"#),
+            )
+            .order(organisations::created_at.asc())
+            .limit(query.limit)
+            .into_boxed();
+        if let Some(exclude_id) = query.exclude_id {
+            rows = rows.filter(organisations::id.ne(exclude_id));
+        }
+        if query.on_the_map_only {
+            rows = rows.filter(organisations::status.eq_any(OrganisationStatus::on_the_map()));
+        }
 
-        Ok(count > 0)
+        Ok(rows.load::<Organisation>(conn)?)
     }
 
     pub fn increment_visits(

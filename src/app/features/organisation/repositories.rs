@@ -1,5 +1,6 @@
 use super::entities::{
-    CommunitySignals, CreateOrganisation, Organisation, OrganisationStatus, UpdateOrganisation,
+    CommunitySignals, CreateOrganisation, Organisation, OrganisationStatus, SimilarNearby,
+    UpdateOrganisation,
 };
 use crate::{
     app::features::user::entities::{User, UserRole},
@@ -80,6 +81,14 @@ pub trait OrganisationRepository: Send + Sync + 'static {
         latitude: Option<&BigDecimal>,
         longitude: Option<&BigDecimal>,
     ) -> Result<bool, AppError>;
+    /// Places on the map near the point with a name like `name` (`Organisation::find_similar_nearby`).
+    fn find_similar_nearby_on_the_map(
+        &self,
+        name: &str,
+        latitude: f64,
+        longitude: f64,
+        limit: i64,
+    ) -> Result<Vec<Organisation>, AppError>;
     fn count_live_orgs_created_by(&self, user_id: Uuid) -> Result<i64, AppError>;
     /// Organisations of `user_id` still waiting for moderation.
     fn count_pending_orgs_created_by(&self, user_id: Uuid) -> Result<i64, AppError>;
@@ -230,8 +239,9 @@ impl OrganisationRepository for OrganisationRepositoryImpl {
 
         let connection = &mut self.pool.get()?;
 
+        // The map shows places waiting for moderation too (muted by the client); never rejected ones.
         let mut query = organisations::table
-            .filter(organisations::status.eq(OrganisationStatus::Live.as_str()))
+            .filter(organisations::status.eq_any(OrganisationStatus::on_the_map()))
             .filter(organisations::latitude.is_not_null())
             .filter(organisations::longitude.is_not_null())
             .into_boxed();
@@ -540,6 +550,30 @@ impl OrganisationRepository for OrganisationRepositoryImpl {
         let connection = &mut self.pool.get()?;
 
         Organisation::has_duplicate_nearby(connection, exclude_id, name, latitude, longitude)
+    }
+
+    fn find_similar_nearby_on_the_map(
+        &self,
+        name: &str,
+        latitude: f64,
+        longitude: f64,
+        limit: i64,
+    ) -> Result<Vec<Organisation>, AppError> {
+        use bigdecimal::FromPrimitive;
+        let decimal = |value: f64| BigDecimal::from_f64(value).ok_or(AppError::InternalServerError);
+        let connection = &mut self.pool.get()?;
+
+        Organisation::find_similar_nearby(
+            connection,
+            SimilarNearby {
+                exclude_id: None,
+                name,
+                latitude: decimal(latitude)?,
+                longitude: decimal(longitude)?,
+                on_the_map_only: true,
+                limit,
+            },
+        )
     }
 
     fn count_live_orgs_created_by(&self, user_id: Uuid) -> Result<i64, AppError> {
