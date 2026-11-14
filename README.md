@@ -294,7 +294,7 @@ GET /api/organisation/duplicates?name=Kyiv%20Coffee&lat=52.5&lng=13.4
 GET /api/organisation/mine?limit=20&offset=0
 Authorization: Bearer <jwt_token>
 
-# Fetch one organisation (openNow computed from opening_hours + timezone)
+# Fetch one organisation (openNow computed from opening_hours + timezone; detail only: community signals with tip authors, creator)
 GET /api/organisation/fetch/{id}
 
 # Create organisation (requires auth; new submissions get status=pending)
