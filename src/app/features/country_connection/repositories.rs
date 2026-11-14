@@ -1,4 +1,6 @@
-use super::entities::{CountryConnection, CreateCountryConnection, UpdateCountryConnection};
+use super::entities::{
+    ConnectedOrganisation, CountryConnection, CreateCountryConnection, UpdateCountryConnection,
+};
 use crate::{
     app::features::user::entities::{User, UserRole},
     error::AppError,
@@ -8,7 +10,7 @@ use crate::{
     },
 };
 use std::{
-    collections::hash_map::DefaultHasher,
+    collections::{HashMap, hash_map::DefaultHasher},
     hash::{Hash, Hasher},
     sync::Arc,
     time::Duration,
@@ -22,6 +24,13 @@ pub trait CountryConnectionRepository: Send + Sync + 'static {
     ) -> Result<Vec<CountryConnection>, AppError>;
 
     fn fetch_country_connection(&self, id: Uuid) -> Result<CountryConnection, AppError>;
+
+    /// Name and city of the linked places that are on the map. Not cached: the
+    /// connection list is, and a renamed place must not show its old name.
+    fn fetch_connected_organisations(
+        &self,
+        ids: &[Uuid],
+    ) -> Result<HashMap<Uuid, ConnectedOrganisation>, AppError>;
 
     fn create_country_connection(
         &self,
@@ -66,6 +75,15 @@ impl CountryConnectionRepositoryImpl {
 }
 
 impl CountryConnectionRepository for CountryConnectionRepositoryImpl {
+    fn fetch_connected_organisations(
+        &self,
+        ids: &[Uuid],
+    ) -> Result<HashMap<Uuid, ConnectedOrganisation>, AppError> {
+        let conn = &mut self.pool.get()?;
+
+        ConnectedOrganisation::find_on_the_map(conn, ids)
+    }
+
     fn fetch_country_connections(
         &self,
         params: FetchCountryConnectionsRepositoryInput,

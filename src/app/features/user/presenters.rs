@@ -1,4 +1,4 @@
-use super::entities::{User, UserToLanguage};
+use super::entities::{PublicUser, User, UserToLanguage};
 use super::repositories::ProfileStats;
 use crate::error::AppError;
 use actix_web::HttpResponse;
@@ -12,6 +12,29 @@ pub trait UserPresenter: Send + Sync + 'static {
     fn to_profile_json(&self, user: User, stats: ProfileStats) -> HttpResponse;
     fn to_lang_vec_json(&self, languages: Vec<UserToLanguage>) -> HttpResponse;
     fn to_auth_middleware(&self, maybe_user: Result<User, AppError>) -> Result<User, &str>;
+}
+
+/// A user as anyone may see them next to their content: who wrote a review or
+/// a check-in tip, who added a place. No id, email or role.
+#[derive(Deserialize, Serialize, Clone, Debug, ToSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct PublicUserContent {
+    /// Unique username.
+    pub username: String,
+    /// Display name, when the user set one.
+    pub name: Option<String>,
+    /// Avatar background colour (data colour), when set.
+    pub avatar_color: Option<String>,
+}
+
+impl From<PublicUser> for PublicUserContent {
+    fn from(user: PublicUser) -> Self {
+        Self {
+            username: user.username,
+            name: user.name,
+            avatar_color: user.avatar_color,
+        }
+    }
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug, ToSchema)]

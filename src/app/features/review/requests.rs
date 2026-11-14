@@ -17,6 +17,14 @@ pub struct CreateReviewRequest {
 }
 
 #[derive(Deserialize, Serialize, Debug, ToSchema, IntoParams)]
+pub struct ReviewSummaryQueryRequest {
+    /// Summary of this organisation's reviews (give exactly one target).
+    pub organisation_id: Option<Uuid>,
+    /// Summary of this person's reviews (give exactly one target).
+    pub person_id: Option<Uuid>,
+}
+
+#[derive(Debug, Deserialize, Serialize, ToSchema, IntoParams)]
 pub struct ListReviewsQueryRequest {
     /// List reviews of this organisation (give exactly one target).
     pub organisation_id: Option<Uuid>,

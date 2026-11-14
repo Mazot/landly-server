@@ -23,6 +23,7 @@ use utoipa::OpenApi;
         requests::UpdateCountryConnectionRequest,
         requests::CountryConnectionsListQueryParams,
         presenters::CountryConnectionContent,
+        presenters::ConnectedOrganisationContent,
         presenters::MultipleCountryConnectionsResponse,
     )),
     tags((name = "CountryConnection", description = "CountryConnection related endpoints"))

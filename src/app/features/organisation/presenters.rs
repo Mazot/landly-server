@@ -1,4 +1,5 @@
 use super::entities::{CommunitySignals, Organisation};
+use crate::app::features::user::{entities::PublicUser, presenters::PublicUserContent};
 use actix_web::{HttpResponse, http::StatusCode};
 use chrono::{Datelike, NaiveDateTime};
 use serde::{Deserialize, Serialize};
@@ -10,10 +11,12 @@ pub trait OrganisationPresenter: Send + Sync + 'static {
     // TODO: Tmp solution
     fn to_single_typed_json(&self, item: Organisation) -> HttpResponse<Organisation>;
     fn to_single_json(&self, item: Organisation) -> HttpResponse;
+    /// The detail payload: the place, its community signals and who added it.
     fn to_single_with_community_json(
         &self,
         item: Organisation,
         signals: CommunitySignals,
+        creator: Option<PublicUser>,
     ) -> HttpResponse;
     fn to_multi_json(&self, items: Vec<Organisation>) -> HttpResponse;
     fn to_search_json(&self, items: Vec<(Organisation, Option<f64>)>) -> HttpResponse;
@@ -143,6 +146,10 @@ pub struct OrganisationContent {
     /// Community check-in signals; present only on the detail (fetch) payload.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub community: Option<CommunitySignalsContent>,
+    /// Detail only (`GET /organisation/fetch/{id}`): who added the place — their
+    /// public face, null when unknown or the account is gone.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub creator: Option<PublicUserContent>,
     /// Submission time (UTC, no timezone).
     pub created_at: NaiveDateTime,
     /// Last edit (UTC, no timezone).
@@ -160,7 +167,19 @@ pub struct CommunitySignalsContent {
     /// Time of the latest check-in (UTC).
     pub last_checkin_at: Option<NaiveDateTime>,
     /// Up to 5 latest check-in tips, newest first.
-    pub tips: Vec<String>,
+    pub tips: Vec<CheckinTipContent>,
+}
+
+/// A check-in tip with who left it and when.
+#[derive(Serialize, Deserialize, ToSchema, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct CheckinTipContent {
+    /// The tip (max 300 characters).
+    pub text: String,
+    /// When it was left (UTC, no timezone).
+    pub created_at: NaiveDateTime,
+    /// Who left it; null when the account is gone.
+    pub author: Option<PublicUserContent>,
 }
 
 impl From<CommunitySignals> for CommunitySignalsContent {
@@ -169,7 +188,15 @@ impl From<CommunitySignals> for CommunitySignalsContent {
             people_came: s.people_came,
             still_active_pct: s.still_active_pct,
             last_checkin_at: s.last_checkin_at,
-            tips: s.tips,
+            tips: s
+                .tips
+                .into_iter()
+                .map(|tip| CheckinTipContent {
+                    text: tip.text,
+                    created_at: tip.created_at,
+                    author: tip.author.map(PublicUserContent::from),
+                })
+                .collect(),
         }
     }
 }
@@ -210,6 +237,7 @@ impl From<Organisation> for OrganisationContent {
             reviews_count: org.reviews_count,
             distance_km: None,
             community: None,
+            creator: None,
             created_at: org.created_at,
             updated_at: org.updated_at,
         }
@@ -310,9 +338,11 @@ impl OrganisationPresenter for OrganisationPresenterImpl {
         &self,
         item: Organisation,
         signals: CommunitySignals,
+        creator: Option<PublicUser>,
     ) -> HttpResponse {
         let mut response_content = OrganisationContent::from(item);
         response_content.community = Some(CommunitySignalsContent::from(signals));
+        response_content.creator = creator.map(PublicUserContent::from);
 
         HttpResponse::Ok().json(response_content)
     }

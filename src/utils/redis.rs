@@ -67,13 +67,7 @@ pub fn make_common_get_request_cache(
     RedisCacheMiddlewareBuilder::new(redis_url)
         .cache_prefix(cache_prefix)
         .ttl(ttl)
-        .cache_if(|ctx| {
-            if ctx.method != "GET" {
-                return false;
-            }
-
-            true
-        })
+        .cache_if(|ctx| ctx.method == "GET")
         .build()
 }
 

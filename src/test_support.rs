@@ -207,6 +207,7 @@ pub fn unique() -> String {
 
 pub struct TestUser {
     pub id: Uuid,
+    pub username: String,
     pub email: String,
     pub token: String,
 }
@@ -239,6 +240,7 @@ pub fn user(pool: &DbPool, role: &str) -> TestUser {
 
     TestUser {
         id: user.id,
+        username: user.username,
         email: user.email,
         token: token::generate_token(user.id).unwrap(),
     }

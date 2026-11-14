@@ -14,13 +14,17 @@ use utoipa::OpenApi;
     paths(
         controllers::create_review,
         controllers::list_reviews,
+        controllers::review_summary,
         controllers::delete_review,
     ),
     components(schemas(
         requests::CreateReviewRequest,
         requests::ListReviewsQueryRequest,
+        requests::ReviewSummaryQueryRequest,
         presenters::ReviewContent,
         presenters::MultipleReviewsResponse,
+        presenters::ReviewSummaryContent,
+        presenters::RatingCountContent,
     )),
     tags(
         (name = "Review", description = "Reviews for organisations and people with live aggregates")

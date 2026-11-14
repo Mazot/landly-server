@@ -1376,6 +1376,68 @@ mod http_tests {
         }
     }
 
+    /// The detail payload names who added the place (public face only); the
+    /// map and the lists never carry it.
+    #[actix_web::test]
+    #[serial(jwt_env)]
+    async fn test_detail_names_the_creator_and_lists_do_not() {
+        let pool = require_db!();
+        let app = test_app!(pool);
+        let creator = ts::user(&pool, "user");
+        let place = ts::org(
+            &pool,
+            OrgSpec {
+                created_by: Some(creator.id),
+                ..Default::default()
+            },
+        );
+
+        let (status, detail) = call(
+            &app,
+            Method::GET,
+            &format!("/api/organisation/fetch/{}", place.id),
+            None,
+            None,
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{detail}");
+        assert_eq!(detail["creator"]["username"], creator.username);
+        assert!(detail["creator"]["name"].is_null());
+        assert!(detail["creator"].get("email").is_none());
+        assert!(detail["creator"].get("id").is_none());
+
+        let (_, list) = call(
+            &app,
+            Method::GET,
+            &format!(
+                "/api/organisation/list?name={}",
+                place.name.replace(' ', "%20")
+            ),
+            None,
+            None,
+        )
+        .await;
+        let row = list["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|item| item["id"] == place.id.to_string())
+            .unwrap_or_else(|| panic!("{list}"));
+        assert!(row.get("creator").is_none(), "{row}");
+
+        // Without a known creator the field is left out.
+        let orphan = ts::org(&pool, OrgSpec::default());
+        let (_, detail) = call(
+            &app,
+            Method::GET,
+            &format!("/api/organisation/fetch/{}", orphan.id),
+            None,
+            None,
+        )
+        .await;
+        assert!(detail.get("creator").is_none(), "{detail}");
+    }
+
     #[actix_web::test]
     #[serial(jwt_env)]
     async fn test_visit_counter_and_checkins() {
@@ -1419,7 +1481,13 @@ mod http_tests {
         .await;
         assert_eq!(body["community"]["peopleCame"], 1);
         assert_eq!(body["community"]["stillActivePct"], 0.0);
-        assert_eq!(body["community"]["tips"], json!(["Bring your passport"]));
+        let tips = body["community"]["tips"].as_array().unwrap();
+        assert_eq!(tips.len(), 1, "{body}");
+        assert_eq!(tips[0]["text"], "Bring your passport");
+        assert!(tips[0]["createdAt"].is_string());
+        // Who left the tip: their public face only.
+        assert_eq!(tips[0]["author"]["username"], me.username);
+        assert!(tips[0]["author"].get("email").is_none());
 
         let other = ts::user(&pool, "user");
         let (_, body) = call(

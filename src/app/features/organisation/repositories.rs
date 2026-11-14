@@ -2,6 +2,7 @@ use super::entities::{
     CommunitySignals, CreateOrganisation, Organisation, OrganisationStatus, SimilarNearby,
     UpdateOrganisation,
 };
+use crate::app::features::user::entities::PublicUser;
 use crate::{
     app::features::user::entities::{User, UserRole},
     error::AppError,
@@ -72,6 +73,8 @@ pub trait OrganisationRepository: Send + Sync + 'static {
     ) -> Result<(), AppError>;
 
     fn fetch_community_signals(&self, id: Uuid) -> Result<CommunitySignals, AppError>;
+    /// The public face of the user who added a place (`None` when the account is gone).
+    fn fetch_public_user(&self, user_id: Uuid) -> Result<Option<PublicUser>, AppError>;
 
     /// Submit-time auto-check inputs.
     fn has_duplicate_nearby(
@@ -547,6 +550,12 @@ impl OrganisationRepository for OrganisationRepositoryImpl {
         let connection = &mut self.pool.get()?;
 
         Organisation::community_signals(connection, id)
+    }
+
+    fn fetch_public_user(&self, user_id: Uuid) -> Result<Option<PublicUser>, AppError> {
+        let connection = &mut self.pool.get()?;
+
+        Ok(PublicUser::find_many(connection, &[user_id])?.remove(&user_id))
     }
 
     fn has_duplicate_nearby(

@@ -1,13 +1,23 @@
-use super::entities::CountryConnection;
+use super::entities::{ConnectedOrganisation, CountryConnection};
 use actix_web::HttpResponse;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
 pub trait CountryConnectionPresenter: Send + Sync + 'static {
     fn to_http_res(&self) -> HttpResponse;
-    fn to_single_json(&self, item: CountryConnection) -> HttpResponse;
-    fn to_multi_json(&self, items: Vec<CountryConnection>) -> HttpResponse;
+    /// `orgs`: name and city of the linked places on the map (by id).
+    fn to_single_json(
+        &self,
+        item: CountryConnection,
+        orgs: &HashMap<Uuid, ConnectedOrganisation>,
+    ) -> HttpResponse;
+    fn to_multi_json(
+        &self,
+        items: Vec<CountryConnection>,
+        orgs: &HashMap<Uuid, ConnectedOrganisation>,
+    ) -> HttpResponse;
 }
 
 #[derive(Deserialize, Serialize, ToSchema)]
@@ -23,11 +33,43 @@ pub struct CountryConnectionContent {
     pub common_info: Option<String>,
     /// Country the embassy/consulate is located in.
     pub location_country_id: Option<Uuid>,
+    /// Name and city of the embassy; null without one, or when it is not on the map.
+    pub embassy: Option<ConnectedOrganisationContent>,
+    /// Name and city of the consulate; null without one, or when it is not on the map.
+    pub consulate: Option<ConnectedOrganisationContent>,
 }
 
-impl From<CountryConnection> for CountryConnectionContent {
-    fn from(connection: CountryConnection) -> Self {
+/// A linked embassy or consulate as the consular-network list shows it.
+#[derive(Deserialize, Serialize, ToSchema, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectedOrganisationContent {
+    /// Organisation ID (opens its page).
+    pub id: Uuid,
+    /// Display name.
+    pub name: String,
+    /// City, when known.
+    pub city: Option<String>,
+}
+
+impl From<ConnectedOrganisation> for ConnectedOrganisationContent {
+    fn from(org: ConnectedOrganisation) -> Self {
         Self {
+            id: org.id,
+            name: org.name,
+            city: org.city,
+        }
+    }
+}
+
+impl CountryConnectionContent {
+    pub fn new(connection: CountryConnection, orgs: &HashMap<Uuid, ConnectedOrganisation>) -> Self {
+        let linked = |id: Option<Uuid>| {
+            id.and_then(|id| orgs.get(&id).cloned())
+                .map(ConnectedOrganisationContent::from)
+        };
+        Self {
+            embassy: linked(connection.embassy_org_id),
+            consulate: linked(connection.consulate_org_id),
             id: connection.id,
             embassy_org_id: connection.embassy_org_id,
             consulate_org_id: connection.consulate_org_id,
@@ -45,11 +87,11 @@ pub struct MultipleCountryConnectionsResponse {
     pub total: i64,
 }
 
-impl From<Vec<CountryConnection>> for MultipleCountryConnectionsResponse {
-    fn from(items: Vec<CountryConnection>) -> Self {
+impl MultipleCountryConnectionsResponse {
+    pub fn new(items: Vec<CountryConnection>, orgs: &HashMap<Uuid, ConnectedOrganisation>) -> Self {
         let response_items: Vec<CountryConnectionContent> = items
             .into_iter()
-            .map(CountryConnectionContent::from)
+            .map(|item| CountryConnectionContent::new(item, orgs))
             .collect();
         let total = response_items.len() as i64;
 
@@ -72,14 +114,22 @@ impl CountryConnectionPresenter for CountryConnectionPresenterImpl {
         HttpResponse::Ok().json("OK")
     }
 
-    fn to_single_json(&self, item: CountryConnection) -> HttpResponse {
-        let response_content = CountryConnectionContent::from(item);
+    fn to_single_json(
+        &self,
+        item: CountryConnection,
+        orgs: &HashMap<Uuid, ConnectedOrganisation>,
+    ) -> HttpResponse {
+        let response_content = CountryConnectionContent::new(item, orgs);
 
         HttpResponse::Ok().json(response_content)
     }
 
-    fn to_multi_json(&self, items: Vec<CountryConnection>) -> HttpResponse {
-        let response_content = MultipleCountryConnectionsResponse::from(items);
+    fn to_multi_json(
+        &self,
+        items: Vec<CountryConnection>,
+        orgs: &HashMap<Uuid, ConnectedOrganisation>,
+    ) -> HttpResponse {
+        let response_content = MultipleCountryConnectionsResponse::new(items, orgs);
 
         HttpResponse::Ok().json(response_content)
     }
@@ -104,13 +154,37 @@ mod tests {
         let connection = create_test_country_connection();
         let connection_id = connection.id;
 
-        let content = CountryConnectionContent::from(connection);
+        let content = CountryConnectionContent::new(connection, &HashMap::new());
 
         assert_eq!(content.id, connection_id);
         assert!(content.embassy_org_id.is_some());
         assert!(content.consulate_org_id.is_some());
         assert!(content.location_country_id.is_some());
         assert_eq!(content.common_info, Some("Test Info".to_string()));
+    }
+
+    /// Linked places come by name and city; one that is not on the map stays null.
+    #[test]
+    fn test_country_connection_content_names_the_linked_places_on_the_map() {
+        let connection = create_test_country_connection();
+        let embassy = ConnectedOrganisation {
+            id: connection.embassy_org_id.unwrap(),
+            name: "Embassy of Russia".to_string(),
+            city: Some("Berlin".to_string()),
+        };
+        let orgs = HashMap::from([(embassy.id, embassy.clone())]);
+
+        let content = CountryConnectionContent::new(connection, &orgs);
+
+        assert_eq!(
+            content.embassy,
+            Some(ConnectedOrganisationContent {
+                id: embassy.id,
+                name: "Embassy of Russia".to_string(),
+                city: Some("Berlin".to_string()),
+            })
+        );
+        assert!(content.consulate.is_none(), "not on the map: not shown");
     }
 
     #[test]
@@ -123,7 +197,7 @@ mod tests {
             common_info: None,
         };
 
-        let content = CountryConnectionContent::from(connection);
+        let content = CountryConnectionContent::new(connection, &HashMap::new());
 
         assert!(content.embassy_org_id.is_none());
         assert!(content.consulate_org_id.is_none());
@@ -137,7 +211,7 @@ mod tests {
         let conn2 = create_test_country_connection();
         let connections = vec![conn1, conn2];
 
-        let response = MultipleCountryConnectionsResponse::from(connections);
+        let response = MultipleCountryConnectionsResponse::new(connections, &HashMap::new());
 
         assert_eq!(response.total, 2);
         assert_eq!(response.items.len(), 2);
@@ -147,7 +221,7 @@ mod tests {
     fn test_multiple_country_connections_response_empty() {
         let connections: Vec<CountryConnection> = vec![];
 
-        let response = MultipleCountryConnectionsResponse::from(connections);
+        let response = MultipleCountryConnectionsResponse::new(connections, &HashMap::new());
 
         assert_eq!(response.total, 0);
         assert_eq!(response.items.len(), 0);
@@ -172,7 +246,7 @@ mod tests {
         let presenter = CountryConnectionPresenterImpl::new();
         let connection = create_test_country_connection();
 
-        let response = presenter.to_single_json(connection);
+        let response = presenter.to_single_json(connection, &HashMap::new());
 
         assert_eq!(response.status(), actix_web::http::StatusCode::OK);
     }
@@ -184,7 +258,7 @@ mod tests {
         let conn2 = create_test_country_connection();
         let connections = vec![conn1, conn2];
 
-        let response = presenter.to_multi_json(connections);
+        let response = presenter.to_multi_json(connections, &HashMap::new());
 
         assert_eq!(response.status(), actix_web::http::StatusCode::OK);
     }

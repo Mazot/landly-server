@@ -720,9 +720,15 @@ impl OrganisationUsecase {
     pub fn fetch_organisation(&self, id: Uuid) -> Result<HttpResponse, AppError> {
         let organisation = self.organisation_repo.fetch_organisation(id)?;
         let signals = self.organisation_repo.fetch_community_signals(id)?;
-        let response = self
-            .organisation_presenter
-            .to_single_with_community_json(organisation, signals);
+        let creator = match organisation.created_by {
+            Some(user_id) => self.organisation_repo.fetch_public_user(user_id)?,
+            None => None,
+        };
+        let response = self.organisation_presenter.to_single_with_community_json(
+            organisation,
+            signals,
+            creator,
+        );
 
         Ok(response)
     }
@@ -1024,6 +1030,18 @@ mod tests {
         ) -> Result<crate::app::features::organisation::entities::CommunitySignals, AppError>
         {
             unimplemented!()
+        }
+
+        fn fetch_public_user(
+            &self,
+            user_id: Uuid,
+        ) -> Result<Option<crate::app::features::user::entities::PublicUser>, AppError> {
+            Ok(Some(crate::app::features::user::entities::PublicUser {
+                id: user_id,
+                username: "stub".to_string(),
+                name: None,
+                avatar_color: None,
+            }))
         }
 
         fn find_similar_nearby_on_the_map(

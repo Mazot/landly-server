@@ -1,3 +1,4 @@
+use crate::app::features::user::entities::PublicUser;
 use crate::data::{models::OrganisationType, schema::organisations};
 use crate::error::*;
 use bigdecimal::BigDecimal;
@@ -351,15 +352,28 @@ impl Organisation {
             .select(diesel::dsl::max(org_checkins::created_at))
             .first::<Option<NaiveDateTime>>(conn)?;
 
-        let tips = org_checkins::table
+        let rows = org_checkins::table
             .filter(org_checkins::organisation_id.eq(organisation_id))
             .filter(org_checkins::tip.is_not_null())
             .order(org_checkins::created_at.desc())
-            .select(org_checkins::tip)
+            .select((
+                org_checkins::tip,
+                org_checkins::created_at,
+                org_checkins::user_id,
+            ))
             .limit(5)
-            .load::<Option<String>>(conn)?
+            .load::<(Option<String>, NaiveDateTime, Uuid)>(conn)?;
+        let author_ids: Vec<Uuid> = rows.iter().map(|(_, _, user_id)| *user_id).collect();
+        let authors = PublicUser::find_many(conn, &author_ids)?;
+        let tips = rows
             .into_iter()
-            .flatten()
+            .filter_map(|(tip, created_at, user_id)| {
+                tip.map(|text| CheckinTip {
+                    text,
+                    created_at,
+                    author: authors.get(&user_id).cloned(),
+                })
+            })
             .collect();
 
         Ok(CommunitySignals {
@@ -524,7 +538,16 @@ pub struct CommunitySignals {
     /// Time of the latest check-in (UTC).
     pub last_checkin_at: Option<NaiveDateTime>,
     /// Up to 5 latest check-in tips, newest first.
-    pub tips: Vec<String>,
+    pub tips: Vec<CheckinTip>,
+}
+
+/// A check-in tip with who left it and when.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CheckinTip {
+    pub text: String,
+    pub created_at: NaiveDateTime,
+    /// `None` when the author's account is gone.
+    pub author: Option<PublicUser>,
 }
 
 #[derive(Insertable, Clone)]

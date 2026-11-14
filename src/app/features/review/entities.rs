@@ -6,6 +6,22 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use uuid::Uuid;
 
+impl ReviewTarget {
+    /// The target of a query that names exactly one of an organisation or a person (422 otherwise).
+    pub fn from_query(
+        organisation_id: Option<Uuid>,
+        person_id: Option<Uuid>,
+    ) -> Result<Self, AppError> {
+        match (organisation_id, person_id) {
+            (Some(id), None) => Ok(Self::Organisation(id)),
+            (None, Some(id)) => Ok(Self::Person(id)),
+            _ => Err(AppError::UnprocessableEntity(json!({
+                "error": "Provide exactly one of organisation_id or person_id"
+            }))),
+        }
+    }
+}
+
 /// Polymorphic review target: exactly one of org/person (DB CHECK enforced).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ReviewTarget {
@@ -104,6 +120,28 @@ impl Review {
         Ok(result)
     }
 
+    /// How many reviews of `target` gave each rating (ratings without reviews are absent).
+    pub fn rating_counts(
+        conn: &mut PgConnection,
+        target: ReviewTarget,
+    ) -> Result<Vec<(i32, i64)>, AppError> {
+        // Not boxed: diesel cannot GROUP BY a boxed query.
+        let counts = match target {
+            ReviewTarget::Organisation(id) => reviews::table
+                .filter(reviews::organisation_id.eq(id))
+                .group_by(reviews::rating)
+                .select((reviews::rating, diesel::dsl::count_star()))
+                .load::<(i32, i64)>(conn)?,
+            ReviewTarget::Person(id) => reviews::table
+                .filter(reviews::person_id.eq(id))
+                .group_by(reviews::rating)
+                .select((reviews::rating, diesel::dsl::count_star()))
+                .load::<(i32, i64)>(conn)?,
+        };
+
+        Ok(counts)
+    }
+
     /// Recomputes AVG/COUNT from the reviews table — the single source of
     /// truth — instead of incrementally patching counters.
     fn refresh_target_aggregates(conn: &mut PgConnection, review: &Review) -> Result<(), AppError> {
@@ -146,8 +184,12 @@ impl Review {
     }
 }
 
+/// Lowest and highest star a review can give (also the rows of the rating breakdown).
+pub const MIN_RATING: i32 = 1;
+pub const MAX_RATING: i32 = 5;
+
 pub fn validate_rating(rating: i32) -> Result<(), AppError> {
-    if !(1..=5).contains(&rating) {
+    if !(MIN_RATING..=MAX_RATING).contains(&rating) {
         return Err(AppError::UnprocessableEntity(
             json!({ "error": "rating must be between 1 and 5" }),
         ));
