@@ -177,11 +177,13 @@ async fn test_one_user_cannot_inflate_checkins() {
         "six taps by one person count once"
     );
     assert_eq!(body["community"]["stillActivePct"], 50.0);
-    assert_eq!(
-        body["community"]["tips"],
-        json!(["tip 5"]),
-        "one tip per person: the latest"
-    );
+    let tips: Vec<&str> = body["community"]["tips"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|tip| tip["text"].as_str().unwrap())
+        .collect();
+    assert_eq!(tips, ["tip 5"], "one tip per person: the latest");
 }
 
 /// A repeat check-in with a blank tip keeps the earlier useful tip.
@@ -208,7 +210,13 @@ async fn test_blank_repeat_tip_keeps_the_earlier_one() {
         last = body;
     }
 
-    assert_eq!(last["community"]["tips"], json!(["bring a passport"]));
+    let tips: Vec<&str> = last["community"]["tips"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|tip| tip["text"].as_str().unwrap())
+        .collect();
+    assert_eq!(tips, ["bring a passport"]);
 }
 
 /// The UPDATE itself refuses to touch the badge once a moderator made the

@@ -217,6 +217,35 @@ diesel::define_sql_function! {
     fn lower(x: diesel::sql_types::Text) -> diesel::sql_types::Text;
 }
 
+/// What anyone may see of a user next to what they wrote or added (reviews,
+/// check-in tips, the places they added) — never their email, role or profile.
+#[derive(Debug, Serialize, Deserialize, Queryable, Selectable, Clone, PartialEq)]
+#[diesel(table_name = users)]
+pub struct PublicUser {
+    pub id: Uuid,
+    pub username: String,
+    pub name: Option<String>,
+    pub avatar_color: Option<String>,
+}
+
+impl PublicUser {
+    /// The public faces of `ids`, keyed by id (one query; unknown ids are absent).
+    pub fn find_many(
+        conn: &mut PgConnection,
+        ids: &[Uuid],
+    ) -> Result<std::collections::HashMap<Uuid, PublicUser>, AppError> {
+        if ids.is_empty() {
+            return Ok(Default::default());
+        }
+        let found = users::table
+            .filter(users::id.eq_any(ids))
+            .select(PublicUser::as_select())
+            .load::<PublicUser>(conn)?;
+
+        Ok(found.into_iter().map(|user| (user.id, user)).collect())
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, Queryable, Insertable, Selectable, Clone)]
 #[diesel(table_name = users)]
 pub struct User {
