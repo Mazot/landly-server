@@ -1,4 +1,4 @@
-use super::entities::Person;
+use super::entities::{Person, RecommendedPerson};
 use actix_web::HttpResponse;
 use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
@@ -13,7 +13,7 @@ pub trait PersonPresenter: Send + Sync + 'static {
     fn to_multi_json(&self, items: Vec<(Person, i64)>) -> HttpResponse;
     fn to_claim_preview_json(&self, person: Person) -> HttpResponse;
     /// The caller's own recommendations, with the moderator's note.
-    fn to_mine_json(&self, items: Vec<(Person, i64, Vec<Uuid>)>) -> HttpResponse;
+    fn to_mine_json(&self, items: Vec<RecommendedPerson>) -> HttpResponse;
 }
 
 /// Public person payload. Contacts (email/whatsapp) are serialized ONLY when
@@ -109,10 +109,18 @@ pub struct MyPersonContent {
     pub moderation_note: Option<String>,
     /// Last change: moderation, or the person answering the claim link (UTC, no timezone).
     pub updated_at: NaiveDateTime,
+    /// `declined` because a moderator rejected it — not because the person turned it down.
+    pub rejected_by_moderator: bool,
 }
 
-impl MyPersonContent {
-    pub fn from_gated(mut person: Person, vouches: i64, language_ids: Vec<Uuid>) -> Self {
+impl From<RecommendedPerson> for MyPersonContent {
+    fn from(item: RecommendedPerson) -> Self {
+        let RecommendedPerson {
+            mut person,
+            vouches,
+            language_ids,
+            rejected_by_moderator,
+        } = item;
         let moderation_note = person.moderation_note.take();
         let updated_at = person.updated_at;
 
@@ -120,6 +128,7 @@ impl MyPersonContent {
             person: PersonContent::from_gated(person, vouches, language_ids),
             moderation_note,
             updated_at,
+            rejected_by_moderator,
         }
     }
 }
@@ -218,13 +227,8 @@ impl PersonPresenter for PersonPresenterImpl {
         HttpResponse::Ok().json(MultiplePeopleResponse { items, total })
     }
 
-    fn to_mine_json(&self, items: Vec<(Person, i64, Vec<Uuid>)>) -> HttpResponse {
-        let items: Vec<MyPersonContent> = items
-            .into_iter()
-            .map(|(person, vouches, language_ids)| {
-                MyPersonContent::from_gated(person, vouches, language_ids)
-            })
-            .collect();
+    fn to_mine_json(&self, items: Vec<RecommendedPerson>) -> HttpResponse {
+        let items: Vec<MyPersonContent> = items.into_iter().map(MyPersonContent::from).collect();
         let total = items.len() as i64;
 
         HttpResponse::Ok().json(MyPeopleResponse { items, total })
@@ -311,8 +315,14 @@ mod tests {
         person.moderation_note = Some("Add a city".to_string());
         let updated_at = person.updated_at;
 
-        let content = MyPersonContent::from_gated(person, 2, vec![]);
+        let content = MyPersonContent::from(RecommendedPerson {
+            person,
+            vouches: 2,
+            language_ids: vec![],
+            rejected_by_moderator: false,
+        });
         assert_eq!(content.moderation_note.as_deref(), Some("Add a city"));
+        assert!(!content.rejected_by_moderator);
         assert_eq!(content.updated_at, updated_at);
         assert_eq!(content.person.vouches, 2);
         assert!(content.person.email.is_none());

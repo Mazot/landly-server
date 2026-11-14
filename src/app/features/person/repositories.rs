@@ -1,5 +1,6 @@
 use super::entities::{
     ClaimOutcome, CreatePerson, ListPeopleFilters, Person, PersonStatus, PersonVouch,
+    RecommendedPerson,
 };
 use crate::{
     error::AppError,
@@ -24,13 +25,13 @@ pub trait PersonRepository: Send + Sync + 'static {
     fn list_people(&self, filters: ListPeopleFilters) -> Result<Vec<(Person, i64)>, AppError>;
 
     /// People `user_id` recommended, any status, newest first — each with its
-    /// vouch count and languages.
+    /// vouch count, languages and whether a moderator rejected it.
     fn list_people_recommended_by(
         &self,
         user_id: Uuid,
         limit: i64,
         offset: i64,
-    ) -> Result<Vec<(Person, i64, Vec<Uuid>)>, AppError>;
+    ) -> Result<Vec<RecommendedPerson>, AppError>;
 
     fn vouch_person(
         &self,
@@ -110,18 +111,9 @@ impl PersonRepository for PersonRepositoryImpl {
         user_id: Uuid,
         limit: i64,
         offset: i64,
-    ) -> Result<Vec<(Person, i64, Vec<Uuid>)>, AppError> {
+    ) -> Result<Vec<RecommendedPerson>, AppError> {
         let conn = &mut self.pool.get()?;
-        let people = Person::list_recommended_by(conn, user_id, limit, offset)?;
-
-        people
-            .into_iter()
-            .map(|p| {
-                let vouches = Person::vouch_count(conn, p.id)?;
-                let language_ids = Person::languages_of(conn, p.id)?;
-                Ok((p, vouches, language_ids))
-            })
-            .collect()
+        Person::list_recommended_by(conn, user_id, limit, offset)
     }
 
     fn vouch_person(

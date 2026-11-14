@@ -2255,4 +2255,70 @@ mod cost_control_tests {
         let (status, _) = call(&app, Method::GET, "/api/organisation/mine", None, None).await;
         assert_eq!(status, StatusCode::UNAUTHORIZED);
     }
+
+    /// Review fix: the owner's edit answers "changes requested" — the place goes
+    /// back to the queue as a resubmission and the stale note is gone.
+    #[actix_web::test]
+    #[serial(jwt_env)]
+    async fn test_owner_resubmitting_after_changes_clears_the_note() {
+        let pool = require_db!();
+        let app = test_app!(pool);
+        let (owner, moderator) = (ts::user(&pool, "user"), ts::user(&pool, "moderator"));
+        let place = ts::org(
+            &pool,
+            OrgSpec {
+                created_by: Some(owner.id),
+                status: Some("pending"),
+                ..OrgSpec::default()
+            },
+        );
+        let (status, body) = call(
+            &app,
+            Method::POST,
+            "/api/moderation/request-changes",
+            Some(&moderator.token),
+            Some(json!({ "kind": "org", "target_id": place.id, "note": "Add a phone number" })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+
+        let (status, body) = call(
+            &app,
+            Method::PUT,
+            &format!("/api/organisation/update/{}", place.id),
+            Some(&owner.token),
+            Some(json!({ "tel": "+49 30 1234567" })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+
+        let (_, mine) = call(
+            &app,
+            Method::GET,
+            "/api/organisation/mine",
+            Some(&owner.token),
+            None,
+        )
+        .await;
+        let item = &mine["items"][0];
+        assert_eq!(item["id"], place.id.to_string(), "{mine}");
+        assert_eq!(item["status"], "pending");
+        assert!(item["moderationNote"].is_null(), "{mine}");
+
+        use crate::data::schema::moderation_events;
+        let conn = &mut pool.get().unwrap();
+        let flags: Vec<Option<serde_json::Value>> = moderation_events::table
+            .filter(moderation_events::target_id.eq(place.id))
+            .filter(moderation_events::action.eq("submitted"))
+            .select(moderation_events::flags)
+            .load(conn)
+            .unwrap();
+        assert!(
+            flags
+                .iter()
+                .flatten()
+                .any(|flags| flags["resubmittedAfterChanges"] == true),
+            "{flags:?}"
+        );
+    }
 }

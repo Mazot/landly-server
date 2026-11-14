@@ -771,4 +771,67 @@ mod http_tests {
         let (status, _) = call(&app, Method::GET, "/api/person/mine", None, None).await;
         assert_eq!(status, StatusCode::UNAUTHORIZED);
     }
+
+    /// Review fix: `declined` is both a moderator's reject and the person turning
+    /// the claim down — `/person/mine` tells the recommender which one it was.
+    #[actix_web::test]
+    #[serial(jwt_env)]
+    async fn test_mine_tells_a_moderator_reject_from_a_declined_claim() {
+        let pool = require_db!();
+        let app = test_app!(pool);
+        let (recommender, moderator) = (ts::user(&pool, "user"), ts::user(&pool, "moderator"));
+
+        let (_, created) = call(
+            &app,
+            Method::POST,
+            "/api/person/create",
+            Some(&recommender.token),
+            Some(recommendation(json!({}))),
+        )
+        .await;
+        let rejected_id = created["person"]["id"].as_str().unwrap().to_string();
+        let (status, body) = call(
+            &app,
+            Method::POST,
+            "/api/moderation/reject",
+            Some(&moderator.token),
+            Some(json!({ "kind": "person", "target_id": rejected_id })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+
+        let (declined_id, token) = approved_person(&app, &recommender, &moderator, json!({})).await;
+        let (status, body) = call(
+            &app,
+            Method::POST,
+            &format!("/api/person/claim/{token}/decline"),
+            None,
+            None,
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+
+        let (_, mine) = call(
+            &app,
+            Method::GET,
+            "/api/person/mine",
+            Some(&recommender.token),
+            None,
+        )
+        .await;
+        let by_id = |id: &str| {
+            mine["items"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|item| item["id"] == id)
+                .unwrap_or_else(|| panic!("{id} missing from {mine}"))
+                .clone()
+        };
+        let (rejected, declined) = (by_id(&rejected_id), by_id(&declined_id));
+        assert_eq!(rejected["status"], "declined");
+        assert_eq!(rejected["rejectedByModerator"], true, "{mine}");
+        assert_eq!(declined["status"], "declined");
+        assert_eq!(declined["rejectedByModerator"], false, "{mine}");
+    }
 }

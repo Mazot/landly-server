@@ -1,9 +1,13 @@
-use crate::data::schema::{people, people_to_languages, person_claim_tokens, person_vouches};
+use crate::app::features::moderation::entities::{ModerationAction, TargetKind};
+use crate::data::schema::{
+    moderation_events, people, people_to_languages, person_claim_tokens, person_vouches,
+};
 use crate::error::*;
 use chrono::NaiveDateTime;
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
 /// Person status flow (TEXT + CHECK): pending (in moderation) → awaiting
@@ -354,21 +358,61 @@ impl Person {
     }
 
     /// People `user_id` recommended, any status, newest first (the account
-    /// screen's "People I recommended").
+    /// screen's "People I recommended"), with their vouch counts, languages and
+    /// whether a moderator rejected them — four queries for the whole page.
     pub fn list_recommended_by(
         conn: &mut PgConnection,
         user_id: Uuid,
         limit: i64,
         offset: i64,
-    ) -> Result<Vec<Self>, AppError> {
-        let result = people::table
+    ) -> Result<Vec<RecommendedPerson>, AppError> {
+        let found = people::table
             .filter(people::recommended_by.eq(user_id))
             .order((people::created_at.desc(), people::id.asc()))
             .limit(limit)
             .offset(offset)
             .load::<Person>(conn)?;
+        let ids: Vec<Uuid> = found.iter().map(|person| person.id).collect();
 
-        Ok(result)
+        let vouches: HashMap<Uuid, i64> = person_vouches::table
+            .filter(person_vouches::person_id.eq_any(&ids))
+            .group_by(person_vouches::person_id)
+            .select((person_vouches::person_id, diesel::dsl::count_star()))
+            .load::<(Uuid, i64)>(conn)?
+            .into_iter()
+            .collect();
+        let mut languages: HashMap<Uuid, Vec<Uuid>> = HashMap::new();
+        for (person_id, language_id) in people_to_languages::table
+            .filter(people_to_languages::person_id.eq_any(&ids))
+            .select((
+                people_to_languages::person_id,
+                people_to_languages::language_id,
+            ))
+            .load::<(Uuid, Uuid)>(conn)?
+        {
+            languages.entry(person_id).or_default().push(language_id);
+        }
+        // `declined` is both the person turning the claim down and a moderator's
+        // reject; the moderation log tells them apart.
+        let rejected: HashSet<Uuid> = moderation_events::table
+            .filter(moderation_events::target_kind.eq(TargetKind::Person.as_str()))
+            .filter(moderation_events::action.eq(ModerationAction::Reject.as_str()))
+            .filter(moderation_events::target_id.eq_any(&ids))
+            .select(moderation_events::target_id)
+            .load::<Uuid>(conn)?
+            .into_iter()
+            .collect();
+
+        Ok(found
+            .into_iter()
+            .map(|person| RecommendedPerson {
+                vouches: vouches.get(&person.id).copied().unwrap_or(0),
+                language_ids: languages.remove(&person.id).unwrap_or_default(),
+                rejected_by_moderator: person.status == PersonStatus::Declined.as_str()
+                    && rejected.contains(&person.id),
+                person,
+            })
+            .collect())
     }
 
     pub fn languages_of(conn: &mut PgConnection, person_id: Uuid) -> Result<Vec<Uuid>, AppError> {
@@ -505,6 +549,15 @@ impl Person {
 
         Ok(updated)
     }
+}
+
+/// A recommendation as its recommender's list needs it (`GET /person/mine`).
+pub struct RecommendedPerson {
+    pub person: Person,
+    pub vouches: i64,
+    pub language_ids: Vec<Uuid>,
+    /// `declined` by a moderator's reject, not by the person.
+    pub rejected_by_moderator: bool,
 }
 
 pub enum ClaimOutcome {

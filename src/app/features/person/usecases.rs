@@ -325,11 +325,19 @@ mod tests {
             user_id: Uuid,
             _limit: i64,
             _offset: i64,
-        ) -> Result<Vec<(Person, i64, Vec<Uuid>)>, AppError> {
+        ) -> Result<Vec<crate::app::features::person::entities::RecommendedPerson>, AppError>
+        {
             let mut person = self.person();
             person.recommended_by = Some(user_id);
 
-            Ok(vec![(person, 0, vec![])])
+            Ok(vec![
+                crate::app::features::person::entities::RecommendedPerson {
+                    person,
+                    vouches: 0,
+                    language_ids: vec![],
+                    rejected_by_moderator: false,
+                },
+            ])
         }
 
         fn vouch_person(

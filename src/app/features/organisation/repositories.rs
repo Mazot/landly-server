@@ -494,6 +494,7 @@ impl OrganisationRepository for OrganisationRepositoryImpl {
                 status: params.status,
                 location_source: params.location_source,
                 location_refreshed_at: params.location_refreshed_at,
+                moderation_note: params.moderation_note,
                 updated_at: chrono::Utc::now().naive_utc(),
             },
         )?;
@@ -718,6 +719,8 @@ pub struct UpdateOrganisationRepositoryInput {
     pub location_source: Option<String>,
     /// `Some(None)` clears it when a point is moved by hand; `None` keeps it.
     pub location_refreshed_at: Option<Option<NaiveDateTime>>,
+    /// `Some(None)` clears the moderator's note (the creator answered it); `None` keeps it.
+    pub moderation_note: Option<Option<String>>,
 }
 
 pub struct FetchOrganisationsRepositoryInput {
