@@ -1,5 +1,6 @@
 use super::entities::{
     ClaimOutcome, CreatePerson, ListPeopleFilters, Person, PersonStatus, PersonVouch,
+    RecommendedPerson,
 };
 use crate::{
     error::AppError,
@@ -22,6 +23,15 @@ pub trait PersonRepository: Send + Sync + 'static {
     fn fetch_person(&self, id: Uuid) -> Result<(Person, i64, Vec<Uuid>), AppError>;
 
     fn list_people(&self, filters: ListPeopleFilters) -> Result<Vec<(Person, i64)>, AppError>;
+
+    /// People `user_id` recommended, any status, newest first — each with its
+    /// vouch count, languages and whether a moderator rejected it.
+    fn list_people_recommended_by(
+        &self,
+        user_id: Uuid,
+        limit: i64,
+        offset: i64,
+    ) -> Result<Vec<RecommendedPerson>, AppError>;
 
     fn vouch_person(
         &self,
@@ -94,6 +104,16 @@ impl PersonRepository for PersonRepositoryImpl {
                 Ok((p, vouches))
             })
             .collect()
+    }
+
+    fn list_people_recommended_by(
+        &self,
+        user_id: Uuid,
+        limit: i64,
+        offset: i64,
+    ) -> Result<Vec<RecommendedPerson>, AppError> {
+        let conn = &mut self.pool.get()?;
+        Person::list_recommended_by(conn, user_id, limit, offset)
     }
 
     fn vouch_person(

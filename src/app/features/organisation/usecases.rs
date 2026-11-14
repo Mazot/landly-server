@@ -468,6 +468,12 @@ impl OrganisationUsecase {
         // turned into publishing anything. It returns to the queue instead.
         let back_to_moderation = managed_by == ManagedBy::Creator
             && existing.status == OrganisationStatus::Live.as_str();
+        // A creator's edit of a place sent back with a note answers that note:
+        // it goes back to the queue as a fresh submission, and the stale note
+        // must not keep saying "changes requested" on the account screen.
+        let resubmitted = managed_by == ManagedBy::Creator
+            && existing.status == OrganisationStatus::Pending.as_str()
+            && existing.moderation_note.is_some();
 
         // An owner's edit never rewrites the badge it merely resent, and a
         // changed one is written only while the row still is not `official`
@@ -513,14 +519,20 @@ impl OrganisationUsecase {
                     .then(|| OrganisationStatus::Pending.as_str().to_string()),
                 location_source,
                 location_refreshed_at: moved.then_some(None),
+                moderation_note: (back_to_moderation || resubmitted).then_some(None),
             },
         )?;
 
-        if back_to_moderation {
+        if back_to_moderation || resubmitted {
+            let flag = if back_to_moderation {
+                "editedAfterApproval"
+            } else {
+                "resubmittedAfterChanges"
+            };
             let _ = self.moderation_repo.record_submitted(SubmittedEventInput {
                 target_kind: TargetKind::Org,
                 target_id: updated_organisation.id,
-                flags: json!({ "editedAfterApproval": true }),
+                flags: json!({ flag: true }),
             });
         }
 
@@ -559,6 +571,21 @@ impl OrganisationUsecase {
         let response = self.organisation_presenter.to_multi_json(organisations);
 
         Ok(response)
+    }
+
+    /// The caller's own submissions in every moderation status — the account
+    /// screen shows where each one stands and what the moderator asked for.
+    pub fn fetch_my_organisations(
+        &self,
+        caller_user_id: Uuid,
+        limit: i64,
+        offset: i64,
+    ) -> Result<HttpResponse, AppError> {
+        let organisations =
+            self.organisation_repo
+                .fetch_organisations_created_by(caller_user_id, limit, offset)?;
+
+        Ok(self.organisation_presenter.to_mine_json(organisations))
     }
 
     /// Map geo-search. Sort defaults to `nearest` when an origin point is
@@ -904,6 +931,8 @@ mod tests {
         organisation: Organisation,
         caller_role: UserRole,
         updated_status: std::sync::Mutex<Vec<Option<String>>>,
+        /// `moderation_note` of every update (`Some(None)` = cleared).
+        updated_note: std::sync::Mutex<Vec<Option<Option<String>>>>,
     }
 
     impl OrganisationRepository for StubRepo {
@@ -920,6 +949,19 @@ mod tests {
             _params: FetchOrganisationsRepositoryInput,
         ) -> Result<Vec<Organisation>, AppError> {
             unimplemented!()
+        }
+
+        fn fetch_organisations_created_by(
+            &self,
+            user_id: Uuid,
+            _limit: i64,
+            _offset: i64,
+        ) -> Result<Vec<Organisation>, AppError> {
+            // Only the stub's organisation, and only for its creator.
+            Ok(Some(self.organisation.clone())
+                .filter(|org| org.created_by == Some(user_id))
+                .into_iter()
+                .collect())
         }
 
         fn search_organisations(
@@ -949,6 +991,10 @@ mod tests {
                 .lock()
                 .unwrap()
                 .push(params.status.clone());
+            self.updated_note
+                .lock()
+                .unwrap()
+                .push(params.moderation_note.clone());
 
             let mut organisation = self.organisation.clone();
             if let Some(status) = params.status {
@@ -1215,6 +1261,7 @@ mod tests {
             organisation,
             caller_role,
             updated_status: std::sync::Mutex::new(vec![]),
+            updated_note: std::sync::Mutex::new(vec![]),
         })
     }
 
@@ -1272,6 +1319,68 @@ mod tests {
             .unwrap();
 
         assert_eq!(*repo.updated_status.lock().unwrap(), vec![None]);
+    }
+
+    /// Review fix: the creator's edit answers the moderator's note, so the note
+    /// is cleared — otherwise the account screen keeps saying "changes requested".
+    #[test]
+    fn test_creator_resubmitting_a_noted_org_clears_the_note() {
+        let owner = Uuid::new_v4();
+        let mut org = test_organisation(Some(owner));
+        org.status = OrganisationStatus::Pending.as_str().to_string();
+        org.moderation_note = Some("Add a phone number".to_string());
+        let repo = stub_repo(org, UserRole::User);
+
+        usecase_with_repo(repo.clone())
+            .update_organisation(Uuid::new_v4(), owner, empty_update())
+            .unwrap();
+
+        assert_eq!(*repo.updated_status.lock().unwrap(), vec![None]);
+        assert_eq!(*repo.updated_note.lock().unwrap(), vec![Some(None)]);
+    }
+
+    /// A live org's creator edit goes back to the queue with a clean slate too.
+    #[test]
+    fn test_creator_edit_of_live_org_clears_the_note() {
+        let owner = Uuid::new_v4();
+        let repo = stub_repo(test_organisation(Some(owner)), UserRole::User);
+
+        usecase_with_repo(repo.clone())
+            .update_organisation(Uuid::new_v4(), owner, empty_update())
+            .unwrap();
+
+        assert_eq!(*repo.updated_note.lock().unwrap(), vec![Some(None)]);
+    }
+
+    /// A moderator's own fix, a creator's edit without a note, and a rejected
+    /// place keep whatever note they have.
+    #[test]
+    fn test_note_is_kept_unless_the_creator_resubmits() {
+        let owner = Uuid::new_v4();
+        let noted = |status: OrganisationStatus| {
+            let mut org = test_organisation(Some(owner));
+            org.status = status.as_str().to_string();
+            org.moderation_note = Some("note".to_string());
+            org
+        };
+        let mut plain = test_organisation(Some(owner));
+        plain.status = OrganisationStatus::Pending.as_str().to_string();
+
+        for (org, role, caller) in [
+            (
+                noted(OrganisationStatus::Pending),
+                UserRole::Moderator,
+                Uuid::new_v4(),
+            ),
+            (plain, UserRole::User, owner),
+            (noted(OrganisationStatus::Rejected), UserRole::User, owner),
+        ] {
+            let repo = stub_repo(org, role);
+            usecase_with_repo(repo.clone())
+                .update_organisation(Uuid::new_v4(), caller, empty_update())
+                .unwrap();
+            assert_eq!(*repo.updated_note.lock().unwrap(), vec![None]);
+        }
     }
 
     #[test]

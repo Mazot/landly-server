@@ -246,6 +246,7 @@ async fn test_badge_guard_refuses_to_overwrite_official() {
         status: None,
         location_source: None,
         location_refreshed_at: None,
+        moderation_note: None,
     };
 
     // Not official yet: a guarded change goes through.

@@ -238,7 +238,7 @@ Every client IP gets a burst of 100 requests, then 20 req/s across the whole API
 ### Profile
 
 ```http
-# Current user profile with stats (places added, etc.)
+# Current user profile with stats: placesAdded, peopleRecommended, reviews, saved (COUNTs over the caller's own rows)
 GET /api/user/me
 Authorization: Bearer <jwt_token>
 
@@ -288,6 +288,11 @@ GET /api/organisation/search?lat=52.5&lng=13.4&radius_km=25&sort=nearest
 # like `name` (equal ignoring case, or one inside the other as whole words of ≥ 4 characters),
 # with distanceKm from the point
 GET /api/organisation/duplicates?name=Kyiv%20Coffee&lat=52.5&lng=13.4
+
+# The caller's own organisations (auth): every moderation status, newest first, each with `moderationNote`
+# (the moderator's note — never part of the public payloads); limit default 20, max 100
+GET /api/organisation/mine?limit=20&offset=0
+Authorization: Bearer <jwt_token>
 
 # Fetch one organisation (openNow computed from opening_hours + timezone)
 GET /api/organisation/fetch/{id}
@@ -379,6 +384,7 @@ A person is a recommended human helper with a claim-and-verify flow: `pending` (
 ```http
 POST /api/person/create          # auth; requires consent_given + a contact; returns claimUrl for manual sending (send_via)
 GET  /api/person/list            # public; confirmed/claimed only; filters: skills, city, language_ids
+GET  /api/person/mine            # auth; people the caller recommended, every status, newest first, with moderationNote + updatedAt; contacts gated as everywhere
 GET  /api/person/fetch/{id}      # public; contacts gated by status + privacy toggles
 POST /api/person/vouch/{id}      # auth; one vouch per user
 
@@ -432,7 +438,7 @@ Every user has a role (`users.role`): `user` (default), `moderator`, or `admin`.
 | Action | anonymous | user | moderator | admin |
 |---|---|---|---|---|
 | Browse (list/search/fetch), signup/signin, visit counter | ✓ | ✓ | ✓ | ✓ |
-| Own profile, languages, corridors | — | ✓ | ✓ | ✓ |
+| Own profile, languages, corridors, own submissions (`/organisation/mine`, `/person/mine`) | — | ✓ | ✓ | ✓ |
 | Add organisation (goes to moderation as `pending`) | — | ✓ | ✓ | ✓ |
 | Edit/delete organisation | — | own only | any | any |
 | Upload / set-primary organisation image | — | own organisation only | any | any |

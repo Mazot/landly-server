@@ -18,6 +18,8 @@ pub trait OrganisationPresenter: Send + Sync + 'static {
     fn to_multi_json(&self, items: Vec<Organisation>) -> HttpResponse;
     fn to_search_json(&self, items: Vec<(Organisation, Option<f64>)>) -> HttpResponse;
     fn to_visits_json(&self, visits: i64) -> HttpResponse;
+    /// The caller's own organisations, with the moderator's note.
+    fn to_mine_json(&self, items: Vec<Organisation>) -> HttpResponse;
 }
 
 /// Computes whether a place is open right now from its structured hours and
@@ -244,6 +246,36 @@ impl From<Vec<Organisation>> for MultipleOrganisationsResponse {
     }
 }
 
+/// An organisation as its submitter sees it (`GET /organisation/mine`): the
+/// public payload plus the moderator's note, which nobody else is shown.
+#[derive(Deserialize, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct MyOrganisationContent {
+    #[serde(flatten)]
+    pub organisation: OrganisationContent,
+    /// Moderator's note to the submitter (set by request-changes / reject, cleared by approve).
+    pub moderation_note: Option<String>,
+}
+
+impl From<Organisation> for MyOrganisationContent {
+    fn from(mut org: Organisation) -> Self {
+        let moderation_note = org.moderation_note.take();
+
+        Self {
+            organisation: OrganisationContent::from(org),
+            moderation_note,
+        }
+    }
+}
+
+#[derive(Deserialize, Serialize, ToSchema)]
+pub struct MyOrganisationsResponse {
+    /// The caller's organisations on this page, newest first.
+    pub items: Vec<MyOrganisationContent>,
+    /// Number of items returned (not the total in the database).
+    pub total: i64,
+}
+
 #[derive(Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct OrganisationVisitsContent {
@@ -306,6 +338,14 @@ impl OrganisationPresenter for OrganisationPresenterImpl {
         HttpResponse::Ok().json(OrganisationVisitsContent {
             visits_count: visits,
         })
+    }
+
+    fn to_mine_json(&self, items: Vec<Organisation>) -> HttpResponse {
+        let items: Vec<MyOrganisationContent> =
+            items.into_iter().map(MyOrganisationContent::from).collect();
+        let total = items.len() as i64;
+
+        HttpResponse::Ok().json(MyOrganisationsResponse { items, total })
     }
 }
 
@@ -379,6 +419,25 @@ mod tests {
         assert_eq!(content.languages, vec!["Russian", "English"]);
         assert_eq!(content.visits_count, 7);
         assert_eq!(content.rating_avg, Some(4.5));
+    }
+
+    /// The submitter's payload is the public one plus the moderator's note —
+    /// which the public payload never carries.
+    #[test]
+    fn test_my_organisation_content_adds_the_moderation_note() {
+        let mut org = create_test_organisation();
+        org.status = "rejected".to_string();
+        org.moderation_note = Some("Not a real place".to_string());
+        let id = org.id;
+
+        let mine = serde_json::to_value(MyOrganisationContent::from(org.clone())).unwrap();
+        assert_eq!(mine["id"], id.to_string());
+        assert_eq!(mine["status"], "rejected");
+        assert_eq!(mine["moderationNote"], "Not a real place");
+        assert!(mine.get("organisation").is_none(), "must be flattened");
+
+        let public = serde_json::to_value(OrganisationContent::from(org)).unwrap();
+        assert!(public.get("moderationNote").is_none());
     }
 
     #[test]

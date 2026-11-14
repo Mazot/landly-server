@@ -1,4 +1,4 @@
-use super::entities::Person;
+use super::entities::{Person, RecommendedPerson};
 use actix_web::HttpResponse;
 use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
@@ -12,6 +12,8 @@ pub trait PersonPresenter: Send + Sync + 'static {
     fn to_created_json(&self, person: Person, claim_url: String) -> HttpResponse;
     fn to_multi_json(&self, items: Vec<(Person, i64)>) -> HttpResponse;
     fn to_claim_preview_json(&self, person: Person) -> HttpResponse;
+    /// The caller's own recommendations, with the moderator's note.
+    fn to_mine_json(&self, items: Vec<RecommendedPerson>) -> HttpResponse;
 }
 
 /// Public person payload. Contacts (email/whatsapp) are serialized ONLY when
@@ -91,6 +93,50 @@ impl PersonContent {
 pub struct MultiplePeopleResponse {
     /// Public (confirmed/claimed) people on this page.
     pub items: Vec<PersonContent>,
+    /// Number of items returned.
+    pub total: i64,
+}
+
+/// A recommendation as its recommender sees it (`GET /person/mine`): the
+/// public payload (contacts gated exactly like everywhere else) plus what only
+/// the recommender is told — the moderator's note and the last change.
+#[derive(Deserialize, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct MyPersonContent {
+    #[serde(flatten)]
+    pub person: PersonContent,
+    /// Moderator's note to the recommender (request-changes / reject).
+    pub moderation_note: Option<String>,
+    /// Last change: moderation, or the person answering the claim link (UTC, no timezone).
+    pub updated_at: NaiveDateTime,
+    /// `declined` because a moderator rejected it — not because the person turned it down.
+    pub rejected_by_moderator: bool,
+}
+
+impl From<RecommendedPerson> for MyPersonContent {
+    fn from(item: RecommendedPerson) -> Self {
+        let RecommendedPerson {
+            mut person,
+            vouches,
+            language_ids,
+            rejected_by_moderator,
+        } = item;
+        let moderation_note = person.moderation_note.take();
+        let updated_at = person.updated_at;
+
+        Self {
+            person: PersonContent::from_gated(person, vouches, language_ids),
+            moderation_note,
+            updated_at,
+            rejected_by_moderator,
+        }
+    }
+}
+
+#[derive(Deserialize, Serialize, ToSchema)]
+pub struct MyPeopleResponse {
+    /// The caller's recommendations on this page, newest first.
+    pub items: Vec<MyPersonContent>,
     /// Number of items returned.
     pub total: i64,
 }
@@ -181,6 +227,13 @@ impl PersonPresenter for PersonPresenterImpl {
         HttpResponse::Ok().json(MultiplePeopleResponse { items, total })
     }
 
+    fn to_mine_json(&self, items: Vec<RecommendedPerson>) -> HttpResponse {
+        let items: Vec<MyPersonContent> = items.into_iter().map(MyPersonContent::from).collect();
+        let total = items.len() as i64;
+
+        HttpResponse::Ok().json(MyPeopleResponse { items, total })
+    }
+
     fn to_claim_preview_json(&self, person: Person) -> HttpResponse {
         HttpResponse::Ok().json(ClaimPreviewContent {
             name: person.name,
@@ -252,6 +305,35 @@ mod tests {
             assert_eq!(content.whatsapp.as_deref(), Some("+49111222333"));
             assert_eq!(content.vouches, 3);
         }
+    }
+
+    /// The recommender's own list adds the moderator's note, but opens no contact
+    /// the public payload keeps closed.
+    #[test]
+    fn test_mine_carries_the_note_and_keeps_contacts_gated() {
+        let mut person = test_person("pending");
+        person.moderation_note = Some("Add a city".to_string());
+        let updated_at = person.updated_at;
+
+        let content = MyPersonContent::from(RecommendedPerson {
+            person,
+            vouches: 2,
+            language_ids: vec![],
+            rejected_by_moderator: false,
+        });
+        assert_eq!(content.moderation_note.as_deref(), Some("Add a city"));
+        assert!(!content.rejected_by_moderator);
+        assert_eq!(content.updated_at, updated_at);
+        assert_eq!(content.person.vouches, 2);
+        assert!(content.person.email.is_none());
+        assert!(content.person.whatsapp.is_none());
+
+        // Flattened: the person's fields sit next to the note, not under a key.
+        let json = serde_json::to_value(&content).unwrap();
+        assert_eq!(json["status"], "pending");
+        assert_eq!(json["moderationNote"], "Add a city");
+        assert!(json.get("person").is_none());
+        assert!(json.get("email").is_none());
     }
 
     #[test]

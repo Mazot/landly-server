@@ -1,7 +1,7 @@
 use super::controllers::{
     checkin_organisation, create_organisation, delete_organisation, fetch_organisation,
-    find_duplicates, list_organisations, search_organisations, update_organisation,
-    visit_organisation,
+    find_duplicates, list_my_organisations, list_organisations, search_organisations,
+    update_organisation, visit_organisation,
 };
 use crate::app::drivers::middlewares::rate_limit::{RateLimitConfig, UserRateLimitConfig};
 use crate::utils::cache::{CacheService, TypedCache};
@@ -33,6 +33,7 @@ pub fn create_configure_services_closure(
                 .route("/list", web::get().to(list_organisations))
                 .route("/search", web::get().to(search_organisations))
                 .route("/duplicates", web::get().to(find_duplicates))
+                .route("/mine", web::get().to(list_my_organisations))
                 .route("/delete/{id}", web::delete().to(delete_organisation))
                 .route("/update/{id}", web::put().to(update_organisation))
                 .route("/fetch/{id}", web::get().to(fetch_organisation))

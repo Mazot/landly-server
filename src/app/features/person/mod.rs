@@ -14,6 +14,7 @@ use utoipa::OpenApi;
     paths(
         controllers::create_person,
         controllers::list_people,
+        controllers::list_my_people,
         controllers::fetch_person,
         controllers::vouch_person,
         controllers::claim_preview,
@@ -23,11 +24,14 @@ use utoipa::OpenApi;
     components(schemas(
         requests::CreatePersonRequest,
         requests::ListPeopleQueryRequest,
+        requests::MyPeopleQueryRequest,
         requests::VouchPersonRequest,
         requests::ClaimConfirmRequest,
         presenters::PersonContent,
         presenters::PersonCreatedContent,
         presenters::MultiplePeopleResponse,
+        presenters::MyPersonContent,
+        presenters::MyPeopleResponse,
         presenters::ClaimPreviewContent,
     )),
     tags(

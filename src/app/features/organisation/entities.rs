@@ -629,6 +629,8 @@ pub struct UpdateOrganisation {
     pub location_source: Option<String>,
     /// `Some(None)` clears it when a point is moved by hand (it is no longer Google's); `None` keeps it.
     pub location_refreshed_at: Option<Option<NaiveDateTime>>,
+    /// `Some(None)` clears the moderator's note when the creator resubmits; `None` keeps it.
+    pub moderation_note: Option<Option<String>>,
 }
 
 #[cfg(test)]

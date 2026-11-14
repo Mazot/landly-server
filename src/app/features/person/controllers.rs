@@ -1,7 +1,8 @@
 use super::{
     entities::ListPeopleFilters,
     requests::{
-        ClaimConfirmRequest, CreatePersonRequest, ListPeopleQueryRequest, VouchPersonRequest,
+        ClaimConfirmRequest, CreatePersonRequest, ListPeopleQueryRequest, MyPeopleQueryRequest,
+        VouchPersonRequest,
     },
     usecases::{ClaimConfirmUsecaseInput, CreatePersonUsecaseInput},
 };
@@ -127,6 +128,34 @@ pub async fn list_people(
             limit: query.limit.unwrap_or(20).clamp(0, 100),
             offset: query.offset.unwrap_or(0).clamp(0, 500),
         })
+}
+
+// [authorship] AI-generated (Claude) — the whole person feature is new.
+#[utoipa::path(
+    get,
+    path = "/person/mine",
+    context_path = "/api",
+    responses(
+        (status = 200, description = "People the caller recommended, in every status, newest first, each with the moderator's note", body = super::presenters::MyPeopleResponse),
+        (status = 401, description = "Unauthorized", body = AppError),
+        (status = 500, description = "Internal server error", body = AppError)
+    ),
+    params(MyPeopleQueryRequest),
+    tag = "Person"
+)]
+pub async fn list_my_people(
+    req: HttpRequest,
+    state: Data<AppState>,
+    query: Query<MyPeopleQueryRequest>,
+) -> Result<HttpResponse, AppError> {
+    let caller = caller_user_id(&req)?;
+    let limit = query.limit.unwrap_or(20).clamp(0, 100);
+    let offset = query.offset.unwrap_or(0).max(0);
+
+    state
+        .di_container
+        .person_usecase
+        .list_my_people(caller, limit, offset)
 }
 
 // [authorship] AI-generated (Claude) — the whole person feature is new.
@@ -641,5 +670,168 @@ mod http_tests {
         )
         .await;
         assert_eq!(status, StatusCode::UNAUTHORIZED);
+    }
+
+    #[actix_web::test]
+    #[serial(jwt_env)]
+    async fn test_mine_lists_the_callers_recommendations_in_every_status() {
+        let pool = require_db!();
+        let app = test_app!(pool);
+        let (recommender, other, moderator) = (
+            ts::user(&pool, "user"),
+            ts::user(&pool, "user"),
+            ts::user(&pool, "moderator"),
+        );
+        let create = recommendation(json!({}));
+        let (_, waiting) = call(
+            &app,
+            Method::POST,
+            "/api/person/create",
+            Some(&recommender.token),
+            Some(create),
+        )
+        .await;
+        let waiting_id = waiting["person"]["id"].as_str().unwrap().to_string();
+        let (approved_id, _) = approved_person(&app, &recommender, &moderator, json!({})).await;
+        let (_, noted) = call(
+            &app,
+            Method::POST,
+            "/api/person/create",
+            Some(&recommender.token),
+            Some(recommendation(json!({}))),
+        )
+        .await;
+        let noted_id = noted["person"]["id"].as_str().unwrap().to_string();
+        let (status, body) = call(
+            &app,
+            Method::POST,
+            "/api/moderation/request-changes",
+            Some(&moderator.token),
+            Some(json!({ "kind": "person", "target_id": noted_id, "note": "Add a city" })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+        let (_, foreign) = call(
+            &app,
+            Method::POST,
+            "/api/person/create",
+            Some(&other.token),
+            Some(recommendation(json!({}))),
+        )
+        .await;
+
+        let (status, mine) = call(
+            &app,
+            Method::GET,
+            "/api/person/mine",
+            Some(&recommender.token),
+            None,
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{mine}");
+        let items = mine["items"].as_array().unwrap();
+        assert_eq!(mine["total"], 3);
+        let by_id = |id: &str| {
+            items
+                .iter()
+                .find(|item| item["id"] == id)
+                .unwrap_or_else(|| panic!("{id} missing from {mine}"))
+        };
+        assert_eq!(by_id(&waiting_id)["status"], "pending");
+        assert_eq!(by_id(&approved_id)["status"], "awaiting");
+        assert_eq!(by_id(&noted_id)["status"], "pending");
+        assert_eq!(by_id(&noted_id)["moderationNote"], "Add a city");
+        assert!(by_id(&noted_id)["updatedAt"].is_string());
+        assert!(
+            items
+                .iter()
+                .all(|item| item["id"] != foreign["person"]["id"]),
+            "someone else's recommendation leaked into {mine}"
+        );
+        // Contacts stay gated for the recommender too: nothing is confirmed yet.
+        assert!(
+            items
+                .iter()
+                .all(|item| item.get("email").is_none() && item.get("whatsapp").is_none()),
+            "{mine}"
+        );
+        // Newest first; paging.
+        assert_eq!(items[0]["id"], noted_id);
+        let (_, page) = call(
+            &app,
+            Method::GET,
+            "/api/person/mine?limit=1&offset=2",
+            Some(&recommender.token),
+            None,
+        )
+        .await;
+        assert_eq!(page["total"], 1);
+        assert_eq!(page["items"][0]["id"], waiting_id);
+
+        let (status, _) = call(&app, Method::GET, "/api/person/mine", None, None).await;
+        assert_eq!(status, StatusCode::UNAUTHORIZED);
+    }
+
+    /// Review fix: `declined` is both a moderator's reject and the person turning
+    /// the claim down — `/person/mine` tells the recommender which one it was.
+    #[actix_web::test]
+    #[serial(jwt_env)]
+    async fn test_mine_tells_a_moderator_reject_from_a_declined_claim() {
+        let pool = require_db!();
+        let app = test_app!(pool);
+        let (recommender, moderator) = (ts::user(&pool, "user"), ts::user(&pool, "moderator"));
+
+        let (_, created) = call(
+            &app,
+            Method::POST,
+            "/api/person/create",
+            Some(&recommender.token),
+            Some(recommendation(json!({}))),
+        )
+        .await;
+        let rejected_id = created["person"]["id"].as_str().unwrap().to_string();
+        let (status, body) = call(
+            &app,
+            Method::POST,
+            "/api/moderation/reject",
+            Some(&moderator.token),
+            Some(json!({ "kind": "person", "target_id": rejected_id })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+
+        let (declined_id, token) = approved_person(&app, &recommender, &moderator, json!({})).await;
+        let (status, body) = call(
+            &app,
+            Method::POST,
+            &format!("/api/person/claim/{token}/decline"),
+            None,
+            None,
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+
+        let (_, mine) = call(
+            &app,
+            Method::GET,
+            "/api/person/mine",
+            Some(&recommender.token),
+            None,
+        )
+        .await;
+        let by_id = |id: &str| {
+            mine["items"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|item| item["id"] == id)
+                .unwrap_or_else(|| panic!("{id} missing from {mine}"))
+                .clone()
+        };
+        let (rejected, declined) = (by_id(&rejected_id), by_id(&declined_id));
+        assert_eq!(rejected["status"], "declined");
+        assert_eq!(rejected["rejectedByModerator"], true, "{mine}");
+        assert_eq!(declined["status"], "declined");
+        assert_eq!(declined["rejectedByModerator"], false, "{mine}");
     }
 }
