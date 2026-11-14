@@ -1,7 +1,8 @@
 use super::{
     requests::{
         CheckinRequest, CreateOrganisationRequest, FindDuplicatesQueryRequest,
-        OrganisationsListQueryRequest, SearchOrganisationsQueryRequest, UpdateOrganisationRequest,
+        MyOrganisationsQueryRequest, OrganisationsListQueryRequest,
+        SearchOrganisationsQueryRequest, UpdateOrganisationRequest,
     },
     usecases::{
         CreateOrganisationUsecaseInput, FetchOrganisationsUsecaseInput, FindDuplicatesUsecaseInput,
@@ -302,6 +303,34 @@ pub async fn create_organisation(
             google_place_id: form.google_place_id.clone(),
         })
         .await
+}
+
+// [authorship] AI-generated (Claude).
+#[utoipa::path(
+    get,
+    path = "/organisation/mine",
+    context_path = "/api",
+    responses(
+        (status = 200, description = "The caller's own organisations in every moderation status, newest first, each with the moderator's note", body = super::presenters::MyOrganisationsResponse),
+        (status = 401, description = "Unauthorized", body = AppError),
+        (status = 500, description = "Internal server error", body = AppError)
+    ),
+    params(MyOrganisationsQueryRequest),
+    tag = "Organisation"
+)]
+pub async fn list_my_organisations(
+    req: HttpRequest,
+    state: Data<AppState>,
+    query: Query<MyOrganisationsQueryRequest>,
+) -> Result<HttpResponse, AppError> {
+    let caller = caller_user_id(&req)?;
+    let limit = query.limit.unwrap_or(20).clamp(0, 100);
+    let offset = query.offset.unwrap_or(0).max(0);
+
+    state
+        .di_container
+        .organisation_usecase
+        .fetch_my_organisations(caller, limit, offset)
 }
 
 // [authorship] AI-generated (Claude).
@@ -2116,5 +2145,114 @@ mod cost_control_tests {
             StatusCode::UNAUTHORIZED,
             "authentication is checked before any limiter"
         );
+    }
+
+    #[actix_web::test]
+    #[serial(jwt_env)]
+    async fn test_mine_lists_the_callers_own_places_in_every_status_with_the_note() {
+        let pool = require_db!();
+        let app = test_app!(pool);
+        let (owner, other, moderator) = (
+            ts::user(&pool, "user"),
+            ts::user(&pool, "user"),
+            ts::user(&pool, "moderator"),
+        );
+        let spec = |status, created_by: &ts::TestUser| OrgSpec {
+            created_by: Some(created_by.id),
+            status: Some(status),
+            ..OrgSpec::default()
+        };
+        let live = ts::org(&pool, spec("live", &owner));
+        let pending = ts::org(&pool, spec("pending", &owner));
+        let rejected = ts::org(&pool, spec("pending", &owner));
+        let foreign = ts::org(&pool, spec("live", &other));
+
+        // A moderator asks for changes on one and rejects another: the note is the owner's to read.
+        for (path, id, note) in [
+            (
+                "/api/moderation/request-changes",
+                pending.id,
+                "Add a phone number",
+            ),
+            ("/api/moderation/reject", rejected.id, "Not a real place"),
+        ] {
+            let (status, body) = call(
+                &app,
+                Method::POST,
+                path,
+                Some(&moderator.token),
+                Some(json!({ "kind": "org", "target_id": id, "note": note })),
+            )
+            .await;
+            assert_eq!(status, StatusCode::OK, "{path}: {body}");
+        }
+
+        let (status, mine) = call(
+            &app,
+            Method::GET,
+            "/api/organisation/mine",
+            Some(&owner.token),
+            None,
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{mine}");
+        let items = mine["items"].as_array().unwrap();
+        assert_eq!(mine["total"], 3);
+        let by_id = |id: Uuid| {
+            items
+                .iter()
+                .find(|item| item["id"] == id.to_string())
+                .unwrap_or_else(|| panic!("{id} missing from {mine}"))
+        };
+        assert_eq!(by_id(live.id)["status"], "live");
+        assert!(by_id(live.id)["moderationNote"].is_null());
+        assert_eq!(by_id(pending.id)["status"], "pending");
+        assert_eq!(by_id(pending.id)["moderationNote"], "Add a phone number");
+        assert_eq!(by_id(rejected.id)["status"], "rejected");
+        assert_eq!(by_id(rejected.id)["moderationNote"], "Not a real place");
+        assert!(
+            items
+                .iter()
+                .all(|item| item["id"] != foreign.id.to_string()),
+            "someone else's place leaked into {mine}"
+        );
+        // Newest first.
+        assert_eq!(items[0]["id"], rejected.id.to_string());
+
+        // Paging, and a caller without places.
+        let (_, page) = call(
+            &app,
+            Method::GET,
+            "/api/organisation/mine?limit=1&offset=1",
+            Some(&owner.token),
+            None,
+        )
+        .await;
+        assert_eq!(page["total"], 1);
+        assert_eq!(page["items"][0]["id"], pending.id.to_string());
+        let (status, empty) = call(
+            &app,
+            Method::GET,
+            "/api/organisation/mine?limit=-5&offset=-5",
+            Some(&moderator.token),
+            None,
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{empty}");
+        assert_eq!(empty["total"], 0);
+
+        // The public payloads never carry the note.
+        let (_, public) = call(
+            &app,
+            Method::GET,
+            &format!("/api/organisation/fetch/{}", pending.id),
+            None,
+            None,
+        )
+        .await;
+        assert!(public.get("moderationNote").is_none(), "{public}");
+
+        let (status, _) = call(&app, Method::GET, "/api/organisation/mine", None, None).await;
+        assert_eq!(status, StatusCode::UNAUTHORIZED);
     }
 }

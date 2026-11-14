@@ -561,6 +561,21 @@ impl OrganisationUsecase {
         Ok(response)
     }
 
+    /// The caller's own submissions in every moderation status — the account
+    /// screen shows where each one stands and what the moderator asked for.
+    pub fn fetch_my_organisations(
+        &self,
+        caller_user_id: Uuid,
+        limit: i64,
+        offset: i64,
+    ) -> Result<HttpResponse, AppError> {
+        let organisations =
+            self.organisation_repo
+                .fetch_organisations_created_by(caller_user_id, limit, offset)?;
+
+        Ok(self.organisation_presenter.to_mine_json(organisations))
+    }
+
     /// Map geo-search. Sort defaults to `nearest` when an origin point is
     /// given, otherwise `recent`; `sort=nearest` without an origin is a 422.
     /// Places on the map (live or waiting for moderation) near a point with a name like the one
@@ -920,6 +935,19 @@ mod tests {
             _params: FetchOrganisationsRepositoryInput,
         ) -> Result<Vec<Organisation>, AppError> {
             unimplemented!()
+        }
+
+        fn fetch_organisations_created_by(
+            &self,
+            user_id: Uuid,
+            _limit: i64,
+            _offset: i64,
+        ) -> Result<Vec<Organisation>, AppError> {
+            // Only the stub's organisation, and only for its creator.
+            Ok(Some(self.organisation.clone())
+                .filter(|org| org.created_by == Some(user_id))
+                .into_iter()
+                .collect())
         }
 
         fn search_organisations(

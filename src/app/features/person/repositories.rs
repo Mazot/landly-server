@@ -23,6 +23,15 @@ pub trait PersonRepository: Send + Sync + 'static {
 
     fn list_people(&self, filters: ListPeopleFilters) -> Result<Vec<(Person, i64)>, AppError>;
 
+    /// People `user_id` recommended, any status, newest first — each with its
+    /// vouch count and languages.
+    fn list_people_recommended_by(
+        &self,
+        user_id: Uuid,
+        limit: i64,
+        offset: i64,
+    ) -> Result<Vec<(Person, i64, Vec<Uuid>)>, AppError>;
+
     fn vouch_person(
         &self,
         person_id: Uuid,
@@ -92,6 +101,25 @@ impl PersonRepository for PersonRepositoryImpl {
             .map(|p| {
                 let vouches = Person::vouch_count(conn, p.id)?;
                 Ok((p, vouches))
+            })
+            .collect()
+    }
+
+    fn list_people_recommended_by(
+        &self,
+        user_id: Uuid,
+        limit: i64,
+        offset: i64,
+    ) -> Result<Vec<(Person, i64, Vec<Uuid>)>, AppError> {
+        let conn = &mut self.pool.get()?;
+        let people = Person::list_recommended_by(conn, user_id, limit, offset)?;
+
+        people
+            .into_iter()
+            .map(|p| {
+                let vouches = Person::vouch_count(conn, p.id)?;
+                let language_ids = Person::languages_of(conn, p.id)?;
+                Ok((p, vouches, language_ids))
             })
             .collect()
     }

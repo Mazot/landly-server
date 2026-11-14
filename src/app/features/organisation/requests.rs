@@ -172,6 +172,15 @@ pub struct OrganisationsListQueryRequest {
     pub offset: Option<i64>,
 }
 
+/// Query of `GET /organisation/mine`.
+#[derive(Deserialize, Serialize, Debug, ToSchema, IntoParams)]
+pub struct MyOrganisationsQueryRequest {
+    /// Page size (default 20, max 100).
+    pub limit: Option<i64>,
+    /// Rows to skip (default 0).
+    pub offset: Option<i64>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

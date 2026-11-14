@@ -48,6 +48,15 @@ pub struct ListPeopleQueryRequest {
     pub offset: Option<i64>,
 }
 
+/// Query of `GET /person/mine`.
+#[derive(Debug, Deserialize, Serialize, ToSchema, IntoParams)]
+pub struct MyPeopleQueryRequest {
+    /// Page size (default 20, max 100).
+    pub limit: Option<i64>,
+    /// Rows to skip (default 0).
+    pub offset: Option<i64>,
+}
+
 #[derive(Debug, Deserialize, Serialize, ToSchema)]
 pub struct VouchPersonRequest {
     /// Optional comment; stored with the vouch, not returned by the API yet.

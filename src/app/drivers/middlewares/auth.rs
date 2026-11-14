@@ -183,7 +183,7 @@ struct AuthRequiredRoute {
     method: Method,
 }
 
-const AUTH_REQUIRED_ROUTES: [AuthRequiredRoute; 34] = [
+const AUTH_REQUIRED_ROUTES: [AuthRequiredRoute; 36] = [
     // person: create/vouch need auth; the /person/claim/* flow is public
     // because the claim token itself is the credential.
     AuthRequiredRoute {
@@ -289,6 +289,15 @@ const AUTH_REQUIRED_ROUTES: [AuthRequiredRoute; 34] = [
     AuthRequiredRoute {
         path: "/api/organisation/create",
         method: Method::POST,
+    },
+    // "mine" lists are GETs, but they answer for the caller: no token, no list.
+    AuthRequiredRoute {
+        path: "/api/organisation/mine",
+        method: Method::GET,
+    },
+    AuthRequiredRoute {
+        path: "/api/person/mine",
+        method: Method::GET,
     },
     AuthRequiredRoute {
         path: "/api/organisation/delete/{id}",
@@ -400,7 +409,7 @@ mod tests {
 
     #[test]
     fn test_auth_required_routes_count() {
-        assert_eq!(AUTH_REQUIRED_ROUTES.len(), 34);
+        assert_eq!(AUTH_REQUIRED_ROUTES.len(), 36);
     }
 
     /// The claim flow must stay public: the token IS the credential, and

@@ -89,6 +89,14 @@ pub trait OrganisationRepository: Send + Sync + 'static {
         longitude: f64,
         limit: i64,
     ) -> Result<Vec<Organisation>, AppError>;
+    /// Organisations `user_id` submitted, any moderation status, newest first
+    /// (the account screen's "My places").
+    fn fetch_organisations_created_by(
+        &self,
+        user_id: Uuid,
+        limit: i64,
+        offset: i64,
+    ) -> Result<Vec<Organisation>, AppError>;
     fn count_live_orgs_created_by(&self, user_id: Uuid) -> Result<i64, AppError>;
     /// Organisations of `user_id` still waiting for moderation.
     fn count_pending_orgs_created_by(&self, user_id: Uuid) -> Result<i64, AppError>;
@@ -574,6 +582,27 @@ impl OrganisationRepository for OrganisationRepositoryImpl {
                 limit,
             },
         )
+    }
+
+    fn fetch_organisations_created_by(
+        &self,
+        user_id: Uuid,
+        limit: i64,
+        offset: i64,
+    ) -> Result<Vec<Organisation>, AppError> {
+        use crate::data::schema::organisations;
+        use diesel::prelude::*;
+
+        // Not cached: the owner must see a fresh status right after moderation.
+        let connection = &mut self.pool.get()?;
+        let items = organisations::table
+            .filter(organisations::created_by.eq(user_id))
+            .order((organisations::created_at.desc(), organisations::id.asc()))
+            .limit(limit)
+            .offset(offset)
+            .load::<Organisation>(connection)?;
+
+        Ok(items)
     }
 
     fn count_live_orgs_created_by(&self, user_id: Uuid) -> Result<i64, AppError> {

@@ -129,6 +129,21 @@ impl PersonUsecase {
         Ok(self.person_presenter.to_multi_json(items))
     }
 
+    /// The caller's own recommendations in every status — the account screen
+    /// shows where each one stands (moderation, waiting for the person, claimed).
+    pub fn list_my_people(
+        &self,
+        caller_user_id: Uuid,
+        limit: i64,
+        offset: i64,
+    ) -> Result<HttpResponse, AppError> {
+        let items = self
+            .person_repo
+            .list_people_recommended_by(caller_user_id, limit, offset)?;
+
+        Ok(self.person_presenter.to_mine_json(items))
+    }
+
     /// Vouch is only meaningful for people already visible publicly.
     pub fn vouch_person(
         &self,
@@ -303,6 +318,18 @@ mod tests {
 
         fn list_people(&self, _filters: ListPeopleFilters) -> Result<Vec<(Person, i64)>, AppError> {
             Ok(vec![])
+        }
+
+        fn list_people_recommended_by(
+            &self,
+            user_id: Uuid,
+            _limit: i64,
+            _offset: i64,
+        ) -> Result<Vec<(Person, i64, Vec<Uuid>)>, AppError> {
+            let mut person = self.person();
+            person.recommended_by = Some(user_id);
+
+            Ok(vec![(person, 0, vec![])])
         }
 
         fn vouch_person(

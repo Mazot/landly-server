@@ -19,8 +19,12 @@ pub trait UserPresenter: Send + Sync + 'static {
 pub struct UserProfileStatsContent {
     /// Organisations this user submitted (any moderation status).
     pub places_added: i64,
-    /// Not computed yet — always 0.
+    /// People this user recommended (any status).
     pub people_recommended: i64,
+    /// Reviews this user wrote.
+    pub reviews: i64,
+    /// Items this user saved (all kinds).
+    pub saved: i64,
     /// Not computed yet — always 0.
     pub people_helped: i64,
     /// Not computed yet — always null.
@@ -77,6 +81,8 @@ impl From<(User, ProfileStats)> for UserProfileContent {
             stats: UserProfileStatsContent {
                 places_added: stats.places_added,
                 people_recommended: stats.people_recommended,
+                reviews: stats.reviews,
+                saved: stats.saved,
                 people_helped: stats.people_helped,
                 rating: stats.rating,
             },
@@ -344,6 +350,8 @@ mod tests {
         let stats = ProfileStats {
             places_added: 3,
             people_recommended: 2,
+            reviews: 9,
+            saved: 14,
             people_helped: 247,
             rating: Some(4.9),
         };
@@ -354,6 +362,8 @@ mod tests {
         assert_eq!(content.locale, "en");
         assert_eq!(content.here_as, Some("newcomer".to_string()));
         assert_eq!(content.stats.places_added, 3);
+        assert_eq!(content.stats.reviews, 9);
+        assert_eq!(content.stats.saved, 14);
         assert_eq!(content.stats.people_helped, 247);
         assert_eq!(content.stats.rating, Some(4.9));
     }

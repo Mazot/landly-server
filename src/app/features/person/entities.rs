@@ -353,6 +353,24 @@ impl Person {
         Ok(result)
     }
 
+    /// People `user_id` recommended, any status, newest first (the account
+    /// screen's "People I recommended").
+    pub fn list_recommended_by(
+        conn: &mut PgConnection,
+        user_id: Uuid,
+        limit: i64,
+        offset: i64,
+    ) -> Result<Vec<Self>, AppError> {
+        let result = people::table
+            .filter(people::recommended_by.eq(user_id))
+            .order((people::created_at.desc(), people::id.asc()))
+            .limit(limit)
+            .offset(offset)
+            .load::<Person>(conn)?;
+
+        Ok(result)
+    }
+
     pub fn languages_of(conn: &mut PgConnection, person_id: Uuid) -> Result<Vec<Uuid>, AppError> {
         let ids = people_to_languages::table
             .filter(people_to_languages::person_id.eq(person_id))

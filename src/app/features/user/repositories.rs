@@ -1,17 +1,21 @@
 use super::entities::{SignUpV2Input, UpdateUserProfile, User, UserToLanguage};
 use crate::{error::AppError, utils::db::DbPool};
+use diesel::prelude::*;
 use serde_json::json;
 use uuid::Uuid;
 
 /// Computed profile stats for the account screen (design: account.jsx).
-/// `people_recommended` / `people_helped` / `rating` come alive in phase 2
-/// together with the person and review features.
+/// `people_helped` / `rating` are not computed yet.
 #[derive(Debug, Clone, Default)]
 pub struct ProfileStats {
     /// Organisations this user submitted (any moderation status).
     pub places_added: i64,
-    /// Not computed yet — always 0.
+    /// People this user recommended (any status).
     pub people_recommended: i64,
+    /// Reviews this user wrote.
+    pub reviews: i64,
+    /// Items this user saved (all kinds).
+    pub saved: i64,
     /// Not computed yet — always 0.
     pub people_helped: i64,
     /// Not computed yet — always null.
@@ -57,6 +61,28 @@ impl UserRepositoryImpl {
     pub fn new(pool: DbPool) -> Self {
         UserRepositoryImpl { pool }
     }
+
+    /// Counters of the account screen, each a COUNT over the user's own rows.
+    fn profile_stats(conn: &mut PgConnection, user_id: Uuid) -> Result<ProfileStats, AppError> {
+        use crate::data::schema::{people, reviews, saved_items};
+
+        Ok(ProfileStats {
+            places_added: User::count_created_organisations(conn, user_id)?,
+            people_recommended: people::table
+                .filter(people::recommended_by.eq(user_id))
+                .count()
+                .get_result::<i64>(conn)?,
+            reviews: reviews::table
+                .filter(reviews::author_id.eq(user_id))
+                .count()
+                .get_result::<i64>(conn)?,
+            saved: saved_items::table
+                .filter(saved_items::user_id.eq(user_id))
+                .count()
+                .get_result::<i64>(conn)?,
+            ..ProfileStats::default()
+        })
+    }
 }
 
 impl UserRepository for UserRepositoryImpl {
@@ -75,10 +101,7 @@ impl UserRepository for UserRepositoryImpl {
     fn fetch_profile(&self, user_id: Uuid) -> Result<(User, ProfileStats), AppError> {
         let conn = &mut self.pool.get()?;
         let user = User::find_by_id(conn, user_id)?;
-        let stats = ProfileStats {
-            places_added: User::count_created_organisations(conn, user_id)?,
-            ..ProfileStats::default()
-        };
+        let stats = Self::profile_stats(conn, user_id)?;
 
         Ok((user, stats))
     }
@@ -90,10 +113,7 @@ impl UserRepository for UserRepositoryImpl {
     ) -> Result<(User, ProfileStats), AppError> {
         let conn = &mut self.pool.get()?;
         let user = User::update_profile(conn, user_id, &changes)?;
-        let stats = ProfileStats {
-            places_added: User::count_created_organisations(conn, user_id)?,
-            ..ProfileStats::default()
-        };
+        let stats = Self::profile_stats(conn, user_id)?;
 
         Ok((user, stats))
     }

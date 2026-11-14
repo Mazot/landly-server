@@ -621,4 +621,67 @@ mod http_tests {
             assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE, "{path}: {resp}");
         }
     }
+
+    #[actix_web::test]
+    #[serial(jwt_env)]
+    async fn test_me_counts_places_people_reviews_and_saved_items() {
+        let pool = require_db!();
+        let app = test_app!(pool);
+        let (me, other) = (ts::user(&pool, "user"), ts::user(&pool, "user"));
+        let stats = |token: String| {
+            let app = &app;
+            async move {
+                let (status, profile) =
+                    call(app, Method::GET, "/api/user/me", Some(&token), None).await;
+                assert_eq!(status, StatusCode::OK, "{profile}");
+                profile["stats"].clone()
+            }
+        };
+        let fresh = stats(me.token.clone()).await;
+        for key in ["placesAdded", "peopleRecommended", "reviews", "saved"] {
+            assert_eq!(fresh[key], 0, "{key} in {fresh}");
+        }
+
+        // Two places (any status counts), one recommendation, one review, two saved items.
+        let spec = |status, by: &ts::TestUser| ts::OrgSpec {
+            created_by: Some(by.id),
+            status: Some(status),
+            ..ts::OrgSpec::default()
+        };
+        ts::org(&pool, spec("live", &me));
+        ts::org(&pool, spec("pending", &me));
+        let theirs = ts::org(&pool, spec("live", &other));
+        for (path, body) in [
+            (
+                "/api/person/create",
+                json!({ "name": format!("Helper {}", ts::unique()), "consent_given": true, "send_via": "email", "email": "h@example.test" }),
+            ),
+            (
+                "/api/review/create",
+                json!({ "organisation_id": theirs.id, "rating": 5 }),
+            ),
+            (
+                "/api/saved/create",
+                json!({ "kind": "org", "target_id": theirs.id }),
+            ),
+            (
+                "/api/saved/create",
+                json!({ "kind": "country", "target_id": Uuid::new_v4() }),
+            ),
+        ] {
+            let (status, resp) = call(&app, Method::POST, path, Some(&me.token), Some(body)).await;
+            assert_eq!(status, StatusCode::OK, "{path}: {resp}");
+        }
+
+        let mine = stats(me.token.clone()).await;
+        assert_eq!(mine["placesAdded"], 2, "{mine}");
+        assert_eq!(mine["peopleRecommended"], 1, "{mine}");
+        assert_eq!(mine["reviews"], 1, "{mine}");
+        assert_eq!(mine["saved"], 2, "{mine}");
+        // Somebody else's numbers are their own.
+        let theirs = stats(other.token.clone()).await;
+        assert_eq!(theirs["placesAdded"], 1, "{theirs}");
+        assert_eq!(theirs["reviews"], 0, "{theirs}");
+        assert_eq!(theirs["saved"], 0, "{theirs}");
+    }
 }
