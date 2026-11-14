@@ -36,6 +36,7 @@ use utoipa::OpenApi;
         presenters::MyOrganisationsResponse,
         presenters::OrganisationVisitsContent,
         presenters::CommunitySignalsContent,
+        presenters::CheckinTipContent,
         requests::CheckinRequest,
     )),
     tags((name = "Organisation", description = "Organisation related endpoints"))

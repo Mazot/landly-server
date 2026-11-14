@@ -26,6 +26,7 @@ use utoipa::OpenApi;
         controllers::oauth_google_exchange,
     ),
     components(schemas(
+        presenters::PublicUserContent,
         requests::SignInRequest,
         requests::SignUpRequest,
         requests::UpdateProfileRequest,

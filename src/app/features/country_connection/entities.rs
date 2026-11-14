@@ -1,7 +1,12 @@
+use crate::app::features::organisation::entities::OrganisationStatus;
 use crate::error::*;
-use crate::{data::models::Country, data::schema::countries_connections};
+use crate::{
+    data::models::Country,
+    data::schema::{countries_connections, organisations},
+};
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use uuid::Uuid;
 
 #[derive(Debug, Associations, Serialize, Deserialize, Queryable, Insertable, Selectable, Clone)]
@@ -132,5 +137,34 @@ impl CountryConnection {
             .load::<CountryConnection>(conn)?;
 
         Ok(result)
+    }
+}
+
+/// What a connection shows of the embassy or consulate it links: its name and
+/// city. Only places on the map (live or pending) — a rejected one is not shown.
+#[derive(Debug, Clone, Queryable, Selectable, Serialize, Deserialize, PartialEq)]
+#[diesel(table_name = organisations)]
+pub struct ConnectedOrganisation {
+    pub id: Uuid,
+    pub name: String,
+    pub city: Option<String>,
+}
+
+impl ConnectedOrganisation {
+    /// The places among `ids` that are on the map, keyed by id (one query).
+    pub fn find_on_the_map(
+        conn: &mut PgConnection,
+        ids: &[Uuid],
+    ) -> Result<HashMap<Uuid, Self>, AppError> {
+        if ids.is_empty() {
+            return Ok(HashMap::new());
+        }
+        let found = organisations::table
+            .filter(organisations::id.eq_any(ids))
+            .filter(organisations::status.eq_any(OrganisationStatus::on_the_map()))
+            .select(Self::as_select())
+            .load::<Self>(conn)?;
+
+        Ok(found.into_iter().map(|org| (org.id, org)).collect())
     }
 }

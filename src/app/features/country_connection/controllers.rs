@@ -197,6 +197,82 @@ mod http_tests {
     use serial_test::serial;
     use uuid::Uuid;
 
+    /// The consular network names the linked places (name + city) — never a
+    /// rejected one — and a renamed place shows its new name although the
+    /// connection list itself is cached.
+    #[actix_web::test]
+    #[serial(jwt_env)]
+    async fn test_list_names_the_linked_places_on_the_map() {
+        let pool = require_db!();
+        let app = test_app!(pool);
+        let admin = ts::user(&pool, "admin");
+        let embassy = ts::org(&pool, OrgSpec::default());
+        let consulate = ts::org(&pool, OrgSpec::default());
+        let hidden = ts::org(
+            &pool,
+            OrgSpec {
+                status: Some("rejected"),
+                ..Default::default()
+            },
+        );
+        for linked in [consulate.id, hidden.id] {
+            let (status, body) = call(
+                &app,
+                Method::POST,
+                "/api/country-connection/create",
+                Some(&admin.token),
+                Some(json!({ "embassy_org_id": embassy.id, "consulate_org_id": linked })),
+            )
+            .await;
+            assert_eq!(status, StatusCode::OK, "{body}");
+            assert_eq!(body["embassy"]["name"], embassy.name, "{body}");
+        }
+
+        let list_path = format!("/api/country-connection/list?embassy_org_id={}", embassy.id);
+        let (status, list) = call(&app, Method::GET, &list_path, None, None).await;
+        assert_eq!(status, StatusCode::OK, "{list}");
+        let items = list["items"].as_array().unwrap();
+        assert_eq!(items.len(), 2, "{list}");
+        let by_consulate = |id: Uuid| {
+            items
+                .iter()
+                .find(|item| item["consulateOrgId"] == id.to_string())
+                .unwrap_or_else(|| panic!("{list}"))
+        };
+        assert_eq!(
+            by_consulate(consulate.id)["consulate"]["name"],
+            consulate.name
+        );
+        assert_eq!(
+            by_consulate(consulate.id)["consulate"]["id"],
+            consulate.id.to_string()
+        );
+        assert!(
+            by_consulate(hidden.id)["consulate"].is_null(),
+            "rejected: not shown"
+        );
+
+        // Renamed through the API: the cached list still shows the new name.
+        let (status, _) = call(
+            &app,
+            Method::PUT,
+            &format!("/api/organisation/update/{}", consulate.id),
+            Some(&admin.token),
+            Some(json!({ "name": "Consulate General in Hamburg" })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        let (_, list) = call(&app, Method::GET, &list_path, None, None).await;
+        let renamed = list["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|item| item["consulateOrgId"] == consulate.id.to_string())
+            .unwrap()
+            .clone();
+        assert_eq!(renamed["consulate"]["name"], "Consulate General in Hamburg");
+    }
+
     #[actix_web::test]
     #[serial(jwt_env)]
     async fn test_country_connection_crud_is_admin_only() {

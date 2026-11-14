@@ -370,7 +370,7 @@ GET /api/common/timezone?lat=44.8&lng=20.46
 GET  /api/common/org_types                    # public
 POST /api/common/org_types                    # admin; { org_type, color, title, slug? }
 
-GET    /api/country-connection/list           # filters: embassy_org_id, consulate_org_id, location_country_id
+GET    /api/country-connection/list           # filters: embassy_org_id, consulate_org_id, location_country_id; embassy/consulate name + city while on the map
 GET    /api/country-connection/fetch/{id}
 POST   /api/country-connection/create         # admin
 PUT    /api/country-connection/update/{id}    # admin
@@ -398,7 +398,8 @@ POST /api/person/claim/{token}/decline   # -> declined
 
 ```http
 POST   /api/review/create        # auth; exactly one of organisation_id/person_id; rating 1-5; one per author per target
-GET    /api/review/list?organisation_id=|person_id=
+GET    /api/review/list?organisation_id=|person_id=      # public; each review carries its author's public face (username, name, avatarColor)
+GET    /api/review/summary?organisation_id=|person_id=   # public; count, ratingAvg, byRating 5…1 (zeros included)
 DELETE /api/review/delete/{id}   # author or moderator
 ```
 

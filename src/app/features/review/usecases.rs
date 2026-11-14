@@ -86,7 +86,12 @@ impl ReviewUsecase {
             text: params.text,
         })?;
 
-        Ok(self.review_presenter.to_single_json(review))
+        let author = self
+            .review_repo
+            .fetch_public_users(&[review.author_id])?
+            .remove(&review.author_id);
+
+        Ok(self.review_presenter.to_single_json(review, author))
     }
 
     pub fn list_reviews(
@@ -96,19 +101,31 @@ impl ReviewUsecase {
         limit: i64,
         offset: i64,
     ) -> Result<HttpResponse, AppError> {
-        let target = match (organisation_id, person_id) {
-            (Some(org_id), None) => ReviewTarget::Organisation(org_id),
-            (None, Some(person_id)) => ReviewTarget::Person(person_id),
-            _ => {
-                return Err(AppError::UnprocessableEntity(json!({
-                    "error": "Provide exactly one of organisation_id or person_id"
-                })));
-            }
-        };
-
+        let target = ReviewTarget::from_query(organisation_id, person_id)?;
         let reviews = self.review_repo.list_reviews(target, limit, offset)?;
+        let author_ids: Vec<Uuid> = reviews.iter().map(|review| review.author_id).collect();
+        let authors = self.review_repo.fetch_public_users(&author_ids)?;
+        let reviews = reviews
+            .into_iter()
+            .map(|review| {
+                let author = authors.get(&review.author_id).cloned();
+                (review, author)
+            })
+            .collect();
 
         Ok(self.review_presenter.to_multi_json(reviews))
+    }
+
+    /// How a target is rated: count, average and the per-rating breakdown.
+    pub fn review_summary(
+        &self,
+        organisation_id: Option<Uuid>,
+        person_id: Option<Uuid>,
+    ) -> Result<HttpResponse, AppError> {
+        let target = ReviewTarget::from_query(organisation_id, person_id)?;
+        let rating_counts = self.review_repo.rating_counts(target)?;
+
+        Ok(self.review_presenter.to_summary_json(rating_counts))
     }
 
     /// Delete: author or moderator/admin.
@@ -171,6 +188,23 @@ mod tests {
     }
 
     impl ReviewRepository for StubRepo {
+        fn rating_counts(
+            &self,
+            _target: crate::app::features::review::entities::ReviewTarget,
+        ) -> Result<Vec<(i32, i64)>, AppError> {
+            Ok(vec![])
+        }
+
+        fn fetch_public_users(
+            &self,
+            _ids: &[Uuid],
+        ) -> Result<
+            std::collections::HashMap<Uuid, crate::app::features::user::entities::PublicUser>,
+            AppError,
+        > {
+            Ok(Default::default())
+        }
+
         fn create_review(&self, record: CreateReview) -> Result<Review, AppError> {
             let review = Review {
                 id: Uuid::new_v4(),

@@ -1,3 +1,4 @@
+use super::entities::{ConnectedOrganisation, CountryConnection};
 use super::{
     presenters::CountryConnectionPresenter,
     repositories::{
@@ -44,11 +45,27 @@ impl CountryConnectionUsecase {
         ))
     }
 
+    /// Name and city of every embassy and consulate `connections` link (one query).
+    fn connected_organisations(
+        &self,
+        connections: &[CountryConnection],
+    ) -> Result<std::collections::HashMap<Uuid, ConnectedOrganisation>, AppError> {
+        let ids: Vec<Uuid> = connections
+            .iter()
+            .flat_map(|connection| [connection.embassy_org_id, connection.consulate_org_id])
+            .flatten()
+            .collect();
+
+        self.country_connection_repo
+            .fetch_connected_organisations(&ids)
+    }
+
     pub fn fetch_country_connection(&self, id: Uuid) -> Result<HttpResponse, AppError> {
         let country_connection = self.country_connection_repo.fetch_country_connection(id)?;
+        let orgs = self.connected_organisations(std::slice::from_ref(&country_connection))?;
         let response = self
             .country_connection_presenter
-            .to_single_json(country_connection);
+            .to_single_json(country_connection, &orgs);
 
         Ok(response)
     }
@@ -66,9 +83,10 @@ impl CountryConnectionUsecase {
                 offset: params.offset,
             },
         )?;
+        let orgs = self.connected_organisations(&country_connections)?;
         let response = self
             .country_connection_presenter
-            .to_multi_json(country_connections);
+            .to_multi_json(country_connections, &orgs);
 
         Ok(response)
     }
@@ -93,9 +111,10 @@ impl CountryConnectionUsecase {
                 location_country_id: params.location_country_id,
             },
         )?;
+        let orgs = self.connected_organisations(std::slice::from_ref(&new_country_connection))?;
         let response = self
             .country_connection_presenter
-            .to_single_json(new_country_connection);
+            .to_single_json(new_country_connection, &orgs);
 
         Ok(response)
     }
@@ -122,9 +141,11 @@ impl CountryConnectionUsecase {
                 location_country_id: params.location_country_id,
             },
         )?;
+        let orgs =
+            self.connected_organisations(std::slice::from_ref(&updated_country_connection))?;
         let response = self
             .country_connection_presenter
-            .to_single_json(updated_country_connection);
+            .to_single_json(updated_country_connection, &orgs);
 
         Ok(response)
     }
@@ -204,6 +225,16 @@ mod tests {
     }
 
     impl CountryConnectionRepository for StubRepo {
+        fn fetch_connected_organisations(
+            &self,
+            _ids: &[Uuid],
+        ) -> Result<
+            std::collections::HashMap<Uuid, super::super::entities::ConnectedOrganisation>,
+            AppError,
+        > {
+            Ok(Default::default())
+        }
+
         fn fetch_country_connections(
             &self,
             _params: FetchCountryConnectionsRepositoryInput,

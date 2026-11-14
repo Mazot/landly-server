@@ -1,7 +1,7 @@
 use super::entities::{CreateReview, Review, ReviewTarget};
 use crate::app::features::organisation::entities::Organisation;
 use crate::app::features::person::entities::Person;
-use crate::app::features::user::entities::{User, UserRole};
+use crate::app::features::user::entities::{PublicUser, User, UserRole};
 use crate::{
     error::AppError,
     utils::{
@@ -9,7 +9,7 @@ use crate::{
         db::DbPool,
     },
 };
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 use uuid::Uuid;
 
 pub trait ReviewRepository: Send + Sync + 'static {
@@ -23,6 +23,12 @@ pub trait ReviewRepository: Send + Sync + 'static {
     ) -> Result<Vec<Review>, AppError>;
 
     fn fetch_review(&self, id: Uuid) -> Result<Review, AppError>;
+
+    /// How many reviews of `target` gave each rating.
+    fn rating_counts(&self, target: ReviewTarget) -> Result<Vec<(i32, i64)>, AppError>;
+
+    /// The public faces of review authors, keyed by id.
+    fn fetch_public_users(&self, ids: &[Uuid]) -> Result<HashMap<Uuid, PublicUser>, AppError>;
 
     fn delete_review(&self, review: &Review) -> Result<(), AppError>;
 
@@ -77,6 +83,18 @@ impl ReviewRepository for ReviewRepositoryImpl {
         let conn = &mut self.pool.get()?;
 
         Review::list_for_target(conn, target, limit, offset)
+    }
+
+    fn rating_counts(&self, target: ReviewTarget) -> Result<Vec<(i32, i64)>, AppError> {
+        let conn = &mut self.pool.get()?;
+
+        Review::rating_counts(conn, target)
+    }
+
+    fn fetch_public_users(&self, ids: &[Uuid]) -> Result<HashMap<Uuid, PublicUser>, AppError> {
+        let conn = &mut self.pool.get()?;
+
+        PublicUser::find_many(conn, ids)
     }
 
     fn fetch_review(&self, id: Uuid) -> Result<Review, AppError> {

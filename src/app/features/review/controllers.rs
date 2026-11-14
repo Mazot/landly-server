@@ -1,5 +1,5 @@
 use super::{
-    requests::{CreateReviewRequest, ListReviewsQueryRequest},
+    requests::{CreateReviewRequest, ListReviewsQueryRequest, ReviewSummaryQueryRequest},
     usecases::CreateReviewUsecaseInput,
 };
 use crate::app::drivers::middlewares::state::AppState;
@@ -77,6 +77,29 @@ pub async fn list_reviews(
         query.limit.unwrap_or(20).clamp(0, 100),
         query.offset.unwrap_or(0).clamp(0, 500),
     )
+}
+
+// [authorship] AI-generated (Claude) — the whole review feature is new.
+#[utoipa::path(
+    get,
+    path = "/review/summary",
+    context_path = "/api",
+    responses(
+        (status = 200, description = "Count, average and the per-rating breakdown (5 … 1) of one target's reviews", body = super::presenters::ReviewSummaryContent),
+        (status = 422, description = "Exactly one target must be given", body = AppError),
+        (status = 500, description = "Internal server error", body = AppError)
+    ),
+    params(ReviewSummaryQueryRequest),
+    tag = "Review"
+)]
+pub async fn review_summary(
+    state: Data<AppState>,
+    query: Query<ReviewSummaryQueryRequest>,
+) -> Result<HttpResponse, AppError> {
+    state
+        .di_container
+        .review_usecase
+        .review_summary(query.organisation_id, query.person_id)
 }
 
 // [authorship] AI-generated (Claude) — the whole review feature is new.
@@ -169,6 +192,47 @@ mod http_tests {
         assert_eq!(status, StatusCode::OK);
         assert_eq!(list["total"], 2);
         assert_eq!(list["items"][0]["id"], second["id"], "newest first");
+        // Each review names its author by their public face.
+        assert_eq!(list["items"][0]["author"]["username"], bob.username);
+        assert_eq!(list["items"][1]["author"]["username"], alice.username);
+        assert!(list["items"][0]["author"].get("email").is_none());
+        assert_eq!(first["author"]["username"], alice.username, "{first}");
+
+        let (status, summary) = call(
+            &app,
+            Method::GET,
+            &format!("/api/review/summary?organisation_id={}", org.id),
+            None,
+            None,
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{summary}");
+        assert_eq!(summary["count"], 2);
+        assert_eq!(summary["ratingAvg"], 3.5);
+        assert_eq!(
+            summary["byRating"],
+            json!([
+                { "rating": 5, "count": 1 },
+                { "rating": 4, "count": 0 },
+                { "rating": 3, "count": 0 },
+                { "rating": 2, "count": 1 },
+                { "rating": 1, "count": 0 }
+            ])
+        );
+        for query in [
+            "",
+            "?organisation_id=00000000-0000-0000-0000-000000000000&person_id=00000000-0000-0000-0000-000000000000",
+        ] {
+            let (status, _) = call(
+                &app,
+                Method::GET,
+                &format!("/api/review/summary{query}"),
+                None,
+                None,
+            )
+            .await;
+            assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{query}");
+        }
 
         let (status, _) = call(
             &app,
