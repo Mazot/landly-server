@@ -1,6 +1,6 @@
 use crate::app::features::moderation::entities::{ModerationAction, TargetKind};
 use crate::data::schema::{
-    moderation_events, people, people_to_languages, person_claim_tokens, person_vouches,
+    moderation_events, people, people_to_languages, person_claim_tokens, person_vouches, skills,
 };
 use crate::error::*;
 use chrono::NaiveDateTime;
@@ -60,6 +60,8 @@ impl TryFrom<&str> for PersonStatus {
 pub enum SendVia {
     Email,
     Whatsapp,
+    Telegram,
+    Instagram,
 }
 
 impl SendVia {
@@ -67,6 +69,8 @@ impl SendVia {
         match self {
             SendVia::Email => "email",
             SendVia::Whatsapp => "whatsapp",
+            SendVia::Telegram => "telegram",
+            SendVia::Instagram => "instagram",
         }
     }
 }
@@ -78,6 +82,8 @@ impl TryFrom<&str> for SendVia {
         match value {
             "email" => Ok(SendVia::Email),
             "whatsapp" => Ok(SendVia::Whatsapp),
+            "telegram" => Ok(SendVia::Telegram),
+            "instagram" => Ok(SendVia::Instagram),
             other => Err(AppError::UnprocessableEntity(
                 json!({ "error": format!("Unknown send_via value: {}", other) }),
             )),
@@ -104,7 +110,7 @@ pub struct Person {
     pub email: Option<String>,
     /// Hidden contact. Used to deliver the claim link; public only after confirm/claim with `show_whatsapp` on.
     pub whatsapp: Option<String>,
-    /// How the recommender sends the claim link: `email` or `whatsapp`.
+    /// How the recommender sends the claim link: `email`, `whatsapp`, `telegram` or `instagram`.
     pub send_via: Option<String>,
     /// The person agreed to be recommended (required to create).
     pub consent_given: bool,
@@ -132,6 +138,14 @@ pub struct Person {
     pub created_at: NaiveDateTime,
     /// Last change (UTC, no timezone).
     pub updated_at: NaiveDateTime,
+    /// Hidden contact (a handle or link). Used to deliver the claim link; public only after confirm/claim with `show_telegram` on.
+    pub telegram: Option<String>,
+    /// Hidden contact (a handle or link). Used to deliver the claim link; public only after confirm/claim with `show_instagram` on.
+    pub instagram: Option<String>,
+    /// Privacy toggle: publish Telegram once confirmed. Default false.
+    pub show_telegram: bool,
+    /// Privacy toggle: publish Instagram once confirmed. Default false.
+    pub show_instagram: bool,
 }
 
 impl Person {
@@ -206,7 +220,7 @@ pub struct CreatePerson {
     pub email: Option<String>,
     /// Hidden contact. Used to deliver the claim link; public only after confirm/claim with `show_whatsapp` on.
     pub whatsapp: Option<String>,
-    /// How the recommender sends the claim link: `email` or `whatsapp`.
+    /// How the recommender sends the claim link: `email`, `whatsapp`, `telegram` or `instagram`.
     pub send_via: Option<String>,
     /// The person agreed to be recommended (required to create).
     pub consent_given: bool,
@@ -222,6 +236,14 @@ pub struct CreatePerson {
     pub allow_reviews: bool,
     /// User who recommended the person; null if that account was deleted.
     pub recommended_by: Option<Uuid>,
+    /// Hidden contact (a handle or link). Used to deliver the claim link; public only after confirm/claim with `show_telegram` on.
+    pub telegram: Option<String>,
+    /// Hidden contact (a handle or link). Used to deliver the claim link; public only after confirm/claim with `show_instagram` on.
+    pub instagram: Option<String>,
+    /// Privacy toggle: publish Telegram once confirmed. Default false.
+    pub show_telegram: bool,
+    /// Privacy toggle: publish Instagram once confirmed. Default false.
+    pub show_instagram: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize, Queryable, Insertable, Selectable, Clone)]
@@ -254,6 +276,18 @@ pub struct PersonVouch {
     pub note: Option<String>,
     /// Vouch time (UTC).
     pub created_at: NaiveDateTime,
+}
+
+/// One choice of what a helper can help with (the reference list behind `people.skills`).
+#[derive(Debug, Serialize, Deserialize, Queryable, Selectable, Clone, PartialEq)]
+#[diesel(table_name = skills)]
+pub struct Skill {
+    /// Skill ID.
+    pub id: Uuid,
+    /// Display name, e.g. "Paperwork" — what `people.skills` stores.
+    pub name: String,
+    /// Position in the list.
+    pub sort_order: i32,
 }
 
 /// Claim-link lifetime: long enough for a manual send + a busy week.
@@ -333,6 +367,10 @@ impl Person {
 
         if let Some(city) = &filters.city {
             query = query.filter(people::city.ilike(format!("%{}%", city)));
+        }
+
+        if let Some(country_id) = filters.location_country_id {
+            query = query.filter(people::location_country_id.eq(country_id));
         }
 
         if let Some(skills) = &filters.skills {
@@ -441,6 +479,32 @@ impl Person {
         Ok(vouch)
     }
 
+    /// Whether `user_id` already vouched for the person.
+    pub fn has_vouched(
+        conn: &mut PgConnection,
+        person_id: Uuid,
+        user_id: Uuid,
+    ) -> Result<bool, AppError> {
+        let found = diesel::select(diesel::dsl::exists(
+            person_vouches::table
+                .filter(person_vouches::person_id.eq(person_id))
+                .filter(person_vouches::user_id.eq(user_id)),
+        ))
+        .get_result::<bool>(conn)?;
+
+        Ok(found)
+    }
+
+    /// The skills a helper can be recommended for, in list order.
+    pub fn list_skills(conn: &mut PgConnection) -> Result<Vec<Skill>, AppError> {
+        let found = skills::table
+            .order(skills::sort_order.asc())
+            .select(Skill::as_select())
+            .load::<Skill>(conn)?;
+
+        Ok(found)
+    }
+
     pub fn vouch_count(conn: &mut PgConnection, person_id: Uuid) -> Result<i64, AppError> {
         let count = person_vouches::table
             .filter(person_vouches::person_id.eq(person_id))
@@ -505,6 +569,8 @@ impl Person {
                     claimed_by,
                     show_whatsapp,
                     show_email,
+                    show_telegram,
+                    show_instagram,
                     show_city,
                     allow_reviews,
                 } => {
@@ -521,6 +587,9 @@ impl Person {
                             people::consent_given.eq(true),
                             people::show_whatsapp.eq(show_whatsapp.unwrap_or(person.show_whatsapp)),
                             people::show_email.eq(show_email.unwrap_or(person.show_email)),
+                            people::show_telegram.eq(show_telegram.unwrap_or(person.show_telegram)),
+                            people::show_instagram
+                                .eq(show_instagram.unwrap_or(person.show_instagram)),
                             people::show_city.eq(show_city.unwrap_or(person.show_city)),
                             people::allow_reviews.eq(allow_reviews.unwrap_or(person.allow_reviews)),
                             people::updated_at.eq(chrono::Utc::now().naive_utc()),
@@ -565,6 +634,8 @@ pub enum ClaimOutcome {
         claimed_by: Option<Uuid>,
         show_whatsapp: Option<bool>,
         show_email: Option<bool>,
+        show_telegram: Option<bool>,
+        show_instagram: Option<bool>,
         show_city: Option<bool>,
         allow_reviews: Option<bool>,
     },
@@ -574,6 +645,8 @@ pub enum ClaimOutcome {
 pub struct ListPeopleFilters {
     /// Case-insensitive substring filter on the city.
     pub city: Option<String>,
+    /// Only people living in this country.
+    pub location_country_id: Option<Uuid>,
     /// Only people with at least one of these skills.
     pub skills: Option<Vec<String>>,
     /// Only people speaking at least one of these languages.
@@ -638,16 +711,23 @@ mod tests {
 
     #[test]
     fn test_send_via_round_trip() {
-        for send_via in [SendVia::Email, SendVia::Whatsapp] {
+        for send_via in [
+            SendVia::Email,
+            SendVia::Whatsapp,
+            SendVia::Telegram,
+            SendVia::Instagram,
+        ] {
             assert_eq!(SendVia::try_from(send_via.as_str()).unwrap(), send_via);
         }
         assert_eq!(SendVia::Email.as_str(), "email");
         assert_eq!(SendVia::Whatsapp.as_str(), "whatsapp");
+        assert_eq!(SendVia::Telegram.as_str(), "telegram");
+        assert_eq!(SendVia::Instagram.as_str(), "instagram");
     }
 
     #[test]
     fn test_send_via_rejects_unknown() {
-        match SendVia::try_from("telegram") {
+        match SendVia::try_from("signal") {
             Err(AppError::UnprocessableEntity(_)) => (),
             other => panic!("expected UnprocessableEntity, got {:?}", other),
         }
@@ -677,6 +757,10 @@ mod tests {
             reviews_count: 0,
             created_at: chrono::Utc::now().naive_utc(),
             updated_at: chrono::Utc::now().naive_utc(),
+            telegram: None,
+            instagram: None,
+            show_telegram: false,
+            show_instagram: false,
         }
     }
 
@@ -685,6 +769,8 @@ mod tests {
             claimed_by,
             show_whatsapp: Some(true),
             show_email: Some(true),
+            show_telegram: Some(true),
+            show_instagram: Some(true),
             show_city: None,
             allow_reviews: None,
         }

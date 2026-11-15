@@ -44,6 +44,8 @@ impl PersonUsecase {
         v::max_chars("city", params.city.as_deref(), limits::CITY)?;
         v::max_chars("email", params.email.as_deref(), limits::EMAIL)?;
         v::max_chars("whatsapp", params.whatsapp.as_deref(), limits::HANDLE)?;
+        v::max_chars("telegram", params.telegram.as_deref(), limits::HANDLE)?;
+        v::max_chars("instagram", params.instagram.as_deref(), limits::HANDLE)?;
         v::tag_list("skills", Some(&params.skills), limits::SKILLS, limits::TAG)?;
         v::max_items(
             "language_ids",
@@ -58,9 +60,13 @@ impl PersonUsecase {
         if let Some(send_via) = params.send_via.as_deref() {
             SendVia::try_from(send_via)?;
         }
-        if params.email.is_none() && params.whatsapp.is_none() {
+        if params.email.is_none()
+            && params.whatsapp.is_none()
+            && params.telegram.is_none()
+            && params.instagram.is_none()
+        {
             return Err(AppError::UnprocessableEntity(json!({
-                "error": "At least one contact (email or whatsapp) is required to send the claim link"
+                "error": "At least one contact (email, whatsapp, telegram or instagram) is required to send the claim link"
             })));
         }
 
@@ -73,11 +79,15 @@ impl PersonUsecase {
                 skills: params.skills.into_iter().map(Some).collect(),
                 email: params.email,
                 whatsapp: params.whatsapp,
+                telegram: params.telegram,
+                instagram: params.instagram,
                 send_via: params.send_via,
                 consent_given: params.consent_given,
                 status: PersonStatus::Pending.as_str().to_string(),
                 show_whatsapp: params.show_whatsapp,
                 show_email: params.show_email,
+                show_telegram: params.show_telegram,
+                show_instagram: params.show_instagram,
                 show_city: params.show_city,
                 allow_reviews: params.allow_reviews,
                 recommended_by: Some(params.recommended_by),
@@ -103,12 +113,33 @@ impl PersonUsecase {
         Ok(self.person_presenter.to_created_json(person, claim_url))
     }
 
-    pub fn fetch_person(&self, id: Uuid) -> Result<HttpResponse, AppError> {
+    /// `viewer`: the signed-in caller, if any — only to tell whether they already vouched.
+    pub fn fetch_person(&self, id: Uuid, viewer: Option<Uuid>) -> Result<HttpResponse, AppError> {
         let (person, vouches, language_ids) = self.person_repo.fetch_person(id)?;
+        let recommender = match person.recommended_by {
+            Some(user_id) => self.person_repo.fetch_public_user(user_id)?,
+            None => None,
+        };
 
-        Ok(self
-            .person_presenter
-            .to_single_json(person, vouches, language_ids))
+        let vouched_by_me = match viewer {
+            Some(user_id) => self.person_repo.has_vouched(id, user_id)?,
+            None => false,
+        };
+
+        Ok(self.person_presenter.to_single_json(
+            person,
+            vouches,
+            language_ids,
+            recommender,
+            vouched_by_me,
+        ))
+    }
+
+    /// The skills the "Recommend someone" form and the people filter offer.
+    pub fn list_skills(&self) -> Result<HttpResponse, AppError> {
+        let skills = self.person_repo.list_skills()?;
+
+        Ok(self.person_presenter.to_skills_json(skills))
     }
 
     pub fn list_people(&self, filters: ListPeopleFilters) -> Result<HttpResponse, AppError> {
@@ -166,7 +197,7 @@ impl PersonUsecase {
 
         self.person_repo.vouch_person(person_id, user_id, note)?;
 
-        self.fetch_person(person_id)
+        self.fetch_person(person_id, Some(user_id))
     }
 
     /// Public claim preview — the token is the credential.
@@ -187,6 +218,8 @@ impl PersonUsecase {
                 claimed_by: params.claimed_by,
                 show_whatsapp: params.show_whatsapp,
                 show_email: params.show_email,
+                show_telegram: params.show_telegram,
+                show_instagram: params.show_instagram,
                 show_city: params.show_city,
                 allow_reviews: params.allow_reviews,
             },
@@ -220,7 +253,11 @@ pub struct CreatePersonUsecaseInput {
     pub email: Option<String>,
     /// Hidden contact. Used to deliver the claim link; public only after confirm/claim with `show_whatsapp` on.
     pub whatsapp: Option<String>,
-    /// How the recommender sends the claim link: `email` or `whatsapp`.
+    /// Hidden contact (a handle or link). Used to deliver the claim link; public only after confirm/claim with `show_telegram` on.
+    pub telegram: Option<String>,
+    /// Hidden contact (a handle or link). Used to deliver the claim link; public only after confirm/claim with `show_instagram` on.
+    pub instagram: Option<String>,
+    /// How the recommender sends the claim link: `email`, `whatsapp`, `telegram` or `instagram`.
     pub send_via: Option<String>,
     /// The person agreed to be recommended (required to create).
     pub consent_given: bool,
@@ -228,6 +265,10 @@ pub struct CreatePersonUsecaseInput {
     pub show_whatsapp: bool,
     /// Privacy toggle: publish email once confirmed. Default false.
     pub show_email: bool,
+    /// Privacy toggle: publish Telegram once confirmed. Default false.
+    pub show_telegram: bool,
+    /// Privacy toggle: publish Instagram once confirmed. Default false.
+    pub show_instagram: bool,
     /// Privacy toggle: publish the city. Default true.
     pub show_city: bool,
     /// Whether reviews of this person are accepted. Default true.
@@ -243,6 +284,10 @@ pub struct ClaimConfirmUsecaseInput {
     pub show_whatsapp: Option<bool>,
     /// Privacy toggle: publish email once confirmed; omit to keep the current value.
     pub show_email: Option<bool>,
+    /// Privacy toggle: publish Telegram once confirmed; omit to keep the current value.
+    pub show_telegram: Option<bool>,
+    /// Privacy toggle: publish Instagram once confirmed; omit to keep the current value.
+    pub show_instagram: Option<bool>,
     /// Privacy toggle: publish the city; omit to keep the current value.
     pub show_city: Option<bool>,
     /// Whether reviews are accepted; omit to keep the current value.
@@ -253,9 +298,9 @@ pub struct ClaimConfirmUsecaseInput {
 mod tests {
     use super::*;
     use crate::app::features::moderation::entities::{ModerationAction, QueueItem};
-    use crate::app::features::person::entities::{Person, PersonVouch};
+    use crate::app::features::person::entities::{Person, PersonVouch, Skill};
     use crate::app::features::person::presenters::PersonPresenterImpl;
-    use crate::app::features::user::entities::UserRole;
+    use crate::app::features::user::entities::{PublicUser, UserRole};
     use std::sync::Mutex;
 
     #[derive(Default)]
@@ -264,6 +309,10 @@ mod tests {
         person_status: Option<PersonStatus>,
         created: Mutex<Vec<CreatePerson>>,
         vouched: Mutex<Vec<Uuid>>,
+        /// Users `has_vouched` was asked about.
+        vouch_lookups: Mutex<Vec<Uuid>>,
+        /// Answer of `has_vouched`.
+        already_vouched: bool,
     }
 
     impl StubRepo {
@@ -295,6 +344,10 @@ mod tests {
                 reviews_count: 0,
                 created_at: chrono::Utc::now().naive_utc(),
                 updated_at: chrono::Utc::now().naive_utc(),
+                telegram: None,
+                instagram: None,
+                show_telegram: false,
+                show_instagram: false,
             }
         }
     }
@@ -355,6 +408,29 @@ mod tests {
                 note,
                 created_at: chrono::Utc::now().naive_utc(),
             })
+        }
+
+        fn has_vouched(&self, _person_id: Uuid, user_id: Uuid) -> Result<bool, AppError> {
+            self.vouch_lookups.lock().unwrap().push(user_id);
+
+            Ok(self.already_vouched)
+        }
+
+        fn list_skills(&self) -> Result<Vec<Skill>, AppError> {
+            Ok(vec![Skill {
+                id: Uuid::new_v4(),
+                name: "Housing".to_string(),
+                sort_order: 1,
+            }])
+        }
+
+        fn fetch_public_user(&self, user_id: Uuid) -> Result<Option<PublicUser>, AppError> {
+            Ok(Some(PublicUser {
+                id: user_id,
+                username: "anna".to_string(),
+                name: Some("Anna M.".to_string()),
+                avatar_color: None,
+            }))
         }
 
         fn fetch_by_claim_token(&self, _token: &str) -> Result<Person, AppError> {
@@ -425,10 +501,14 @@ mod tests {
             language_ids: vec![],
             email: Some("daria@example.com".to_string()),
             whatsapp: None,
+            telegram: None,
+            instagram: None,
             send_via: Some("email".to_string()),
             consent_given: true,
             show_whatsapp: false,
             show_email: true,
+            show_telegram: false,
+            show_instagram: false,
             show_city: true,
             allow_reviews: true,
             recommended_by: Uuid::new_v4(),
@@ -482,7 +562,7 @@ mod tests {
     fn test_create_person_rejects_unknown_send_via() {
         let repo = Arc::new(StubRepo::default());
         let mut params = create_input();
-        params.send_via = Some("telegram".to_string());
+        params.send_via = Some("signal".to_string());
 
         match usecase_with(repo.clone()).create_person(params) {
             Err(AppError::UnprocessableEntity(_)) => (),
@@ -559,5 +639,32 @@ mod tests {
             );
             assert_eq!(repo.vouched.lock().unwrap().len(), 1);
         }
+    }
+
+    /// Only a signed-in viewer is looked up: a guest never costs a vouch query.
+    #[test]
+    fn test_fetch_person_asks_about_the_viewers_vouch_only_when_there_is_one() {
+        let repo = Arc::new(StubRepo {
+            person_status: Some(PersonStatus::Confirmed),
+            ..Default::default()
+        });
+        let viewer = Uuid::new_v4();
+
+        usecase_with(repo.clone())
+            .fetch_person(Uuid::new_v4(), None)
+            .unwrap();
+        assert!(repo.vouch_lookups.lock().unwrap().is_empty());
+
+        usecase_with(repo.clone())
+            .fetch_person(Uuid::new_v4(), Some(viewer))
+            .unwrap();
+        assert_eq!(*repo.vouch_lookups.lock().unwrap(), vec![viewer]);
+    }
+
+    #[test]
+    fn test_list_skills_answers_the_reference_list() {
+        let repo = Arc::new(StubRepo::default());
+
+        assert!(usecase_with(repo).list_skills().is_ok());
     }
 }

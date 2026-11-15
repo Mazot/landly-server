@@ -20,7 +20,11 @@ pub struct CreatePersonRequest {
     pub email: Option<String>,
     /// Hidden contact — used only for the claim link, gated afterwards. Email or WhatsApp is required.
     pub whatsapp: Option<String>,
-    /// "email" | "whatsapp" — how the recommender sends the claim link
+    /// Hidden contact (a handle like "@daria" or a link) — used only for the claim link, gated afterwards.
+    pub telegram: Option<String>,
+    /// Hidden contact (a handle like "daria.k" or a link) — used only for the claim link, gated afterwards.
+    pub instagram: Option<String>,
+    /// "email" | "whatsapp" | "telegram" | "instagram" — how the recommender sends the claim link
     pub send_via: Option<String>,
     /// Must be true: the person agreed to be recommended
     pub consent_given: bool,
@@ -28,6 +32,10 @@ pub struct CreatePersonRequest {
     pub show_whatsapp: Option<bool>,
     /// Publish email once confirmed. Default false.
     pub show_email: Option<bool>,
+    /// Publish Telegram once confirmed. Default false.
+    pub show_telegram: Option<bool>,
+    /// Publish Instagram once confirmed. Default false.
+    pub show_instagram: Option<bool>,
     /// Publish the city. Default true.
     pub show_city: Option<bool>,
     /// Accept reviews. Default true.
@@ -42,6 +50,8 @@ pub struct ListPeopleQueryRequest {
     pub city: Option<String>,
     /// Comma-separated language UUIDs
     pub language_ids: Option<String>,
+    /// Only people living in this country (the corridor's destination).
+    pub location_country_id: Option<Uuid>,
     /// Page size (default 20, max 100).
     pub limit: Option<i64>,
     /// Rows to skip (default 0, max 500).
@@ -69,6 +79,10 @@ pub struct ClaimConfirmRequest {
     pub show_whatsapp: Option<bool>,
     /// Privacy toggle: publish email once confirmed; omit to keep the current value.
     pub show_email: Option<bool>,
+    /// Privacy toggle: publish Telegram once confirmed; omit to keep the current value.
+    pub show_telegram: Option<bool>,
+    /// Privacy toggle: publish Instagram once confirmed; omit to keep the current value.
+    pub show_instagram: Option<bool>,
     /// Privacy toggle: publish the city; omit to keep the current value.
     pub show_city: Option<bool>,
     /// Whether reviews are accepted; omit to keep the current value.

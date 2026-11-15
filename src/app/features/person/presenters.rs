@@ -1,4 +1,5 @@
-use super::entities::{Person, RecommendedPerson};
+use super::entities::{Person, RecommendedPerson, Skill};
+use crate::app::features::user::{entities::PublicUser, presenters::PublicUserContent};
 use actix_web::HttpResponse;
 use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
@@ -7,8 +8,16 @@ use uuid::Uuid;
 
 pub trait PersonPresenter: Send + Sync + 'static {
     fn to_http_res(&self) -> HttpResponse;
-    fn to_single_json(&self, person: Person, vouches: i64, language_ids: Vec<Uuid>)
-    -> HttpResponse;
+    /// The detail payload; `recommender` is who recommended the person (public face only).
+    fn to_single_json(
+        &self,
+        person: Person,
+        vouches: i64,
+        language_ids: Vec<Uuid>,
+        recommender: Option<PublicUser>,
+        vouched_by_me: bool,
+    ) -> HttpResponse;
+    fn to_skills_json(&self, skills: Vec<Skill>) -> HttpResponse;
     fn to_created_json(&self, person: Person, claim_url: String) -> HttpResponse;
     fn to_multi_json(&self, items: Vec<(Person, i64)>) -> HttpResponse;
     fn to_claim_preview_json(&self, person: Person) -> HttpResponse;
@@ -16,7 +25,7 @@ pub trait PersonPresenter: Send + Sync + 'static {
     fn to_mine_json(&self, items: Vec<RecommendedPerson>) -> HttpResponse;
 }
 
-/// Public person payload. Contacts (email/whatsapp) are serialized ONLY when
+/// Public person payload. Contacts (email/whatsapp/telegram/instagram) are serialized ONLY when
 /// the person is confirmed/claimed AND the matching privacy toggle is on;
 /// the city respects show_city the same way.
 #[derive(Deserialize, Serialize, ToSchema)]
@@ -44,6 +53,12 @@ pub struct PersonContent {
     /// Present only when confirmed/claimed and `show_whatsapp` is on.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub whatsapp: Option<String>,
+    /// Present only when confirmed/claimed and `show_telegram` is on. A handle ("@daria") or a link, as entered.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub telegram: Option<String>,
+    /// Present only when confirmed/claimed and `show_instagram` is on. A handle ("daria.k") or a link, as entered.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub instagram: Option<String>,
     /// Whether reviews of this person are accepted. Default true.
     pub allow_reviews: bool,
     /// Average review rating (1–5); null without reviews. Recomputed on every review create/delete.
@@ -54,6 +69,38 @@ pub struct PersonContent {
     pub vouches: i64,
     /// Recommendation time (UTC, no timezone).
     pub created_at: NaiveDateTime,
+    /// Detail payload only: who recommended the person (public face — no id, email or role); absent when unknown or the account is gone.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub recommended_by: Option<PublicUserContent>,
+    /// Detail payload only: whether the caller (a valid Bearer token) already vouched; false for guests.
+    pub vouched_by_me: bool,
+}
+
+/// One choice of what a helper can help with.
+#[derive(Deserialize, Serialize, ToSchema, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct SkillContent {
+    /// Skill ID.
+    pub id: Uuid,
+    /// Display name — what `skills` on a person holds, and what the list filter takes.
+    pub name: String,
+}
+
+impl From<Skill> for SkillContent {
+    fn from(skill: Skill) -> Self {
+        Self {
+            id: skill.id,
+            name: skill.name,
+        }
+    }
+}
+
+#[derive(Deserialize, Serialize, ToSchema)]
+pub struct MultipleSkillsResponse {
+    /// The skills, in list order.
+    pub items: Vec<SkillContent>,
+    /// Number of items returned.
+    pub total: i64,
 }
 
 impl PersonContent {
@@ -80,11 +127,23 @@ impl PersonContent {
             } else {
                 None
             },
+            telegram: if contacts_unlocked && person.show_telegram {
+                person.telegram
+            } else {
+                None
+            },
+            instagram: if contacts_unlocked && person.show_instagram {
+                person.instagram
+            } else {
+                None
+            },
             allow_reviews: person.allow_reviews,
             rating_avg: person.rating_avg,
             reviews_count: person.reviews_count,
             vouches,
             created_at: person.created_at,
+            recommended_by: None,
+            vouched_by_me: false,
         }
     }
 }
@@ -173,10 +232,18 @@ pub struct ClaimPreviewContent {
     pub email: Option<String>,
     /// WhatsApp the recommender entered (shown to the person being claimed only).
     pub whatsapp: Option<String>,
+    /// Telegram the recommender entered (shown to the person being claimed only).
+    pub telegram: Option<String>,
+    /// Instagram the recommender entered (shown to the person being claimed only).
+    pub instagram: Option<String>,
     /// Privacy toggle: publish WhatsApp once confirmed. Default false.
     pub show_whatsapp: bool,
     /// Privacy toggle: publish email once confirmed. Default false.
     pub show_email: bool,
+    /// Privacy toggle: publish Telegram once confirmed. Default false.
+    pub show_telegram: bool,
+    /// Privacy toggle: publish Instagram once confirmed. Default false.
+    pub show_instagram: bool,
     /// Privacy toggle: publish the city. Default true.
     pub show_city: bool,
     /// Whether reviews of this person are accepted. Default true.
@@ -202,8 +269,21 @@ impl PersonPresenter for PersonPresenterImpl {
         person: Person,
         vouches: i64,
         language_ids: Vec<Uuid>,
+        recommender: Option<PublicUser>,
+        vouched_by_me: bool,
     ) -> HttpResponse {
-        HttpResponse::Ok().json(PersonContent::from_gated(person, vouches, language_ids))
+        let mut content = PersonContent::from_gated(person, vouches, language_ids);
+        content.recommended_by = recommender.map(PublicUserContent::from);
+        content.vouched_by_me = vouched_by_me;
+
+        HttpResponse::Ok().json(content)
+    }
+
+    fn to_skills_json(&self, skills: Vec<Skill>) -> HttpResponse {
+        let items: Vec<SkillContent> = skills.into_iter().map(SkillContent::from).collect();
+        let total = items.len() as i64;
+
+        HttpResponse::Ok().json(MultipleSkillsResponse { items, total })
     }
 
     fn to_created_json(&self, person: Person, claim_url: String) -> HttpResponse {
@@ -243,8 +323,12 @@ impl PersonPresenter for PersonPresenterImpl {
             status: person.status,
             email: person.email,
             whatsapp: person.whatsapp,
+            telegram: person.telegram,
+            instagram: person.instagram,
             show_whatsapp: person.show_whatsapp,
             show_email: person.show_email,
+            show_telegram: person.show_telegram,
+            show_instagram: person.show_instagram,
             show_city: person.show_city,
             allow_reviews: person.allow_reviews,
         })
@@ -279,6 +363,10 @@ mod tests {
             reviews_count: 27,
             created_at: chrono::Utc::now().naive_utc(),
             updated_at: chrono::Utc::now().naive_utc(),
+            telegram: Some("@daria".to_string()),
+            instagram: Some("daria.k".to_string()),
+            show_telegram: true,
+            show_instagram: true,
         }
     }
 
@@ -290,10 +378,18 @@ mod tests {
             let content = PersonContent::from_gated(test_person(status), 0, vec![]);
             assert!(content.email.is_none(), "email leaked for {}", status);
             assert!(content.whatsapp.is_none(), "whatsapp leaked for {}", status);
+            assert!(content.telegram.is_none(), "telegram leaked for {}", status);
+            assert!(
+                content.instagram.is_none(),
+                "instagram leaked for {}",
+                status
+            );
 
             let json = serde_json::to_string(&content).unwrap();
             assert!(!json.contains("daria@example.com"));
             assert!(!json.contains("+49111222333"));
+            assert!(!json.contains("@daria"));
+            assert!(!json.contains("daria.k"));
         }
     }
 
@@ -303,6 +399,8 @@ mod tests {
             let content = PersonContent::from_gated(test_person(status), 3, vec![]);
             assert_eq!(content.email.as_deref(), Some("daria@example.com"));
             assert_eq!(content.whatsapp.as_deref(), Some("+49111222333"));
+            assert_eq!(content.telegram.as_deref(), Some("@daria"));
+            assert_eq!(content.instagram.as_deref(), Some("daria.k"));
             assert_eq!(content.vouches, 3);
         }
     }
@@ -327,6 +425,8 @@ mod tests {
         assert_eq!(content.person.vouches, 2);
         assert!(content.person.email.is_none());
         assert!(content.person.whatsapp.is_none());
+        assert!(content.person.telegram.is_none());
+        assert!(content.person.instagram.is_none());
 
         // Flattened: the person's fields sit next to the note, not under a key.
         let json = serde_json::to_value(&content).unwrap();
@@ -341,11 +441,15 @@ mod tests {
         let mut person = test_person("confirmed");
         person.show_email = false;
         person.show_whatsapp = false;
+        person.show_telegram = false;
+        person.show_instagram = false;
         person.show_city = false;
 
         let content = PersonContent::from_gated(person, 0, vec![]);
         assert!(content.email.is_none());
         assert!(content.whatsapp.is_none());
+        assert!(content.telegram.is_none());
+        assert!(content.instagram.is_none());
         assert!(content.city.is_none());
     }
 
