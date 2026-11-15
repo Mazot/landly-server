@@ -379,18 +379,19 @@ DELETE /api/country-connection/delete/{id}    # admin
 
 ### People / Helpers
 
-A person is a recommended human helper with a claim-and-verify flow: `pending` (moderation) → `awaiting` (approved, claim link sent) → `confirmed` / `claimed` (linked an account) or `declined`. Hidden contacts (email/whatsapp) are **never** serialized until the person confirms — and then only per their privacy toggles.
+A person is a recommended human helper with a claim-and-verify flow: `pending` (moderation) → `awaiting` (approved, claim link sent) → `confirmed` / `claimed` (linked an account) or `declined`. Hidden contacts (email, WhatsApp, Telegram, Instagram — handles or links, as entered) are **never** serialized until the person confirms — and then only per their privacy toggles.
 
 ```http
-POST /api/person/create          # auth; requires consent_given + a contact; returns claimUrl for manual sending (send_via)
-GET  /api/person/list            # public; confirmed/claimed only; filters: skills, city, language_ids
+POST /api/person/create          # auth; requires consent_given + a contact (email, whatsapp, telegram or instagram); returns claimUrl for manual sending (send_via: email|whatsapp|telegram|instagram)
+GET  /api/person/list            # public; confirmed/claimed only; filters: skills, city, language_ids, location_country_id
+GET  /api/person/skills          # public; the skills a helper can be recommended for (id, name — the `skills` table), in list order
 GET  /api/person/mine            # auth; people the caller recommended, every status, newest first, with moderationNote + updatedAt; contacts gated as everywhere
-GET  /api/person/fetch/{id}      # public; contacts gated by status + privacy toggles
+GET  /api/person/fetch/{id}      # public; contacts gated by status + privacy toggles; adds `recommendedBy` (public face of the recommender) and `vouchedByMe` (true once the caller — a valid Bearer token — vouched; false for guests)
 POST /api/person/vouch/{id}      # auth; one vouch per user
 
 # Claim flow — PUBLIC, the token from the invite link is the credential:
 GET  /api/person/claim/{token}           # preview for the recommended person
-POST /api/person/claim/{token}/confirm   # -> confirmed (or claimed with a Bearer token); optional privacy toggles
+POST /api/person/claim/{token}/confirm   # -> confirmed (or claimed with a Bearer token); optional privacy toggles (show_whatsapp/email/telegram/instagram/city, allow_reviews)
 POST /api/person/claim/{token}/decline   # -> declined
 ```
 

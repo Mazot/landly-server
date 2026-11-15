@@ -1,8 +1,9 @@
 use super::entities::{
     ClaimOutcome, CreatePerson, ListPeopleFilters, Person, PersonStatus, PersonVouch,
-    RecommendedPerson,
+    RecommendedPerson, Skill,
 };
 use crate::{
+    app::features::user::entities::PublicUser,
     error::AppError,
     utils::{
         cache::{CacheKeys, CacheService, TypedCache},
@@ -39,6 +40,15 @@ pub trait PersonRepository: Send + Sync + 'static {
         user_id: Uuid,
         note: Option<String>,
     ) -> Result<PersonVouch, AppError>;
+
+    /// Whether `user_id` already vouched for the person.
+    fn has_vouched(&self, person_id: Uuid, user_id: Uuid) -> Result<bool, AppError>;
+
+    /// The skills a helper can be recommended for, in list order.
+    fn list_skills(&self) -> Result<Vec<Skill>, AppError>;
+
+    /// The public face of the user who recommended a person (`None` when the account is gone).
+    fn fetch_public_user(&self, user_id: Uuid) -> Result<Option<PublicUser>, AppError>;
 
     fn fetch_by_claim_token(&self, token: &str) -> Result<Person, AppError>;
 
@@ -128,6 +138,24 @@ impl PersonRepository for PersonRepositoryImpl {
         self.invalidate();
 
         Ok(vouch)
+    }
+
+    fn has_vouched(&self, person_id: Uuid, user_id: Uuid) -> Result<bool, AppError> {
+        let conn = &mut self.pool.get()?;
+
+        Person::has_vouched(conn, person_id, user_id)
+    }
+
+    fn list_skills(&self) -> Result<Vec<Skill>, AppError> {
+        let conn = &mut self.pool.get()?;
+
+        Person::list_skills(conn)
+    }
+
+    fn fetch_public_user(&self, user_id: Uuid) -> Result<Option<PublicUser>, AppError> {
+        let conn = &mut self.pool.get()?;
+
+        Ok(PublicUser::find_many(conn, &[user_id])?.remove(&user_id))
     }
 
     fn fetch_by_claim_token(&self, token: &str) -> Result<Person, AppError> {

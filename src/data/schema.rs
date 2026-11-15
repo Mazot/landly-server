@@ -179,6 +179,10 @@ diesel::table! {
         reviews_count -> Int8,
         created_at -> Timestamp,
         updated_at -> Timestamp,
+        telegram -> Nullable<Text>,
+        instagram -> Nullable<Text>,
+        show_telegram -> Bool,
+        show_instagram -> Bool,
     }
 }
 
@@ -244,6 +248,14 @@ diesel::table! {
         note -> Nullable<Text>,
         list_name -> Nullable<Text>,
         created_at -> Timestamp,
+    }
+}
+
+diesel::table! {
+    skills (id) {
+        id -> Uuid,
+        name -> Text,
+        sort_order -> Int4,
     }
 }
 
@@ -338,6 +350,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     reports,
     reviews,
     saved_items,
+    skills,
     user_providers,
     users,
     users_to_languages,
