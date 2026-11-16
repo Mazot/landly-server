@@ -20,7 +20,13 @@ pub trait PersonPresenter: Send + Sync + 'static {
     fn to_skills_json(&self, skills: Vec<Skill>) -> HttpResponse;
     fn to_created_json(&self, person: Person, claim_url: String) -> HttpResponse;
     fn to_multi_json(&self, items: Vec<(Person, i64)>) -> HttpResponse;
-    fn to_claim_preview_json(&self, person: Person) -> HttpResponse;
+    /// What the holder of a claim link sees: the person, their languages and who recommended them.
+    fn to_claim_preview_json(
+        &self,
+        person: Person,
+        language_ids: Vec<Uuid>,
+        recommender: Option<PublicUser>,
+    ) -> HttpResponse;
     /// The caller's own recommendations, with the moderator's note.
     fn to_mine_json(&self, items: Vec<RecommendedPerson>) -> HttpResponse;
 }
@@ -209,7 +215,7 @@ pub struct PersonCreatedContent {
     pub person: PersonContent,
     /// Relative claim link `/claim/{token}` for the recommender to send; valid 30 days.
     pub claim_url: String,
-    /// How the recommender sends the claim link: `email` or `whatsapp`.
+    /// How the recommender sends the claim link: `email`, `whatsapp`, `telegram` or `instagram`.
     pub send_via: Option<String>,
 }
 
@@ -218,6 +224,8 @@ pub struct PersonCreatedContent {
 #[derive(Deserialize, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ClaimPreviewContent {
+    /// Person ID — where the public profile lives once confirmed.
+    pub id: Uuid,
     /// Display name, e.g. "Daria K.".
     pub name: String,
     /// Short free-text bio.
@@ -226,8 +234,13 @@ pub struct ClaimPreviewContent {
     pub city: Option<String>,
     /// What they help with, free-text tags, e.g. ["Relocation", "Housing"].
     pub skills: Vec<String>,
+    /// Languages the person speaks.
+    pub language_ids: Vec<Uuid>,
     /// `pending` (moderation) → `awaiting` (approved, waiting for the person) → `confirmed` / `claimed` (linked to an account), or `declined`. Only confirmed/claimed are public.
     pub status: String,
+    /// Who recommended the person (public face — no id, email or role); absent when unknown or the account is gone.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub recommended_by: Option<PublicUserContent>,
     /// Email the recommender entered (shown to the person being claimed only).
     pub email: Option<String>,
     /// WhatsApp the recommender entered (shown to the person being claimed only).
@@ -314,8 +327,16 @@ impl PersonPresenter for PersonPresenterImpl {
         HttpResponse::Ok().json(MyPeopleResponse { items, total })
     }
 
-    fn to_claim_preview_json(&self, person: Person) -> HttpResponse {
+    fn to_claim_preview_json(
+        &self,
+        person: Person,
+        language_ids: Vec<Uuid>,
+        recommender: Option<PublicUser>,
+    ) -> HttpResponse {
         HttpResponse::Ok().json(ClaimPreviewContent {
+            id: person.id,
+            language_ids,
+            recommended_by: recommender.map(PublicUserContent::from),
             name: person.name,
             bio: person.bio,
             city: person.city,
