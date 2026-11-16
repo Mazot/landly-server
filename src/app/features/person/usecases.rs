@@ -1,5 +1,5 @@
 use super::{
-    entities::{ClaimOutcome, CreatePerson, ListPeopleFilters, PersonStatus, SendVia},
+    entities::{ClaimOutcome, CreatePerson, ListPeopleFilters, Person, PersonStatus, SendVia},
     presenters::PersonPresenter,
     repositories::PersonRepository,
 };
@@ -204,7 +204,20 @@ impl PersonUsecase {
     pub fn claim_preview(&self, token: &str) -> Result<HttpResponse, AppError> {
         let person = self.person_repo.fetch_by_claim_token(token)?;
 
-        Ok(self.person_presenter.to_claim_preview_json(person))
+        self.claim_view(person)
+    }
+
+    /// The claim answer: the person with their languages and recommender, which the page shows next to the form.
+    fn claim_view(&self, person: Person) -> Result<HttpResponse, AppError> {
+        let (_, _, language_ids) = self.person_repo.fetch_person(person.id)?;
+        let recommender = match person.recommended_by {
+            Some(user_id) => self.person_repo.fetch_public_user(user_id)?,
+            None => None,
+        };
+
+        Ok(self
+            .person_presenter
+            .to_claim_preview_json(person, language_ids, recommender))
     }
 
     pub fn claim_confirm(
@@ -225,7 +238,7 @@ impl PersonUsecase {
             },
         )?;
 
-        Ok(self.person_presenter.to_claim_preview_json(person))
+        self.claim_view(person)
     }
 
     pub fn claim_decline(&self, token: &str) -> Result<HttpResponse, AppError> {
