@@ -1,5 +1,5 @@
 use super::{
-    entities::{ClaimOutcome, CreatePerson, ListPeopleFilters, PersonStatus, SendVia},
+    entities::{ClaimOutcome, CreatePerson, ListPeopleFilters, Person, PersonStatus, SendVia},
     presenters::PersonPresenter,
     repositories::PersonRepository,
 };
@@ -113,9 +113,14 @@ impl PersonUsecase {
         Ok(self.person_presenter.to_created_json(person, claim_url))
     }
 
-    /// `viewer`: the signed-in caller, if any — only to tell whether they already vouched.
+    /// `viewer`: the signed-in caller, if any — to tell whether they already vouched, and to let the
+    /// recommender or a moderator see a profile that is not public yet. Everyone else gets 404 for a
+    /// person who is not confirmed/claimed (in moderation, waiting for the person, or declined).
     pub fn fetch_person(&self, id: Uuid, viewer: Option<Uuid>) -> Result<HttpResponse, AppError> {
         let (person, vouches, language_ids) = self.person_repo.fetch_person(id)?;
+        if !person.status_enum().is_public() && !self.may_see_unpublished(&person, viewer)? {
+            return Err(AppError::NotFound(json!({ "error": "Person not found" })));
+        }
         let recommender = match person.recommended_by {
             Some(user_id) => self.person_repo.fetch_public_user(user_id)?,
             None => None,
@@ -133,6 +138,18 @@ impl PersonUsecase {
             recommender,
             vouched_by_me,
         ))
+    }
+
+    /// The recommender of a person who is not public yet, or a moderator (who reviews them).
+    fn may_see_unpublished(&self, person: &Person, viewer: Option<Uuid>) -> Result<bool, AppError> {
+        let Some(viewer) = viewer else {
+            return Ok(false);
+        };
+        if person.recommended_by == Some(viewer) {
+            return Ok(true);
+        }
+
+        Ok(self.moderation_repo.fetch_user_role(viewer)?.is_moderator())
     }
 
     /// The skills the "Recommend someone" form and the people filter offer.

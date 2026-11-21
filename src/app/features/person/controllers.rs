@@ -173,7 +173,7 @@ pub async fn list_my_people(
     ),
     responses(
         (status = 200, description = "Person profile (contacts gated by status + privacy); with a Bearer token, `vouchedByMe` is true once the caller vouched", body = super::presenters::PersonContent),
-        (status = 404, description = "Not found", body = AppError),
+        (status = 404, description = "Not found, or not public yet / declined (only the recommender and moderators see those)", body = AppError),
         (status = 500, description = "Internal server error", body = AppError)
     ),
     tag = "Person"
@@ -715,6 +715,70 @@ mod http_tests {
         )
         .await;
         assert_eq!(status, StatusCode::UNAUTHORIZED);
+    }
+
+    /// A profile that is not public yet (or never will be) is a 404 for everyone but its recommender
+    /// and moderators: a declined person is not left readable by whoever has the id.
+    #[actix_web::test]
+    #[serial(jwt_env)]
+    async fn test_unpublished_profiles_are_hidden_from_strangers() {
+        let pool = require_db!();
+        let app = test_app!(pool);
+        let (recommender, moderator, stranger) = (
+            ts::user(&pool, "user"),
+            ts::user(&pool, "moderator"),
+            ts::user(&pool, "user"),
+        );
+        let (id, token) = approved_person(&app, &recommender, &moderator, json!({})).await;
+        let path = format!("/api/person/fetch/{id}");
+
+        let status_for = |viewer: Option<&str>| {
+            let path = path.clone();
+            let viewer = viewer.map(str::to_string);
+            let app = &app;
+            async move {
+                call(app, Method::GET, &path, viewer.as_deref(), None)
+                    .await
+                    .0
+            }
+        };
+        // Approved, waiting for the person (`awaiting`): not public yet.
+        assert_eq!(status_for(None).await, StatusCode::NOT_FOUND, "guest");
+        assert_eq!(
+            status_for(Some(&stranger.token)).await,
+            StatusCode::NOT_FOUND,
+            "stranger"
+        );
+        assert_eq!(
+            status_for(Some(&recommender.token)).await,
+            StatusCode::OK,
+            "recommender"
+        );
+        assert_eq!(
+            status_for(Some(&moderator.token)).await,
+            StatusCode::OK,
+            "moderator"
+        );
+
+        // Declined by the person: stays hidden.
+        let (status, _) = call(
+            &app,
+            Method::POST,
+            &format!("/api/person/claim/{token}/decline"),
+            None,
+            None,
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(
+            status_for(None).await,
+            StatusCode::NOT_FOUND,
+            "a declined person is never public"
+        );
+        assert_eq!(
+            status_for(Some(&stranger.token)).await,
+            StatusCode::NOT_FOUND
+        );
     }
 
     /// The detail names who recommended the person (public face only) and, for a signed-in viewer,
