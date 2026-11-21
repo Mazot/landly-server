@@ -390,7 +390,7 @@ GET  /api/person/fetch/{id}      # public for confirmed/claimed people (404 for 
 POST /api/person/vouch/{id}      # auth; one vouch per user
 
 # Claim flow — PUBLIC, the token from the invite link is the credential:
-GET  /api/person/claim/{token}           # preview for the recommended person
+GET  /api/person/claim/{token}           # preview for the recommended person: the entered contacts and toggles, plus `id`, `languageIds` and `recommendedBy` (public face)
 POST /api/person/claim/{token}/confirm   # -> confirmed (or claimed with a Bearer token); optional privacy toggles (show_whatsapp/email/telegram/instagram/city, allow_reviews)
 POST /api/person/claim/{token}/decline   # -> declined
 ```

@@ -439,6 +439,19 @@ mod http_tests {
             preview["email"], "helper@example.test",
             "the claimed person sees their contacts"
         );
+        assert_eq!(
+            preview["id"], id,
+            "the preview says where the profile will live"
+        );
+        assert_eq!(
+            preview["recommendedBy"]["username"], recommender.username,
+            "the page names who recommended the person"
+        );
+        let face = preview["recommendedBy"].as_object().unwrap();
+        for private in ["id", "email", "role"] {
+            assert!(!face.contains_key(private), "{private} must not be public");
+        }
+        assert!(preview["languageIds"].is_array());
         let (status, _) = call(
             &app,
             Method::POST,
@@ -483,6 +496,11 @@ mod http_tests {
             confirmed["status"], "claimed",
             "a Bearer token links the account"
         );
+        assert_eq!(
+            confirmed["id"], id,
+            "the answer of confirm carries the same view"
+        );
+        assert_eq!(confirmed["recommendedBy"]["username"], recommender.username);
 
         let (_, public) = call(
             &app,

@@ -41,6 +41,9 @@ pub trait PersonRepository: Send + Sync + 'static {
         note: Option<String>,
     ) -> Result<PersonVouch, AppError>;
 
+    /// The ids of the languages the person speaks.
+    fn languages_of(&self, person_id: Uuid) -> Result<Vec<Uuid>, AppError>;
+
     /// Whether `user_id` already vouched for the person.
     fn has_vouched(&self, person_id: Uuid, user_id: Uuid) -> Result<bool, AppError>;
 
@@ -138,6 +141,12 @@ impl PersonRepository for PersonRepositoryImpl {
         self.invalidate();
 
         Ok(vouch)
+    }
+
+    fn languages_of(&self, person_id: Uuid) -> Result<Vec<Uuid>, AppError> {
+        let conn = &mut self.pool.get()?;
+
+        Person::languages_of(conn, person_id)
     }
 
     fn has_vouched(&self, person_id: Uuid, user_id: Uuid) -> Result<bool, AppError> {
