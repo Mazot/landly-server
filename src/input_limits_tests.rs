@@ -214,6 +214,8 @@ async fn test_people_reviews_reports_and_bookmarks_are_bounded() {
         ("city", limits::CITY),
         ("email", limits::EMAIL),
         ("whatsapp", limits::HANDLE),
+        ("telegram", limits::HANDLE),
+        ("instagram", limits::HANDLE),
     ] {
         let (status, body) = call(
             &app,

@@ -84,10 +84,14 @@ pub async fn create_person(
             language_ids: form.language_ids.clone().unwrap_or_default(),
             email: form.email.clone(),
             whatsapp: form.whatsapp.clone(),
+            telegram: form.telegram.clone(),
+            instagram: form.instagram.clone(),
             send_via: form.send_via.clone(),
             consent_given: form.consent_given,
             show_whatsapp: form.show_whatsapp.unwrap_or(false),
             show_email: form.show_email.unwrap_or(false),
+            show_telegram: form.show_telegram.unwrap_or(false),
+            show_instagram: form.show_instagram.unwrap_or(false),
             show_city: form.show_city.unwrap_or(true),
             allow_reviews: form.allow_reviews.unwrap_or(true),
             recommended_by: caller,
@@ -123,6 +127,7 @@ pub async fn list_people(
         .person_usecase
         .list_people(ListPeopleFilters {
             city: query.city.clone(),
+            location_country_id: query.location_country_id,
             skills: parse_csv(&query.skills),
             language_ids,
             limit: query.limit.unwrap_or(20).clamp(0, 100),
@@ -167,17 +172,37 @@ pub async fn list_my_people(
         ("id" = Uuid, Path, description = "Person ID")
     ),
     responses(
-        (status = 200, description = "Person profile (contacts gated by status + privacy)", body = super::presenters::PersonContent),
-        (status = 404, description = "Not found", body = AppError),
+        (status = 200, description = "Person profile (contacts gated by status + privacy); with a Bearer token, `vouchedByMe` is true once the caller vouched", body = super::presenters::PersonContent),
+        (status = 404, description = "Not found, or not public yet / declined (only the recommender and moderators see those)", body = AppError),
         (status = 500, description = "Internal server error", body = AppError)
     ),
     tag = "Person"
 )]
-pub async fn fetch_person(state: Data<AppState>, id: Path<Uuid>) -> Result<HttpResponse, AppError> {
+pub async fn fetch_person(
+    req: HttpRequest,
+    state: Data<AppState>,
+    id: Path<Uuid>,
+) -> Result<HttpResponse, AppError> {
+    // Public, but a valid Bearer token tells the profile whether this viewer already vouched.
     state
         .di_container
         .person_usecase
-        .fetch_person(id.into_inner())
+        .fetch_person(id.into_inner(), optional_caller_user_id(&req))
+}
+
+// [authorship] AI-generated (Claude).
+#[utoipa::path(
+    get,
+    path = "/person/skills",
+    context_path = "/api",
+    responses(
+        (status = 200, description = "The skills a helper can be recommended for, in list order", body = super::presenters::MultipleSkillsResponse),
+        (status = 500, description = "Internal server error", body = AppError)
+    ),
+    tag = "Person"
+)]
+pub async fn list_skills(state: Data<AppState>) -> Result<HttpResponse, AppError> {
+    state.di_container.person_usecase.list_skills()
 }
 
 // [authorship] AI-generated (Claude) — the whole person feature is new.
@@ -265,6 +290,8 @@ pub async fn claim_confirm(
             claimed_by: optional_caller_user_id(&req),
             show_whatsapp: form.show_whatsapp,
             show_email: form.show_email,
+            show_telegram: form.show_telegram,
+            show_instagram: form.show_instagram,
             show_city: form.show_city,
             allow_reviews: form.allow_reviews,
         },
@@ -308,6 +335,7 @@ mod http_tests {
         let mut body = json!({
             "name": format!("Helper {}", ts::unique()), "bio": "Knows the paperwork", "city": "Berlin",
             "skills": ["Paperwork", "Housing"], "email": "helper@example.test", "whatsapp": "+4915112345678",
+            "telegram": "@helper_tg", "instagram": "helper.ig",
             "send_via": "email", "consent_given": true, "show_email": true,
         });
         body.as_object_mut()
@@ -384,6 +412,12 @@ mod http_tests {
             created["person"].get("email").is_none(),
             "contacts hidden before confirmation"
         );
+        for hidden in ["whatsapp", "telegram", "instagram"] {
+            assert!(
+                created["person"].get(hidden).is_none(),
+                "{hidden} hidden before confirmation"
+            );
+        }
         let id = created["person"]["id"].as_str().unwrap().to_string();
         let token = created["claimUrl"]
             .as_str()
@@ -441,7 +475,7 @@ mod http_tests {
             Method::POST,
             &format!("/api/person/claim/{token}/confirm"),
             Some(&claimer.token),
-            Some(json!({ "show_whatsapp": false, "show_email": true })),
+            Some(json!({ "show_whatsapp": false, "show_email": true, "show_telegram": true })),
         )
         .await;
         assert_eq!(status, StatusCode::OK, "{confirmed}");
@@ -462,6 +496,14 @@ mod http_tests {
         assert!(
             public.get("whatsapp").is_none(),
             "show_whatsapp=false keeps it hidden"
+        );
+        assert_eq!(
+            public["telegram"], "@helper_tg",
+            "show_telegram=true publishes it"
+        );
+        assert!(
+            public.get("instagram").is_none(),
+            "an untouched toggle stays closed: instagram is hidden"
         );
 
         let (status, _) = call(
@@ -648,7 +690,10 @@ mod http_tests {
 
         for (extra, why) in [
             (json!({ "consent_given": false }), "consent"),
-            (json!({ "email": null, "whatsapp": null }), "a contact"),
+            (
+                json!({ "email": null, "whatsapp": null, "telegram": null, "instagram": null }),
+                "a contact",
+            ),
             (json!({ "send_via": "pigeon" }), "send_via"),
         ] {
             let (status, _) = call(
@@ -670,6 +715,293 @@ mod http_tests {
         )
         .await;
         assert_eq!(status, StatusCode::UNAUTHORIZED);
+    }
+
+    /// A profile that is not public yet (or never will be) is a 404 for everyone but its recommender
+    /// and moderators: a declined person is not left readable by whoever has the id.
+    #[actix_web::test]
+    #[serial(jwt_env)]
+    async fn test_unpublished_profiles_are_hidden_from_strangers() {
+        let pool = require_db!();
+        let app = test_app!(pool);
+        let (recommender, moderator, stranger) = (
+            ts::user(&pool, "user"),
+            ts::user(&pool, "moderator"),
+            ts::user(&pool, "user"),
+        );
+        let (id, token) = approved_person(&app, &recommender, &moderator, json!({})).await;
+        let path = format!("/api/person/fetch/{id}");
+
+        let status_for = |viewer: Option<&str>| {
+            let path = path.clone();
+            let viewer = viewer.map(str::to_string);
+            let app = &app;
+            async move {
+                call(app, Method::GET, &path, viewer.as_deref(), None)
+                    .await
+                    .0
+            }
+        };
+        // Approved, waiting for the person (`awaiting`): not public yet.
+        assert_eq!(status_for(None).await, StatusCode::NOT_FOUND, "guest");
+        assert_eq!(
+            status_for(Some(&stranger.token)).await,
+            StatusCode::NOT_FOUND,
+            "stranger"
+        );
+        assert_eq!(
+            status_for(Some(&recommender.token)).await,
+            StatusCode::OK,
+            "recommender"
+        );
+        assert_eq!(
+            status_for(Some(&moderator.token)).await,
+            StatusCode::OK,
+            "moderator"
+        );
+
+        // Declined by the person: stays hidden.
+        let (status, _) = call(
+            &app,
+            Method::POST,
+            &format!("/api/person/claim/{token}/decline"),
+            None,
+            None,
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(
+            status_for(None).await,
+            StatusCode::NOT_FOUND,
+            "a declined person is never public"
+        );
+        assert_eq!(
+            status_for(Some(&stranger.token)).await,
+            StatusCode::NOT_FOUND
+        );
+    }
+
+    /// The detail names who recommended the person (public face only) and, for a signed-in viewer,
+    /// whether they already vouched; the list narrows to a country.
+    #[actix_web::test]
+    #[serial(jwt_env)]
+    async fn test_detail_recommender_vouched_by_me_and_country_filter() {
+        let pool = require_db!();
+        let app = test_app!(pool);
+        let (recommender, moderator, voucher) = (
+            ts::user(&pool, "user"),
+            ts::user(&pool, "moderator"),
+            ts::user(&pool, "user"),
+        );
+        let (here, elsewhere) = (ts::country(&pool), ts::country(&pool));
+
+        let (id, token) = approved_person(
+            &app,
+            &recommender,
+            &moderator,
+            json!({ "location_country_id": here.id }),
+        )
+        .await;
+        let (other_id, other_token) = approved_person(
+            &app,
+            &recommender,
+            &moderator,
+            json!({ "location_country_id": elsewhere.id }),
+        )
+        .await;
+        for claim in [&token, &other_token] {
+            call(
+                &app,
+                Method::POST,
+                &format!("/api/person/claim/{claim}/confirm"),
+                None,
+                Some(json!({})),
+            )
+            .await;
+        }
+
+        let (status, guest_view) = call(
+            &app,
+            Method::GET,
+            &format!("/api/person/fetch/{id}"),
+            None,
+            None,
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(
+            guest_view["recommendedBy"]["username"],
+            recommender.username
+        );
+        let face = guest_view["recommendedBy"].as_object().unwrap();
+        for private in ["id", "email", "role"] {
+            assert!(!face.contains_key(private), "{private} must not be public");
+        }
+        assert_eq!(guest_view["vouchedByMe"], false);
+
+        let (status, vouched) = call(
+            &app,
+            Method::POST,
+            &format!("/api/person/vouch/{id}"),
+            Some(&voucher.token),
+            Some(json!({})),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(
+            vouched["vouchedByMe"], true,
+            "the vouch answer is the viewer's own"
+        );
+        let (_, signed_in) = call(
+            &app,
+            Method::GET,
+            &format!("/api/person/fetch/{id}"),
+            Some(&voucher.token),
+            None,
+        )
+        .await;
+        assert_eq!(signed_in["vouchedByMe"], true);
+        let (_, other_viewer) = call(
+            &app,
+            Method::GET,
+            &format!("/api/person/fetch/{id}"),
+            Some(&recommender.token),
+            None,
+        )
+        .await;
+        assert_eq!(other_viewer["vouchedByMe"], false);
+        let (_, guest_again) = call(
+            &app,
+            Method::GET,
+            &format!("/api/person/fetch/{id}"),
+            None,
+            None,
+        )
+        .await;
+        assert_eq!(guest_again["vouchedByMe"], false);
+
+        let (status, listed) = call(
+            &app,
+            Method::GET,
+            &format!("/api/person/list?location_country_id={}", here.id),
+            None,
+            None,
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        let ids: Vec<&str> = listed["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|p| p["id"].as_str().unwrap())
+            .collect();
+        assert_eq!(ids, vec![id.as_str()], "only people in that country");
+        assert!(!ids.contains(&other_id.as_str()));
+        assert!(
+            listed["items"][0].get("recommendedBy").is_none(),
+            "the list stays light: no recommender"
+        );
+    }
+
+    /// A helper reached only through Telegram or Instagram can be recommended: the link goes out through
+    /// that channel, and the handle stays hidden until the person publishes it.
+    #[actix_web::test]
+    #[serial(jwt_env)]
+    async fn test_recommend_through_telegram_or_instagram_only() {
+        let pool = require_db!();
+        let app = test_app!(pool);
+        let (recommender, moderator) = (ts::user(&pool, "user"), ts::user(&pool, "moderator"));
+
+        for (channel, handle) in [("telegram", "@only_tg"), ("instagram", "only.ig")] {
+            let (status, created) = call(
+                &app,
+                Method::POST,
+                "/api/person/create",
+                Some(&recommender.token),
+                Some(recommendation(json!({
+                    "email": null, "whatsapp": null, "telegram": null, "instagram": null,
+                    channel: handle, "send_via": channel,
+                }))),
+            )
+            .await;
+            assert_eq!(status, StatusCode::OK, "{created}");
+            assert_eq!(created["sendVia"], channel);
+            let id = created["person"]["id"].as_str().unwrap().to_string();
+            let token = created["claimUrl"]
+                .as_str()
+                .unwrap()
+                .trim_start_matches("/claim/")
+                .to_string();
+            call(
+                &app,
+                Method::POST,
+                "/api/moderation/approve",
+                Some(&moderator.token),
+                Some(json!({ "kind": "person", "target_id": id })),
+            )
+            .await;
+
+            let (_, preview) = call(
+                &app,
+                Method::GET,
+                &format!("/api/person/claim/{token}"),
+                None,
+                None,
+            )
+            .await;
+            assert_eq!(preview[channel], handle, "the person sees what was entered");
+            let toggle = if channel == "telegram" {
+                "showTelegram"
+            } else {
+                "showInstagram"
+            };
+            assert_eq!(
+                preview[toggle], false,
+                "published only when the person says so"
+            );
+
+            call(
+                &app,
+                Method::POST,
+                &format!("/api/person/claim/{token}/confirm"),
+                None,
+                Some(json!({})),
+            )
+            .await;
+            let (_, public) = call(
+                &app,
+                Method::GET,
+                &format!("/api/person/fetch/{id}"),
+                None,
+                None,
+            )
+            .await;
+            assert!(
+                public.get(channel).is_none(),
+                "{channel} stays hidden by default"
+            );
+        }
+    }
+
+    #[actix_web::test]
+    #[serial(jwt_env)]
+    async fn test_skills_reference_is_public_and_ordered() {
+        let pool = require_db!();
+        let app = test_app!(pool);
+
+        let (status, skills) = call(&app, Method::GET, "/api/person/skills", None, None).await;
+
+        assert_eq!(status, StatusCode::OK);
+        let names: Vec<&str> = skills["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|s| s["name"].as_str().unwrap())
+            .collect();
+        assert!(names.len() >= 9);
+        assert_eq!(&names[..3], ["Relocation", "Paperwork", "Housing"]);
+        assert_eq!(skills["total"], names.len());
+        assert!(skills["items"][0]["id"].is_string());
     }
 
     #[actix_web::test]

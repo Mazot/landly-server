@@ -314,6 +314,10 @@ mod tests {
             reviews_count: 0,
             created_at: chrono::Utc::now().naive_utc(),
             updated_at: chrono::Utc::now().naive_utc(),
+            telegram: None,
+            instagram: None,
+            show_telegram: false,
+            show_instagram: false,
         }
     }
 
