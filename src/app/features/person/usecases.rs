@@ -226,7 +226,7 @@ impl PersonUsecase {
 
     /// The claim answer: the person with their languages and recommender, which the page shows next to the form.
     fn claim_view(&self, person: Person) -> Result<HttpResponse, AppError> {
-        let (_, _, language_ids) = self.person_repo.fetch_person(person.id)?;
+        let language_ids = self.person_repo.languages_of(person.id)?;
         let recommender = match person.recommended_by {
             Some(user_id) => self.person_repo.fetch_public_user(user_id)?,
             None => None,
@@ -438,6 +438,10 @@ mod tests {
                 note,
                 created_at: chrono::Utc::now().naive_utc(),
             })
+        }
+
+        fn languages_of(&self, _person_id: Uuid) -> Result<Vec<Uuid>, AppError> {
+            Ok(vec![])
         }
 
         fn has_vouched(&self, _person_id: Uuid, user_id: Uuid) -> Result<bool, AppError> {
