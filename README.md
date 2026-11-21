@@ -386,7 +386,7 @@ POST /api/person/create          # auth; requires consent_given + a contact (ema
 GET  /api/person/list            # public; confirmed/claimed only; filters: skills, city, language_ids, location_country_id
 GET  /api/person/skills          # public; the skills a helper can be recommended for (id, name — the `skills` table), in list order
 GET  /api/person/mine            # auth; people the caller recommended, every status, newest first, with moderationNote + updatedAt; contacts gated as everywhere
-GET  /api/person/fetch/{id}      # public; contacts gated by status + privacy toggles; adds `recommendedBy` (public face of the recommender) and `vouchedByMe` (true once the caller — a valid Bearer token — vouched; false for guests)
+GET  /api/person/fetch/{id}      # public for confirmed/claimed people (404 for pending/awaiting/declined, except to the recommender and moderators); contacts gated by status + privacy toggles; adds `recommendedBy` (public face of the recommender) and `vouchedByMe` (true once the caller — a valid Bearer token — vouched; false for guests)
 POST /api/person/vouch/{id}      # auth; one vouch per user
 
 # Claim flow — PUBLIC, the token from the invite link is the credential:
